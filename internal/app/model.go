@@ -17,14 +17,20 @@ import (
 )
 
 const (
-	bodyStartRow          = 1
-	navigatorListStartRow = 4
-	defaultWidth          = 100
-	defaultHeight         = 24
-	wheelDebounce         = 50 * time.Millisecond
-	tableLoadTimeout      = 5 * time.Second
-	rowPageSize           = 20
+	bodyStartRow           = 1
+	navigatorListStartRow  = 4
+	defaultWidth           = 100
+	defaultHeight          = 24
+	wheelDebounce          = 50 * time.Millisecond
+	tableLoadTimeout       = 5 * time.Second
+	rowPageSize            = 100
+	spinnerInterval        = 100 * time.Millisecond
+	tableHorizontalPadding = 2
+	tableOuterBorderWidth  = 2
+	tableColumnBorderWidth = 1
 )
+
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 type focusPane uint8
 
@@ -46,6 +52,8 @@ type rowsLoadedMsg struct {
 	err         error
 }
 
+type spinnerTickMsg struct{}
+
 // Model is the root Bubble Tea application model.
 type Model struct {
 	database        db.Database
@@ -60,6 +68,8 @@ type Model struct {
 	columnOffset    int
 	rowsLoading     bool
 	rowsErr         error
+	spinnerFrame    int
+	spinnerRunning  bool
 	width           int
 	height          int
 	selected        int
@@ -74,12 +84,13 @@ func New(database db.Database, databaseName string, connectErr error) Model {
 	isLoading := database != nil && connectErr == nil
 
 	return Model{
-		database:     database,
-		databaseName: databaseName,
-		loading:      isLoading,
-		loadErr:      connectErr,
-		width:        defaultWidth,
-		height:       defaultHeight,
+		database:       database,
+		databaseName:   databaseName,
+		loading:        isLoading,
+		spinnerRunning: isLoading,
+		loadErr:        connectErr,
+		width:          defaultWidth,
+		height:         defaultHeight,
 	}
 }
 
@@ -88,7 +99,7 @@ func (m Model) Init() tea.Cmd {
 	if m.database == nil || m.loadErr != nil {
 		return nil
 	}
-	return loadTables(m.database)
+	return tea.Batch(loadTables(m.database), spinnerTick())
 }
 
 func loadTables(database db.Database) tea.Cmd {
@@ -125,6 +136,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var command tea.Cmd
 
 	switch msg := msg.(type) {
+	case spinnerTickMsg:
+		if m.loading || m.rowsLoading {
+			m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
+			command = spinnerTick()
+		} else {
+			m.spinnerRunning = false
+		}
 	case tablesLoadedMsg:
 		m.loading = false
 		m.loadErr = msg.err
@@ -265,7 +283,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() tea.View {
 	width := max(m.width, 64)
 	height := max(m.height, 16)
-	bodyHeight := height - 2
+	bodyHeight := height - 4
 	leftWidth := navigatorWidth(width)
 	rightWidth := width - leftWidth - 1
 
@@ -305,7 +323,7 @@ func (m Model) footerText() string {
 	}
 	rowStatus := ""
 	if m.rowsLoading {
-		rowStatus = "  •  query executing…"
+		rowStatus = "  •  " + m.spinner() + " Query executing…"
 	} else if m.rowsErr != nil {
 		rowStatus = "  •  row load failed"
 	} else if len(m.rowPage.Rows) > 0 {
@@ -355,53 +373,17 @@ func (m Model) renderData(width, height int, focused bool) string {
 	case len(m.tables) == 0:
 		return panelStyle(width, height, focused).Render("No public tables found.")
 	case m.rowsLoading:
-		return panelStyle(width, height, focused).Render(tableName + "\n\nQuery executing…")
+		return panelStyle(width, height, focused).Render(tableName + "\n\n" + m.spinner() + " Query executing…")
 	case m.rowsErr != nil:
 		return panelStyle(width, height, focused).Render(tableName + "\n\nUnable to load rows:\n" + sanitizeText(m.rowsErr.Error()))
 	case len(m.rowPage.Rows) == 0:
 		return panelStyle(width, height, focused).Render(tableName + "\n\nNo rows in this page.")
 	}
 
-	columnCount := m.visibleDataColumns(width)
-	firstColumn := min(m.columnOffset, len(m.rowPage.Columns)-columnCount)
-	lastColumn := min(firstColumn+columnCount, len(m.rowPage.Columns))
-	headers := make([]string, 0, lastColumn-firstColumn)
-	for _, column := range m.rowPage.Columns[firstColumn:lastColumn] {
-		headers = append(headers, sanitizeText(column))
-	}
-	rows := make([][]string, len(m.rowPage.Rows))
-	for rowIndex, row := range m.rowPage.Rows {
-		rows[rowIndex] = make([]string, 0, lastColumn-firstColumn)
-		for columnIndex := firstColumn; columnIndex < lastColumn; columnIndex++ {
-			var value any
-			if columnIndex < len(row) {
-				value = row[columnIndex]
-			}
-			rows[rowIndex] = append(rows[rowIndex], formatCell(value))
-		}
-	}
-
-	grid := table.New().
-		Headers(headers...).
-		Rows(rows...).
-		Width(max(20, width-4)).
-		Height(max(5, height-5)).
-		YOffset(m.rowViewport).
-		Border(lipgloss.NormalBorder()).
-		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-		StyleFunc(func(row, _ int) lipgloss.Style {
-			style := lipgloss.NewStyle().Padding(0, 1)
-			if row == table.HeaderRow {
-				return style.Bold(true).Foreground(lipgloss.Color("86"))
-			}
-			if row == m.rowSelected {
-				return style.Foreground(lipgloss.Color("230")).Background(lipgloss.Color("62"))
-			}
-			if row%2 == 1 {
-				return style.Foreground(lipgloss.Color("252"))
-			}
-			return style.Foreground(lipgloss.Color("250"))
-		})
+	firstColumn, lastColumn := m.visibleColumnRange(width)
+	firstVisibleRow := m.rowViewport
+	lastVisibleRow := m.visibleDataEnd(width, height, firstColumn, lastColumn, firstVisibleRow)
+	grid := m.dataGrid(width, firstColumn, lastColumn, firstVisibleRow, lastVisibleRow)
 
 	firstRow := m.rowOffset + 1
 	lastRow := m.rowOffset + len(m.rowPage.Rows)
@@ -444,7 +426,7 @@ func (m *Model) startRowLoad(offset, selectedRow int) tea.Cmd {
 	m.rowPage = db.RowPage{}
 	m.rowsLoading = true
 	m.rowsErr = nil
-	return loadRows(m.database, m.tables[m.selected], offset, selectedRow)
+	return tea.Batch(loadRows(m.database, m.tables[m.selected], offset, selectedRow), m.startSpinner())
 }
 
 func (m *Model) resetRows() {
@@ -532,41 +514,175 @@ func (m *Model) ensureSelectedRowVisible() {
 		return
 	}
 	m.rowSelected = min(max(m.rowSelected, 0), len(m.rowPage.Rows)-1)
-	visibleRows := m.visibleDataRows()
 	if m.rowSelected < m.rowViewport {
 		m.rowViewport = m.rowSelected
 	}
-	if m.rowSelected >= m.rowViewport+visibleRows {
-		m.rowViewport = m.rowSelected - visibleRows + 1
+	firstColumn, lastColumn := m.visibleColumnRange(m.dataPaneWidth())
+	for m.visibleDataEnd(m.dataPaneWidth(), m.dataPaneHeight(), firstColumn, lastColumn, m.rowViewport) <= m.rowSelected && m.rowViewport < m.rowSelected {
+		m.rowViewport++
 	}
-	m.rowViewport = min(max(m.rowViewport, 0), m.maxRowViewport())
+	m.rowViewport = min(max(m.rowViewport, 0), len(m.rowPage.Rows)-1)
 }
 
-func (m Model) maxRowViewport() int {
-	return max(0, len(m.rowPage.Rows)-m.visibleDataRows())
+func (m Model) visibleColumnRange(width int) (int, int) {
+	if len(m.rowPage.Columns) == 0 {
+		return 0, 0
+	}
+
+	firstColumn := min(max(m.columnOffset, 0), len(m.rowPage.Columns)-1)
+	availableWidth := tableWidth(width) - tableOuterBorderWidth
+	usedWidth := 0
+	lastColumn := firstColumn
+
+	for columnIndex := firstColumn; columnIndex < len(m.rowPage.Columns); columnIndex++ {
+		columnWidth := lipgloss.Width(sanitizeText(m.rowPage.Columns[columnIndex])) + tableHorizontalPadding
+		if columnIndex > firstColumn {
+			columnWidth += tableColumnBorderWidth
+		}
+		if lastColumn > firstColumn && usedWidth+columnWidth > availableWidth {
+			break
+		}
+
+		usedWidth += columnWidth
+		lastColumn++
+	}
+
+	return firstColumn, lastColumn
 }
 
-func (m Model) visibleDataRows() int {
-	bodyHeight := max(m.height, 16) - 2
-	gridHeight := max(5, bodyHeight-5)
-	return max(1, gridHeight-5)
+func (m Model) visibleDataEnd(width, height, firstColumn, lastColumn, firstRow int) int {
+	availableHeight := max(1, height-2)
+	lastRow := firstRow
+	for lastRow < len(m.rowPage.Rows) {
+		grid := m.dataGrid(width, firstColumn, lastColumn, firstRow, lastRow+1)
+		if lipgloss.Height(grid.String()) > availableHeight {
+			if lastRow == firstRow {
+				return lastRow + 1
+			}
+			break
+		}
+		lastRow++
+	}
+	return lastRow
+}
+
+func (m Model) dataGrid(width, firstColumn, lastColumn, firstRow, lastRow int) *table.Table {
+	headers := make([]string, 0, lastColumn-firstColumn)
+	for _, column := range m.rowPage.Columns[firstColumn:lastColumn] {
+		headers = append(headers, sanitizeText(column))
+	}
+	columnWidths := m.dataColumnWidths(width, firstColumn, lastColumn)
+
+	rows := make([][]string, 0, lastRow-firstRow)
+	for _, row := range m.rowPage.Rows[firstRow:lastRow] {
+		values := make([]string, 0, lastColumn-firstColumn)
+		for columnIndex := firstColumn; columnIndex < lastColumn; columnIndex++ {
+			var value any
+			if columnIndex < len(row) {
+				value = row[columnIndex]
+			}
+			values = append(values, formatCell(value))
+		}
+		rows = append(rows, values)
+	}
+
+	return table.New().
+		Headers(headers...).
+		Rows(rows...).
+		Width(totalTableWidth(columnWidths)).
+		Wrap(true).
+		Border(lipgloss.NormalBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+		StyleFunc(func(row, column int) lipgloss.Style {
+			style := lipgloss.NewStyle().Padding(0, 1).Width(columnWidths[column])
+			if row == table.HeaderRow {
+				return style.Bold(true).Foreground(lipgloss.Color("86"))
+			}
+			if row == m.rowSelected-firstRow {
+				return style.Foreground(lipgloss.Color("230")).Background(lipgloss.Color("62"))
+			}
+			if row%2 == 1 {
+				return style.Foreground(lipgloss.Color("252"))
+			}
+			return style.Foreground(lipgloss.Color("250"))
+		})
+}
+
+func (m Model) dataColumnWidths(width, firstColumn, lastColumn int) []int {
+	columnWidths := make([]int, lastColumn-firstColumn)
+	desiredWidths := make([]int, len(columnWidths))
+	usedWidth := 0
+
+	for columnIndex := firstColumn; columnIndex < lastColumn; columnIndex++ {
+		index := columnIndex - firstColumn
+		minimumWidth := lipgloss.Width(sanitizeText(m.rowPage.Columns[columnIndex])) + tableHorizontalPadding
+		columnWidths[index] = minimumWidth
+		desiredWidths[index] = minimumWidth
+
+		for _, row := range m.rowPage.Rows {
+			var value any
+			if columnIndex < len(row) {
+				value = row[columnIndex]
+			}
+			desiredWidths[index] = max(desiredWidths[index], lipgloss.Width(formatCell(value))+tableHorizontalPadding)
+		}
+		usedWidth += minimumWidth
+	}
+
+	availableWidth := tableWidth(width) - tableOuterBorderWidth - max(0, len(columnWidths)-1)*tableColumnBorderWidth
+	remainingWidth := max(0, availableWidth-usedWidth)
+	for remainingWidth > 0 {
+		totalNeededWidth := 0
+		for index := range columnWidths {
+			totalNeededWidth += desiredWidths[index] - columnWidths[index]
+		}
+		if totalNeededWidth == 0 {
+			break
+		}
+
+		for index := range columnWidths {
+			neededWidth := desiredWidths[index] - columnWidths[index]
+			if neededWidth == 0 || remainingWidth == 0 {
+				continue
+			}
+			additionalWidth := max(1, remainingWidth*neededWidth/totalNeededWidth)
+			additionalWidth = min(additionalWidth, neededWidth, remainingWidth)
+			columnWidths[index] += additionalWidth
+			remainingWidth -= additionalWidth
+		}
+	}
+
+	return columnWidths
+}
+
+func totalTableWidth(columnWidths []int) int {
+	width := tableOuterBorderWidth + max(0, len(columnWidths)-1)*tableColumnBorderWidth
+	for _, columnWidth := range columnWidths {
+		width += columnWidth
+	}
+	return width
 }
 
 func (m *Model) scrollColumns(delta int) {
 	m.columnOffset = min(max(m.columnOffset+delta, 0), m.maxColumnOffset())
+	m.ensureSelectedRowVisible()
 }
 
 func (m Model) maxColumnOffset() int {
-	return max(0, len(m.rowPage.Columns)-m.visibleDataColumns(m.dataPaneWidth()))
+	return max(0, len(m.rowPage.Columns)-1)
 }
 
-func (m Model) visibleDataColumns(dataWidth int) int {
-	return min(len(m.rowPage.Columns), max(1, (dataWidth-4)/14))
+func tableWidth(width int) int {
+	return max(20, width-4)
 }
 
 func (m Model) dataPaneWidth() int {
 	width := max(m.width, 64)
 	return width - navigatorWidth(width) - 1
+}
+
+func (m Model) dataPaneHeight() int {
+	return max(m.height, 16) - 4
 }
 
 func (m *Model) acceptWheel(button tea.MouseButton) bool {
@@ -577,6 +693,24 @@ func (m *Model) acceptWheel(button tea.MouseButton) bool {
 	m.lastWheelAt = now
 	m.lastWheelButton = button
 	return true
+}
+
+func spinnerTick() tea.Cmd {
+	return tea.Tick(spinnerInterval, func(time.Time) tea.Msg {
+		return spinnerTickMsg{}
+	})
+}
+
+func (m *Model) startSpinner() tea.Cmd {
+	if m.spinnerRunning {
+		return nil
+	}
+	m.spinnerRunning = true
+	return spinnerTick()
+}
+
+func (m Model) spinner() string {
+	return spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
 }
 
 func (m Model) selectedTableName() string {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/ernestoponce27/db-tui/internal/db"
+	"github.com/ernestoponce27/db-tui/internal/querylog"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -18,27 +19,38 @@ const listTablesSQL = `
 		AND table_type = 'BASE TABLE'
 	ORDER BY table_name`
 
+const queryLogPath = "queries.log"
+
 type postgresql struct {
-	pool *pgxpool.Pool
+	pool   *pgxpool.Pool
+	logger *querylog.Logger
 }
 
 // Connect opens a PostgreSQL database using dsn and verifies that it is reachable.
 func Connect(ctx context.Context, dsn string) (db.Database, error) {
+	logger, err := querylog.Open(queryLogPath)
+	if err != nil {
+		return nil, fmt.Errorf("open query log: %w", err)
+	}
+
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
+		_ = logger.Close()
 		return nil, fmt.Errorf("create PostgreSQL pool: %w", err)
 	}
 
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
+		_ = logger.Close()
 		return nil, fmt.Errorf("connect to PostgreSQL: %w", err)
 	}
 
-	return &postgresql{pool: pool}, nil
+	return &postgresql{pool: pool, logger: logger}, nil
 }
 
 // ListTables returns the base tables in the connected database's public schema.
 func (p *postgresql) ListTables(ctx context.Context) ([]db.Table, error) {
+	p.logger.Log(listTablesSQL)
 	rows, err := p.pool.Query(ctx, listTablesSQL)
 	if err != nil {
 		return nil, fmt.Errorf("query PostgreSQL tables: %w", err)
@@ -74,7 +86,9 @@ func (p *postgresql) GetRows(ctx context.Context, table db.Table, page db.PageRe
 
 	tableName := pgx.Identifier{"public", table.Name}.Sanitize()
 	query := fmt.Sprintf("SELECT * FROM %s LIMIT $1 OFFSET $2", tableName)
-	rows, err := p.pool.Query(ctx, query, page.Limit+1, page.Offset)
+	queryLimit := page.Limit + 1
+	p.logger.Log(fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", tableName, queryLimit, page.Offset))
+	rows, err := p.pool.Query(ctx, query, queryLimit, page.Offset)
 	if err != nil {
 		return db.RowPage{}, fmt.Errorf("query PostgreSQL rows: %w", err)
 	}
@@ -107,4 +121,5 @@ func (p *postgresql) GetRows(ctx context.Context, table db.Table, page db.PageRe
 // Close releases all connections held by the database.
 func (p *postgresql) Close() {
 	p.pool.Close()
+	_ = p.logger.Close()
 }
