@@ -30,6 +30,8 @@ type RowPage struct {
 
 // Database provides operations supported by a connected database.
 type Database interface {
+	// Name returns the connected database name for display.
+	Name() string
 	ListTables(ctx context.Context) ([]Table, error)
 	// GetRows returns an unordered page of rows from table.
 	GetRows(ctx context.Context, table Table, page PageRequest) (RowPage, error)

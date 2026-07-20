@@ -60,7 +60,8 @@ type Model struct {
 	databaseName    string
 	tables          []db.Table
 	loading         bool
-	loadErr         error
+	startupErr      error
+	tableLoadErr    error
 	rowPage         db.RowPage
 	rowOffset       int
 	rowViewport     int
@@ -80,15 +81,15 @@ type Model struct {
 }
 
 // New creates the root Bubble Tea application model for databaseName.
-func New(database db.Database, databaseName string, connectErr error) Model {
-	isLoading := database != nil && connectErr == nil
+func New(database db.Database, databaseName string, startupErr error) Model {
+	isLoading := database != nil && startupErr == nil
 
 	return Model{
 		database:       database,
 		databaseName:   databaseName,
 		loading:        isLoading,
 		spinnerRunning: isLoading,
-		loadErr:        connectErr,
+		startupErr:     startupErr,
 		width:          defaultWidth,
 		height:         defaultHeight,
 	}
@@ -96,7 +97,7 @@ func New(database db.Database, databaseName string, connectErr error) Model {
 
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
-	if m.database == nil || m.loadErr != nil {
+	if m.database == nil || m.startupErr != nil {
 		return nil
 	}
 	return tea.Batch(loadTables(m.database), spinnerTick())
@@ -145,7 +146,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tablesLoadedMsg:
 		m.loading = false
-		m.loadErr = msg.err
+		m.tableLoadErr = msg.err
 		m.tables = msg.tables
 		m.selected = 0
 		m.navigatorOffset = 0
@@ -287,9 +288,13 @@ func (m Model) View() tea.View {
 	leftWidth := navigatorWidth(width)
 	rightWidth := width - leftWidth - 1
 
+	headerTitle := "db-tui  /  PostgreSQL"
+	if m.databaseName != "" {
+		headerTitle = fmt.Sprintf("db-tui  /  %s  /  PostgreSQL", sanitizeText(m.databaseName))
+	}
 	header := lipgloss.NewStyle().Width(width).Padding(0, 1).Bold(true).
 		Foreground(lipgloss.Color("230")).Background(lipgloss.Color("62")).
-		Render(fmt.Sprintf("db-tui  /  %s  /  PostgreSQL", sanitizeText(m.databaseName)))
+		Render(headerTitle)
 	body := lipgloss.JoinHorizontal(lipgloss.Top,
 		m.renderNavigator(leftWidth, bodyHeight, m.focus == focusNavigator), " ",
 		m.renderData(rightWidth, bodyHeight, m.focus == focusData),
@@ -305,10 +310,13 @@ func (m Model) View() tea.View {
 }
 
 func (m Model) footerText() string {
+	if m.startupErr != nil {
+		return "unable to start database session  •  q quit"
+	}
 	if m.loading {
 		return "loading tables  •  q quit"
 	}
-	if m.loadErr != nil {
+	if m.tableLoadErr != nil {
 		return "unable to load tables  •  q quit"
 	}
 	if len(m.tables) == 0 {
@@ -340,10 +348,12 @@ func (m Model) footerText() string {
 func (m Model) renderNavigator(width, height int, focused bool) string {
 	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render("● " + sanitizeText(m.databaseName)), ""}
 	switch {
+	case m.startupErr != nil:
+		lines = append(lines, "Unable to start database session", truncateLabel(m.startupErr.Error(), max(1, width-4)))
 	case m.loading:
 		lines = append(lines, "Loading tables…")
-	case m.loadErr != nil:
-		lines = append(lines, "Unable to load tables", truncateLabel(m.loadErr.Error(), max(1, width-4)))
+	case m.tableLoadErr != nil:
+		lines = append(lines, "Unable to load tables", truncateLabel(m.tableLoadErr.Error(), max(1, width-4)))
 	case len(m.tables) == 0:
 		lines = append(lines, "No public tables.")
 	default:
@@ -366,10 +376,12 @@ func (m Model) renderNavigator(width, height int, focused bool) string {
 func (m Model) renderData(width, height int, focused bool) string {
 	tableName := m.selectedTableName()
 	switch {
+	case m.startupErr != nil:
+		return panelStyle(width, height, focused).Render("Unable to start database session:\n" + sanitizeText(m.startupErr.Error()))
 	case m.loading:
 		return panelStyle(width, height, focused).Render("Loading PostgreSQL tables…")
-	case m.loadErr != nil:
-		return panelStyle(width, height, focused).Render("Unable to load PostgreSQL tables:\n" + sanitizeText(m.loadErr.Error()))
+	case m.tableLoadErr != nil:
+		return panelStyle(width, height, focused).Render("Unable to load PostgreSQL tables:\n" + sanitizeText(m.tableLoadErr.Error()))
 	case len(m.tables) == 0:
 		return panelStyle(width, height, focused).Render("No public tables found.")
 	case m.rowsLoading:

@@ -24,16 +24,22 @@ const queryLogPath = "queries.log"
 type postgresql struct {
 	pool   *pgxpool.Pool
 	logger *querylog.Logger
+	name   string
 }
 
 // Connect opens a PostgreSQL database using dsn and verifies that it is reachable.
 func Connect(ctx context.Context, dsn string) (db.Database, error) {
+	poolConfig, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("parse PostgreSQL DSN: %w", err)
+	}
+
 	logger, err := querylog.Open(queryLogPath)
 	if err != nil {
 		return nil, fmt.Errorf("open query log: %w", err)
 	}
 
-	pool, err := pgxpool.New(ctx, dsn)
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		_ = logger.Close()
 		return nil, fmt.Errorf("create PostgreSQL pool: %w", err)
@@ -45,7 +51,12 @@ func Connect(ctx context.Context, dsn string) (db.Database, error) {
 		return nil, fmt.Errorf("connect to PostgreSQL: %w", err)
 	}
 
-	return &postgresql{pool: pool, logger: logger}, nil
+	return &postgresql{pool: pool, logger: logger, name: poolConfig.ConnConfig.Database}, nil
+}
+
+// Name returns the configured PostgreSQL database name.
+func (p *postgresql) Name() string {
+	return p.name
 }
 
 // ListTables returns the base tables in the connected database's public schema.

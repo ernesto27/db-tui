@@ -21,6 +21,7 @@ func TestListTables(t *testing.T) {
 		return
 	}
 	t.Cleanup(database.Close)
+	assert.Equal(t, "chinook", database.Name(), "Database.Name()")
 
 	tables, err := database.ListTables(ctx)
 	if !assert.NoError(t, err, "list tables") {

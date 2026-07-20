@@ -2,8 +2,6 @@
 
 `db-tui` is a keyboard-driven terminal database client written in Go with Bubble Tea. The first release targets PostgreSQL and focuses on the core workflow: browse database objects, write SQL, and inspect bounded query results.
 
-The project is currently in the planning and bootstrap stage.
-
 ## Requirements
 
 - Go 1.26 or newer
@@ -39,7 +37,17 @@ The Chinook dump is in `docker/postgres/init/001_chinook.sql`. PostgreSQL runs f
 
 ## Local configuration and secrets
 
-Do not commit passwords or credential-bearing database URLs. Local environment, connection, secret, and configuration files are ignored by Git; future connection profiles will resolve passwords from environment variables or an interactive prompt.
+On startup, db-tui creates `$HOME/.config/db-tui` and `$HOME/.config/db-tui/config.json` when necessary. The generated file contains an empty PostgreSQL DSN:
+
+```json
+{
+  "postgresql": {
+    "dsn": ""
+  }
+}
+```
+
+Set `postgresql.dsn` to the desired connection string. If the file is invalid, the DSN is empty, or the database cannot be reached, db-tui displays the error in the TUI. Do not commit passwords or credential-bearing database URLs; this configuration is private to the current user.
 
 ## License
 
