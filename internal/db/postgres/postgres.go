@@ -5,6 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
+	"strconv"
+	"strings"
 
 	"github.com/ernestoponce27/db-tui/internal/db"
 	"github.com/ernestoponce27/db-tui/internal/querylog"
@@ -20,6 +24,50 @@ const listTablesSQL = `
 	ORDER BY table_name`
 
 const queryLogPath = "queries.log"
+
+// PostgreSQLConfig contains the settings for one PostgreSQL connection.
+type PostgreSQLConfig struct {
+	DSN          string `json:"dsn,omitempty"`
+	Host         string `json:"host,omitempty"`
+	Port         int    `json:"port,omitempty"`
+	DatabaseName string `json:"databaseName,omitempty"`
+	Username     string `json:"username,omitempty"`
+	Password     string `json:"password,omitempty"`
+}
+
+// ConnectionDSN returns the configured DSN or builds one from individual settings.
+func (c PostgreSQLConfig) ConnectionDSN() (string, error) {
+	if dsn := strings.TrimSpace(c.DSN); dsn != "" {
+		return dsn, nil
+	}
+
+	host := strings.TrimSpace(c.Host)
+	databaseName := strings.TrimSpace(c.DatabaseName)
+	username := strings.TrimSpace(c.Username)
+	if host == "" {
+		return "", errors.New(`config field "postgresql.host" is required`)
+	}
+	if databaseName == "" {
+		return "", errors.New(`config field "postgresql.databaseName" is required`)
+	}
+	if username == "" {
+		return "", errors.New(`config field "postgresql.username" is required`)
+	}
+	if c.Port < 1 || c.Port > 65535 {
+		return "", errors.New(`config field "postgresql.port" must be between 1 and 65535`)
+	}
+
+	user := url.User(username)
+	if c.Password != "" {
+		user = url.UserPassword(username, c.Password)
+	}
+	return (&url.URL{
+		Scheme: "postgres",
+		User:   user,
+		Host:   net.JoinHostPort(host, strconv.Itoa(c.Port)),
+		Path:   "/" + databaseName,
+	}).String(), nil
+}
 
 type postgresql struct {
 	pool   *pgxpool.Pool

@@ -40,8 +40,9 @@ const (
 )
 
 type tablesLoadedMsg struct {
-	tables []db.Table
-	err    error
+	tables  []db.Table
+	session uint64
+	err     error
 }
 
 type rowsLoadedMsg struct {
@@ -49,6 +50,7 @@ type rowsLoadedMsg struct {
 	offset      int
 	selectedRow int
 	page        db.RowPage
+	session     uint64
 	err         error
 }
 
@@ -56,42 +58,52 @@ type spinnerTickMsg struct{}
 
 // Model is the root Bubble Tea application model.
 type Model struct {
-	database        db.Database
-	databaseName    string
-	tables          []db.Table
-	loading         bool
-	startupErr      error
-	tableLoadErr    error
-	rowPage         db.RowPage
-	rowOffset       int
-	rowViewport     int
-	rowSelected     int
-	columnOffset    int
-	rowsLoading     bool
-	rowsErr         error
-	spinnerFrame    int
-	spinnerRunning  bool
-	width           int
-	height          int
-	selected        int
-	navigatorOffset int
-	focus           focusPane
-	lastWheelAt     time.Time
-	lastWheelButton tea.MouseButton
+	database          db.Database
+	databaseName      string
+	savedConnection   ConnectionSettings
+	connect           ConnectFunc
+	saveConnection    SaveConnectionFunc
+	modal             *connectionModal
+	connectionAttempt uint64
+	session           uint64
+	tables            []db.Table
+	loading           bool
+	startupErr        error
+	tableLoadErr      error
+	rowPage           db.RowPage
+	rowOffset         int
+	rowViewport       int
+	rowSelected       int
+	columnOffset      int
+	rowsLoading       bool
+	rowsErr           error
+	spinnerFrame      int
+	spinnerRunning    bool
+	width             int
+	height            int
+	selected          int
+	navigatorOffset   int
+	focus             focusPane
+	lastWheelAt       time.Time
+	lastWheelButton   tea.MouseButton
 }
 
 // New creates the root Bubble Tea application model for databaseName.
-func New(database db.Database, databaseName string, startupErr error) Model {
+func New(database db.Database, databaseName string, startupErr error, savedConnection ConnectionSettings, connect ConnectFunc, saveConnection SaveConnectionFunc) Model {
 	isLoading := database != nil && startupErr == nil
 
 	return Model{
-		database:       database,
-		databaseName:   databaseName,
-		loading:        isLoading,
-		spinnerRunning: isLoading,
-		startupErr:     startupErr,
-		width:          defaultWidth,
-		height:         defaultHeight,
+		database:        database,
+		databaseName:    databaseName,
+		savedConnection: savedConnection,
+		connect:         connect,
+		saveConnection:  saveConnection,
+		loading:         isLoading,
+		spinnerRunning:  isLoading,
+		startupErr:      startupErr,
+		session:         1,
+		width:           defaultWidth,
+		height:          defaultHeight,
 	}
 }
 
@@ -100,20 +112,20 @@ func (m Model) Init() tea.Cmd {
 	if m.database == nil || m.startupErr != nil {
 		return nil
 	}
-	return tea.Batch(loadTables(m.database), spinnerTick())
+	return tea.Batch(loadTables(m.database, m.session), spinnerTick())
 }
 
-func loadTables(database db.Database) tea.Cmd {
+func loadTables(database db.Database, session uint64) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
 		defer cancel()
 
 		tables, err := database.ListTables(ctx)
-		return tablesLoadedMsg{tables: tables, err: err}
+		return tablesLoadedMsg{tables: tables, session: session, err: err}
 	}
 }
 
-func loadRows(database db.Database, table db.Table, offset, selectedRow int) tea.Cmd {
+func loadRows(database db.Database, table db.Table, offset, selectedRow int, session uint64) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
 		defer cancel()
@@ -127,6 +139,7 @@ func loadRows(database db.Database, table db.Table, offset, selectedRow int) tea
 			offset:      offset,
 			selectedRow: selectedRow,
 			page:        page,
+			session:     session,
 			err:         err,
 		}
 	}
@@ -134,6 +147,17 @@ func loadRows(database db.Database, table db.Table, offset, selectedRow int) tea
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.modal != nil {
+		switch msg.(type) {
+		case spinnerTickMsg, tablesLoadedMsg, rowsLoadedMsg, tea.WindowSizeMsg:
+			// Keep background loading and terminal sizing active behind the modal.
+		case tea.MouseClickMsg, tea.MouseWheelMsg:
+			return m, nil
+		default:
+			return m.updateModal(msg)
+		}
+	}
+
 	var command tea.Cmd
 
 	switch msg := msg.(type) {
@@ -145,6 +169,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.spinnerRunning = false
 		}
 	case tablesLoadedMsg:
+		if msg.session != m.session {
+			return m, nil
+		}
 		m.loading = false
 		m.tableLoadErr = msg.err
 		m.tables = msg.tables
@@ -155,7 +182,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			command = m.startRowLoad(0, 0)
 		}
 	case rowsLoadedMsg:
-		if len(m.tables) == 0 || m.selected >= len(m.tables) ||
+		if msg.session != m.session || len(m.tables) == 0 || m.selected >= len(m.tables) ||
 			msg.tableName != m.tables[m.selected].Name || msg.offset != m.rowOffset {
 			return m, nil
 		}
@@ -176,6 +203,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.columnOffset = min(m.columnOffset, m.maxColumnOffset())
 	case tea.KeyPressMsg:
 		switch msg.String() {
+		case "ctrl+l":
+			modal := newConnectionModal(m.savedConnection)
+			m.modal = &modal
+			command = m.modal.focus(0)
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "left":
@@ -280,8 +311,71 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, command
 }
 
+func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+	case submitConnectionMsg:
+		settings, err := m.modal.connectionSettings()
+		if err != nil {
+			m.modal.errorText = err.Error()
+			return m, nil
+		}
+		m.modal.errorText = ""
+		m.modal.connecting = true
+		m.connectionAttempt++
+		return m, connectAndSave(m.connect, m.saveConnection, settings, m.connectionAttempt)
+	case cancelConnectionMsg:
+		m.modal = nil
+		return m, nil
+	case connectionFinishedMsg:
+		if msg.attempt != m.connectionAttempt {
+			if msg.database != nil {
+				msg.database.Close()
+			}
+			return m, nil
+		}
+		m.modal.connecting = false
+		if msg.err != nil {
+			m.modal.errorText = msg.err.Error()
+			return m, nil
+		}
+
+		if m.database != nil {
+			m.database.Close()
+		}
+		m.database = msg.database
+		m.databaseName = msg.database.Name()
+		m.savedConnection = msg.settings
+		m.startupErr = nil
+		m.tableLoadErr = nil
+		m.tables = nil
+		m.selected = 0
+		m.navigatorOffset = 0
+		m.resetRows()
+		m.loading = true
+		m.session++
+		m.modal = nil
+		return m, tea.Batch(loadTables(m.database, m.session), m.startSpinner())
+	default:
+		modal, command := m.modal.update(msg)
+		m.modal = &modal
+		return m, command
+	}
+}
+
 // View implements tea.Model.
 func (m Model) View() tea.View {
+	view := m.baseView()
+	if m.modal != nil {
+		view.Content = m.renderModalOverlay(view.Content)
+	}
+	return view
+}
+
+func (m Model) baseView() tea.View {
 	width := max(m.width, 64)
 	height := max(m.height, 16)
 	bodyHeight := height - 4
@@ -307,6 +401,20 @@ func (m Model) View() tea.View {
 	view.MouseMode = tea.MouseModeCellMotion
 	view.WindowTitle = "db-tui"
 	return view
+}
+
+func (m Model) renderModalOverlay(base string) string {
+	width := max(m.width, 64)
+	height := max(m.height, 16)
+	modal := m.modal.view(width)
+
+	return lipgloss.NewCompositor(
+		lipgloss.NewLayer(base),
+		lipgloss.NewLayer(modal).
+			X(max(0, (width-lipgloss.Width(modal))/2)).
+			Y(max(0, (height-lipgloss.Height(modal))/2)).
+			Z(1),
+	).Render()
 }
 
 func (m Model) footerText() string {
@@ -438,7 +546,7 @@ func (m *Model) startRowLoad(offset, selectedRow int) tea.Cmd {
 	m.rowPage = db.RowPage{}
 	m.rowsLoading = true
 	m.rowsErr = nil
-	return tea.Batch(loadRows(m.database, m.tables[m.selected], offset, selectedRow), m.startSpinner())
+	return tea.Batch(loadRows(m.database, m.tables[m.selected], offset, selectedRow, m.session), m.startSpinner())
 }
 
 func (m *Model) resetRows() {
@@ -756,6 +864,13 @@ func truncateLabel(label string, width int) string {
 		return ""
 	}
 	return ansi.Truncate(sanitizeText(label), width, "…")
+}
+
+// Close releases the current database session, if any.
+func (m Model) Close() {
+	if m.database != nil {
+		m.database.Close()
+	}
 }
 
 var _ tea.Model = Model{}

@@ -20,21 +20,51 @@ const connectionTimeout = 5 * time.Second
 func main() {
 	var database db.Database
 	var databaseName string
-	config, startErr := config.Load()
+	var savedConnection app.ConnectionSettings
+	applicationConfig, startErr := config.Load()
 	if startErr == nil {
-		ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
-		database, startErr = postgres.Connect(ctx, config.PostgreSQL.DSN)
-		cancel()
-		if database != nil {
-			databaseName = database.Name()
+		savedConnection = appConnectionSettings(*applicationConfig.PostgreSQL)
+		var dsn string
+		dsn, startErr = applicationConfig.PostgreSQL.ConnectionDSN()
+		if startErr == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
+			database, startErr = postgres.Connect(ctx, dsn)
+			cancel()
+			if database != nil {
+				databaseName = database.Name()
+			}
 		}
 	}
-	if database != nil {
-		defer database.Close()
-	}
 
-	if _, err := tea.NewProgram(app.New(database, databaseName, startErr)).Run(); err != nil {
+	model := app.New(database, databaseName, startErr, savedConnection, postgres.Connect, saveConnectionSettings)
+	finalModel, err := tea.NewProgram(model).Run()
+	if finalApp, ok := finalModel.(app.Model); ok {
+		finalApp.Close()
+	}
+	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "db-tui: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func appConnectionSettings(postgreSQLConfig postgres.PostgreSQLConfig) app.ConnectionSettings {
+	return app.ConnectionSettings{
+		DSN:          postgreSQLConfig.DSN,
+		Host:         postgreSQLConfig.Host,
+		Port:         postgreSQLConfig.Port,
+		DatabaseName: postgreSQLConfig.DatabaseName,
+		Username:     postgreSQLConfig.Username,
+		Password:     postgreSQLConfig.Password,
+	}
+}
+
+func saveConnectionSettings(settings app.ConnectionSettings) error {
+	return config.SavePostgreSQLConfig(postgres.PostgreSQLConfig{
+		DSN:          settings.DSN,
+		Host:         settings.Host,
+		Port:         settings.Port,
+		DatabaseName: settings.DatabaseName,
+		Username:     settings.Username,
+		Password:     settings.Password,
+	})
 }

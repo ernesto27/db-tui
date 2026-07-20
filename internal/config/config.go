@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+
+	"github.com/ernestoponce27/db-tui/internal/db/postgres"
 )
 
 const (
@@ -16,14 +17,9 @@ const (
 	configFileName      = "config.json"
 )
 
-// PostgreSQLConfig contains the PostgreSQL connection settings.
-type PostgreSQLConfig struct {
-	DSN string `json:"dsn"`
-}
-
 // Config contains db-tui connection settings.
 type Config struct {
-	PostgreSQL *PostgreSQLConfig `json:"postgresql"`
+	PostgreSQL *postgres.PostgreSQLConfig `json:"postgresql"`
 }
 
 // Load reads the db-tui configuration from $HOME/.config/db-tui/config.json.
@@ -53,25 +49,58 @@ func Load() (Config, error) {
 	if config.PostgreSQL == nil {
 		return Config{}, errors.New(`config field "postgresql" is required`)
 	}
-	if strings.TrimSpace(config.PostgreSQL.DSN) == "" {
-		return Config{}, errors.New(`config field "postgresql.dsn" is required`)
+	if _, err := config.PostgreSQL.ConnectionDSN(); err != nil {
+		return Config{}, err
 	}
 
 	return config, nil
 }
 
-func createEmptyConfig(path string) ([]byte, error) {
-	data, err := json.MarshalIndent(Config{
-		PostgreSQL: &PostgreSQLConfig{},
-	}, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("encode empty config: %w", err)
+// SavePostgreSQLDSN writes dsn as the saved PostgreSQL connection.
+func SavePostgreSQLDSN(dsn string) error {
+	return SavePostgreSQLConfig(postgres.PostgreSQLConfig{DSN: dsn})
+}
+
+// SavePostgreSQLConfig writes PostgreSQL connection settings.
+func SavePostgreSQLConfig(postgreSQLConfig postgres.PostgreSQLConfig) error {
+	if _, err := postgreSQLConfig.ConnectionDSN(); err != nil {
+		return err
 	}
-	data = append(data, '\n')
+	path, err := configPath()
+	if err != nil {
+		return err
+	}
+	return writeConfig(path, Config{PostgreSQL: &postgreSQLConfig})
+}
+
+func createEmptyConfig(path string) ([]byte, error) {
+	data, err := encodeConfig(Config{PostgreSQL: &postgres.PostgreSQLConfig{}})
+	if err != nil {
+		return nil, err
+	}
 	if err := os.WriteFile(path, data, configFileMode); err != nil {
 		return nil, fmt.Errorf("create empty config: %w", err)
 	}
 	return data, nil
+}
+
+func writeConfig(path string, config Config) error {
+	data, err := encodeConfig(config)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, data, configFileMode); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+	return nil
+}
+
+func encodeConfig(config Config) ([]byte, error) {
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode config: %w", err)
+	}
+	return append(data, '\n'), nil
 }
 
 func configPath() (string, error) {

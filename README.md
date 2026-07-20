@@ -47,7 +47,11 @@ On startup, db-tui creates `$HOME/.config/db-tui` and `$HOME/.config/db-tui/conf
 }
 ```
 
-Set `postgresql.dsn` to the desired connection string. If the file is invalid, the DSN is empty, or the database cannot be reached, db-tui displays the error in the TUI. Do not commit passwords or credential-bearing database URLs; this configuration is private to the current user.
+Set `postgresql.dsn` to the desired connection string. If the file is invalid, the DSN is empty, or the database cannot be reached, db-tui displays the error in the TUI.
+
+Press `Ctrl+L` in the TUI to open the PostgreSQL connection modal. You can paste a complete DSN, or enter the host, database name, port, username, and optional password. When a DSN is provided it takes precedence over the individual fields and is saved as `postgresql.dsn`. When you connect with the individual fields, those fields are saved in `postgresql` instead—no generated DSN is written to the configuration file. The app tests the connection before saving it and immediately switches to the successful connection. Connection failures stay in the modal and preserve the entered values.
+
+For this first version, a password is stored as plaintext inside the DSN. The configuration file is private to the current user (`0600`), but it is not encrypted. Do not commit passwords or credential-bearing database URLs.
 
 ## License
 

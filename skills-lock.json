@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "skills": {
+    "caveman": {
+      "source": "ernesto27/skills",
+      "sourceType": "github",
+      "skillPath": "skills/caveman/SKILL.md",
+      "computedHash": "a818cdc41dcfaa50dd891c5cb5e5705968338de02e7e37949ca56e8c30ad4176"
+    },
+    "commit-push": {
+      "source": "ernesto27/skills",
+      "sourceType": "github",
+      "skillPath": "skills/commit-push/SKILL.md",
+      "computedHash": "e4393197d4aeb4dbe6621575b71dc84b62f7130ec99db9c4c507d2d61d5a294f"
+    },
+    "deep-research": {
+      "source": "ernesto27/skills",
+      "sourceType": "github",
+      "skillPath": "skills/deep-research/SKILL.md",
+      "computedHash": "59a9a850fb0e77692c24605360a9ee76a13f6636a9c8c7ee01598c175d606d9f"
+    },
+    "explain-changes": {
+      "source": "ernesto27/skills",
+      "sourceType": "github",
+      "skillPath": "skills/explain-changes/SKILL.md",
+      "computedHash": "b92c9736ab83f2886b890efccdeb9feed5da114c3c556fd2d70a3c5b954eb410"
+    },
+    "plan-from-spec": {
+      "source": "ernesto27/skills",
+      "sourceType": "github",
+      "skillPath": "skills/plan-from-spec/SKILL.md",
+      "computedHash": "8c2e709d1cd6b7db90edf1401d13c4c4c766ed4ede1db7292bbbd1df4ae24126"
+    },
+    "tutorial-master": {
+      "source": "ernesto27/skills",
+      "sourceType": "github",
+      "skillPath": "skills/tutorial-master/SKILL.md",
+      "computedHash": "81295f597cc55f381082d3937cb7265f88a7613292f6b40beda3a86c520aaef2"
+    }
+  }
+}
