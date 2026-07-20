@@ -2,13 +2,18 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
 const (
@@ -17,17 +22,9 @@ const (
 	defaultWidth          = 100
 	defaultHeight         = 24
 	wheelDebounce         = 50 * time.Millisecond
-	noModal               = -1
+	tableLoadTimeout      = 5 * time.Second
+	rowPageSize           = 20
 )
-
-var mockTableNames = buildMockTableNames(200)
-
-var mockUsers = buildMockUsers(200)
-
-var mockUserHeaders = []string{
-	"ID", "USERNAME", "NAME", "EMAIL", "ROLE", "DEPARTMENT", "STATUS", "CREATED", "LAST LOGIN",
-	"PHONE", "COUNTRY", "CITY", "TZ", "LANG", "PLAN", "LOGINS", "API KEYS", "2FA", "UPDATED",
-}
 
 type focusPane uint8
 
@@ -36,77 +33,135 @@ const (
 	focusData
 )
 
-// Model is the root Bubble Tea model.
-type Model struct {
-	width            int
-	height           int
-	selected         int
-	navigatorOffset  int
-	userOffset       int
-	userColumnOffset int
-	focus            focusPane
-	lastWheelAt      time.Time
-	lastWheelButton  tea.MouseButton
-	modalTable       int
-	notice           string
+type tablesLoadedMsg struct {
+	tables []db.Table
+	err    error
 }
 
-// New creates the root application model with mock data.
-func New() Model {
+type rowsLoadedMsg struct {
+	tableName   string
+	offset      int
+	selectedRow int
+	page        db.RowPage
+	err         error
+}
+
+// Model is the root Bubble Tea application model.
+type Model struct {
+	database        db.Database
+	databaseName    string
+	tables          []db.Table
+	loading         bool
+	loadErr         error
+	rowPage         db.RowPage
+	rowOffset       int
+	rowViewport     int
+	rowSelected     int
+	columnOffset    int
+	rowsLoading     bool
+	rowsErr         error
+	width           int
+	height          int
+	selected        int
+	navigatorOffset int
+	focus           focusPane
+	lastWheelAt     time.Time
+	lastWheelButton tea.MouseButton
+}
+
+// New creates the root Bubble Tea application model for databaseName.
+func New(database db.Database, databaseName string, connectErr error) Model {
+	isLoading := database != nil && connectErr == nil
+
 	return Model{
-		width:      defaultWidth,
-		height:     defaultHeight,
-		selected:   0,
-		modalTable: noModal,
+		database:     database,
+		databaseName: databaseName,
+		loading:      isLoading,
+		loadErr:      connectErr,
+		width:        defaultWidth,
+		height:       defaultHeight,
 	}
 }
 
 // Init implements tea.Model.
-func (Model) Init() tea.Cmd {
-	return nil
+func (m Model) Init() tea.Cmd {
+	if m.database == nil || m.loadErr != nil {
+		return nil
+	}
+	return loadTables(m.database)
+}
+
+func loadTables(database db.Database) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		defer cancel()
+
+		tables, err := database.ListTables(ctx)
+		return tablesLoadedMsg{tables: tables, err: err}
+	}
+}
+
+func loadRows(database db.Database, table db.Table, offset, selectedRow int) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		defer cancel()
+
+		page, err := database.GetRows(ctx, table, db.PageRequest{
+			Offset: offset,
+			Limit:  rowPageSize,
+		})
+		return rowsLoadedMsg{
+			tableName:   table.Name,
+			offset:      offset,
+			selectedRow: selectedRow,
+			page:        page,
+			err:         err,
+		}
+	}
 }
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if m.modalTable != noModal {
-		switch msg := msg.(type) {
-		case tea.WindowSizeMsg:
-			m.width = msg.Width
-			m.height = msg.Height
-		case tea.KeyPressMsg:
-			switch msg.String() {
-			case "esc", "q":
-				m.modalTable = noModal
-			case "1":
-				m.notice = "Mock action: preview rows"
-				m.modalTable = noModal
-			case "2":
-				m.notice = "Mock action: describe table"
-				m.modalTable = noModal
-			case "3":
-				m.notice = "Mock action: copy table name"
-				m.modalTable = noModal
-			}
-		case tea.MouseClickMsg:
-			m.modalTable = noModal
-		}
-		return m, nil
-	}
+	var command tea.Cmd
 
 	switch msg := msg.(type) {
+	case tablesLoadedMsg:
+		m.loading = false
+		m.loadErr = msg.err
+		m.tables = msg.tables
+		m.selected = 0
+		m.navigatorOffset = 0
+		m.resetRows()
+		if msg.err == nil && len(m.tables) > 0 {
+			command = m.startRowLoad(0, 0)
+		}
+	case rowsLoadedMsg:
+		if len(m.tables) == 0 || m.selected >= len(m.tables) ||
+			msg.tableName != m.tables[m.selected].Name || msg.offset != m.rowOffset {
+			return m, nil
+		}
+		m.rowsLoading = false
+		m.rowsErr = msg.err
+		if msg.err == nil {
+			m.rowPage = msg.page
+			m.rowViewport = 0
+			m.rowSelected = min(msg.selectedRow, max(0, len(m.rowPage.Rows)-1))
+			m.ensureSelectedRowVisible()
+			m.columnOffset = 0
+		}
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m.ensureSelectionVisible()
-		m.userOffset = min(m.userOffset, m.maxUserOffset())
-		m.userColumnOffset = min(m.userColumnOffset, m.maxUserColumnOffset())
+		m.ensureSelectedRowVisible()
+		m.columnOffset = min(m.columnOffset, m.maxColumnOffset())
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "left":
-			if m.focus == focusData && m.userColumnOffset > 0 {
-				m.scrollUserColumns(-1)
+			if m.focus == focusData && m.columnOffset > 0 {
+				m.scrollColumns(-1)
 			} else {
 				m.focus = focusNavigator
 			}
@@ -114,61 +169,64 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focus == focusNavigator {
 				m.focus = focusData
 			} else {
-				m.scrollUserColumns(1)
+				m.scrollColumns(1)
 			}
 		case "up", "k":
 			if m.focus == focusNavigator {
-				m.moveSelection(-1)
+				if m.moveSelection(-1) {
+					command = m.startRowLoad(0, 0)
+				}
 			} else {
-				m.scrollUsers(-1)
+				command = m.moveDataUp()
 			}
 		case "down", "j":
 			if m.focus == focusNavigator {
-				m.moveSelection(1)
+				if m.moveSelection(1) {
+					command = m.startRowLoad(0, 0)
+				}
 			} else {
-				m.scrollUsers(1)
+				command = m.moveDataDown()
 			}
 		case "pgup":
 			if m.focus == focusNavigator {
-				m.moveSelection(-m.visibleNavigatorRows())
-			} else {
-				m.scrollUsers(-m.visibleUserRows())
+				if m.moveSelection(-m.visibleNavigatorRows()) {
+					command = m.startRowLoad(0, 0)
+				}
+			} else if m.rowOffset > 0 && !m.rowsLoading {
+				command = m.startRowLoad(max(0, m.rowOffset-rowPageSize), 0)
 			}
 		case "pgdown":
 			if m.focus == focusNavigator {
-				m.moveSelection(m.visibleNavigatorRows())
-			} else {
-				m.scrollUsers(m.visibleUserRows())
+				if m.moveSelection(m.visibleNavigatorRows()) {
+					command = m.startRowLoad(0, 0)
+				}
+			} else if m.rowPage.HasMore && !m.rowsLoading {
+				command = m.startRowLoad(m.rowOffset+rowPageSize, 0)
 			}
 		case "home":
-			if m.focus == focusNavigator {
+			if m.focus == focusNavigator && len(m.tables) > 0 && m.selected != 0 {
 				m.selected = 0
 				m.ensureSelectionVisible()
-			} else {
-				m.userOffset = 0
+				command = m.startRowLoad(0, 0)
 			}
 		case "end":
-			if m.focus == focusNavigator {
-				m.selected = len(mockTableNames) - 1
+			if m.focus == focusNavigator && len(m.tables) > 0 && m.selected != len(m.tables)-1 {
+				m.selected = len(m.tables) - 1
 				m.ensureSelectionVisible()
-			} else {
-				m.userOffset = m.maxUserOffset()
+				command = m.startRowLoad(0, 0)
 			}
 		}
 	case tea.MouseClickMsg:
 		visibleIndex := msg.Y - bodyStartRow - navigatorListStartRow
 		itemIndex := m.navigatorOffset + visibleIndex
 		navigatorWidth := navigatorWidth(m.width)
-		if (msg.Button == tea.MouseLeft || msg.Button == tea.MouseRight) &&
-			msg.X > 0 && msg.X < navigatorWidth-1 &&
+		if msg.Button == tea.MouseLeft && msg.X > 0 && msg.X < navigatorWidth-1 &&
 			visibleIndex >= 0 && visibleIndex < m.visibleNavigatorRows() &&
-			itemIndex >= 0 && itemIndex < len(mockTableNames) {
+			itemIndex >= 0 && itemIndex < len(m.tables) {
 			m.focus = focusNavigator
-			m.selected = itemIndex
-			m.userOffset = 0
-			m.userColumnOffset = 0
-			if msg.Button == tea.MouseRight {
-				m.modalTable = itemIndex
+			if m.selected != itemIndex {
+				m.selected = itemIndex
+				command = m.startRowLoad(0, 0)
 			}
 		} else if msg.Button == tea.MouseLeft && msg.X >= navigatorWidth {
 			m.focus = focusData
@@ -181,21 +239,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.focus = focusNavigator
 			switch msg.Button {
 			case tea.MouseWheelUp:
-				m.moveSelection(-1)
+				if m.moveSelection(-1) {
+					command = m.startRowLoad(0, 0)
+				}
 			case tea.MouseWheelDown:
-				m.moveSelection(1)
+				if m.moveSelection(1) {
+					command = m.startRowLoad(0, 0)
+				}
 			}
-		} else if m.selected == 0 {
+		} else {
 			m.focus = focusData
 			switch msg.Button {
 			case tea.MouseWheelUp:
-				m.scrollUsers(-1)
+				command = m.moveDataUp()
 			case tea.MouseWheelDown:
-				m.scrollUsers(1)
+				command = m.moveDataDown()
 			}
 		}
 	}
-	return m, nil
+
+	return m, command
 }
 
 // View implements tea.Model.
@@ -206,136 +269,124 @@ func (m Model) View() tea.View {
 	leftWidth := navigatorWidth(width)
 	rightWidth := width - leftWidth - 1
 
-	header := lipgloss.NewStyle().
-		Width(width).
-		Padding(0, 1).
-		Bold(true).
-		Foreground(lipgloss.Color("230")).
-		Background(lipgloss.Color("62")).
-		Render("db-tui  /  demo_store  /  PostgreSQL (mock)")
+	header := lipgloss.NewStyle().Width(width).Padding(0, 1).Bold(true).
+		Foreground(lipgloss.Color("230")).Background(lipgloss.Color("62")).
+		Render(fmt.Sprintf("db-tui  /  %s  /  PostgreSQL", sanitizeText(m.databaseName)))
+	body := lipgloss.JoinHorizontal(lipgloss.Top,
+		m.renderNavigator(leftWidth, bodyHeight, m.focus == focusNavigator), " ",
+		m.renderData(rightWidth, bodyHeight, m.focus == focusData),
+	)
+	footer := lipgloss.NewStyle().Width(width).Padding(0, 1).
+		Foreground(lipgloss.Color("245")).Render(m.footerText())
 
-	navigator := m.renderNavigator(leftWidth, bodyHeight, m.focus == focusNavigator)
-	data := m.renderData(rightWidth, bodyHeight, m.focus == focusData)
-	body := lipgloss.JoinHorizontal(lipgloss.Top, navigator, " ", data)
+	view := tea.NewView(strings.Join([]string{header, body, footer}, "\n"))
+	view.AltScreen = true
+	view.MouseMode = tea.MouseModeCellMotion
+	view.WindowTitle = "db-tui"
+	return view
+}
+
+func (m Model) footerText() string {
+	if m.loading {
+		return "loading tables  •  q quit"
+	}
+	if m.loadErr != nil {
+		return "unable to load tables  •  q quit"
+	}
+	if len(m.tables) == 0 {
+		return "no public tables  •  q quit"
+	}
 
 	firstTable := m.navigatorOffset + 1
-	lastTable := min(m.navigatorOffset+m.visibleNavigatorRows(), len(mockTableNames))
+	lastTable := min(m.navigatorOffset+m.visibleNavigatorRows(), len(m.tables))
 	focusLabel := "tables"
 	if m.focus == focusData {
 		focusLabel = "data"
 	}
-	footerText := fmt.Sprintf("%s  •  tables %d–%d/%d  •  focus: %s  •  ←/→ switch  •  q quit", mockTableNames[m.selected], firstTable, lastTable, len(mockTableNames), focusLabel)
-	if m.selected == 0 {
-		firstUser := m.userOffset + 1
-		lastUser := min(m.userOffset+m.visibleUserRows(), len(mockUsers))
-		firstColumn := m.userColumnOffset + 1
-		lastColumn := min(m.userColumnOffset+m.visibleUserColumns(m.dataPaneWidth()), len(mockUserHeaders))
-		footerText = fmt.Sprintf("users %d–%d/%d  •  cols %d–%d/%d  •  focus: %s  •  ←/→ scroll  •  q quit", firstUser, lastUser, len(mockUsers), firstColumn, lastColumn, len(mockUserHeaders), focusLabel)
+	rowStatus := ""
+	if m.rowsLoading {
+		rowStatus = "  •  query executing…"
+	} else if m.rowsErr != nil {
+		rowStatus = "  •  row load failed"
+	} else if len(m.rowPage.Rows) > 0 {
+		firstRow := m.rowOffset + 1
+		lastRow := m.rowOffset + len(m.rowPage.Rows)
+		rowStatus = fmt.Sprintf("  •  rows %d–%d", firstRow, lastRow)
+		if m.rowPage.HasMore {
+			rowStatus += "  •  PgDown next"
+		}
 	}
-	footer := lipgloss.NewStyle().
-		Width(width).
-		Padding(0, 1).
-		Foreground(lipgloss.Color("245")).
-		Render(footerText)
-
-	content := strings.Join([]string{header, body, footer}, "\n")
-	if m.notice != "" {
-		content += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render(m.notice)
-	}
-	if m.modalTable != noModal {
-		content = m.renderModal(content, width, height)
-	}
-
-	view := tea.NewView(content)
-	view.AltScreen = true
-	view.MouseMode = tea.MouseModeCellMotion
-	view.WindowTitle = "db-tui prototype"
-	return view
-}
-
-func (m Model) renderModal(base string, width, height int) string {
-	tableName := mockTableNames[m.modalTable]
-	dialog := lipgloss.NewStyle().
-		Width(38).
-		Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("86")).
-		Foreground(lipgloss.Color("230")).
-		Background(lipgloss.Color("236")).
-		Render(strings.Join([]string{
-			"Table options",
-			"",
-			"Table: " + tableName,
-			"",
-			"1. Preview rows",
-			"2. Describe table",
-			"3. Copy table name",
-			"",
-			"Esc, q, or click to close",
-		}, "\n"))
-
-	dialogLayer := lipgloss.NewLayer(dialog).
-		X(max(0, (width-lipgloss.Width(dialog))/2)).
-		Y(max(0, (height-lipgloss.Height(dialog))/2)).
-		Z(1)
-	return lipgloss.NewCompositor(lipgloss.NewLayer(base), dialogLayer).Render()
+	return fmt.Sprintf("%s  •  tables %d–%d/%d  •  focus: %s%s  •  ←/→ switch  •  q quit", m.selectedTableName(), firstTable, lastTable, len(m.tables), focusLabel, rowStatus)
 }
 
 func (m Model) renderNavigator(width, height int, focused bool) string {
-	visibleRows := max(1, height-5)
-	lastVisible := min(m.navigatorOffset+visibleRows, len(mockTableNames))
-	lines := []string{
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render("● demo_store"),
-		"",
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("245")).Render(
-			fmt.Sprintf("TABLES (%d)", len(mockTableNames)),
-		),
-	}
-
-	for index := m.navigatorOffset; index < lastVisible; index++ {
-		name := mockTableNames[index]
-		itemWidth := max(1, width-4)
-		marker := "  "
-		style := lipgloss.NewStyle().Width(itemWidth)
-		if index == m.selected {
-			marker = "> "
-			style = style.Bold(true).
-				Foreground(lipgloss.Color("230")).
-				Background(lipgloss.Color("62"))
+	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render("● " + sanitizeText(m.databaseName)), ""}
+	switch {
+	case m.loading:
+		lines = append(lines, "Loading tables…")
+	case m.loadErr != nil:
+		lines = append(lines, "Unable to load tables", truncateLabel(m.loadErr.Error(), max(1, width-4)))
+	case len(m.tables) == 0:
+		lines = append(lines, "No public tables.")
+	default:
+		lines = append(lines, lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("245")).Render(fmt.Sprintf("TABLES (%d)", len(m.tables))))
+		lastVisible := min(m.navigatorOffset+m.visibleNavigatorRows(), len(m.tables))
+		for index := m.navigatorOffset; index < lastVisible; index++ {
+			itemWidth := max(1, width-4)
+			marker := "  "
+			style := lipgloss.NewStyle().Width(itemWidth)
+			if index == m.selected {
+				marker = "> "
+				style = style.Bold(true).Foreground(lipgloss.Color("230")).Background(lipgloss.Color("62"))
+			}
+			lines = append(lines, style.Render(marker+truncateLabel(m.tables[index].Name, max(0, itemWidth-len(marker)))))
 		}
-		lines = append(lines, style.Render(marker+truncateLabel(name, max(0, itemWidth-len(marker)))))
 	}
-
 	return panelStyle(width, height, focused).Render(strings.Join(lines, "\n"))
 }
 
 func (m Model) renderData(width, height int, focused bool) string {
-	selectedTable := mockTableNames[m.selected]
-	if selectedTable != "users" {
-		content := strings.Join([]string{
-			lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render(selectedTable + "  •  mock table"),
-			"",
-			"No preview rows in this prototype.",
-			"Select users to view the mock data grid.",
-		}, "\n")
-		return panelStyle(width, height, focused).Render(content)
+	tableName := m.selectedTableName()
+	switch {
+	case m.loading:
+		return panelStyle(width, height, focused).Render("Loading PostgreSQL tables…")
+	case m.loadErr != nil:
+		return panelStyle(width, height, focused).Render("Unable to load PostgreSQL tables:\n" + sanitizeText(m.loadErr.Error()))
+	case len(m.tables) == 0:
+		return panelStyle(width, height, focused).Render("No public tables found.")
+	case m.rowsLoading:
+		return panelStyle(width, height, focused).Render(tableName + "\n\nQuery executing…")
+	case m.rowsErr != nil:
+		return panelStyle(width, height, focused).Render(tableName + "\n\nUnable to load rows:\n" + sanitizeText(m.rowsErr.Error()))
+	case len(m.rowPage.Rows) == 0:
+		return panelStyle(width, height, focused).Render(tableName + "\n\nNo rows in this page.")
 	}
 
-	columnCount := m.visibleUserColumns(width)
-	firstColumn := min(m.userColumnOffset, len(mockUserHeaders)-columnCount)
-	lastColumn := min(firstColumn+columnCount, len(mockUserHeaders))
-	headers := mockUserHeaders[firstColumn:lastColumn]
-	rows := make([][]string, len(mockUsers))
-	for index, row := range mockUsers {
-		rows[index] = row[firstColumn:lastColumn]
+	columnCount := m.visibleDataColumns(width)
+	firstColumn := min(m.columnOffset, len(m.rowPage.Columns)-columnCount)
+	lastColumn := min(firstColumn+columnCount, len(m.rowPage.Columns))
+	headers := make([]string, 0, lastColumn-firstColumn)
+	for _, column := range m.rowPage.Columns[firstColumn:lastColumn] {
+		headers = append(headers, sanitizeText(column))
+	}
+	rows := make([][]string, len(m.rowPage.Rows))
+	for rowIndex, row := range m.rowPage.Rows {
+		rows[rowIndex] = make([]string, 0, lastColumn-firstColumn)
+		for columnIndex := firstColumn; columnIndex < lastColumn; columnIndex++ {
+			var value any
+			if columnIndex < len(row) {
+				value = row[columnIndex]
+			}
+			rows[rowIndex] = append(rows[rowIndex], formatCell(value))
+		}
 	}
 
 	grid := table.New().
 		Headers(headers...).
 		Rows(rows...).
 		Width(max(20, width-4)).
-		Height(max(5, height-4)).
-		YOffset(m.userOffset).
+		Height(max(5, height-5)).
+		YOffset(m.rowViewport).
 		Border(lipgloss.NormalBorder()).
 		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
 		StyleFunc(func(row, _ int) lipgloss.Style {
@@ -343,16 +394,23 @@ func (m Model) renderData(width, height int, focused bool) string {
 			if row == table.HeaderRow {
 				return style.Bold(true).Foreground(lipgloss.Color("86"))
 			}
+			if row == m.rowSelected {
+				return style.Foreground(lipgloss.Color("230")).Background(lipgloss.Color("62"))
+			}
 			if row%2 == 1 {
 				return style.Foreground(lipgloss.Color("252"))
 			}
 			return style.Foreground(lipgloss.Color("250"))
 		})
 
+	firstRow := m.rowOffset + 1
+	lastRow := m.rowOffset + len(m.rowPage.Rows)
+	title := fmt.Sprintf("%s  •  rows %d–%d  •  columns %d–%d/%d", tableName, firstRow, lastRow, firstColumn+1, lastColumn, len(m.rowPage.Columns))
+	if m.rowPage.HasMore {
+		title += "  •  PgUp/PgDown page"
+	}
 	content := strings.Join([]string{
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render(
-			fmt.Sprintf("users  •  200 rows  •  columns %d-%d/%d  •  mock data", firstColumn+1, lastColumn, len(mockUserHeaders)),
-		),
+		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render(title),
 		"",
 		grid.String(),
 	}, "\n")
@@ -364,12 +422,8 @@ func panelStyle(width, height int, focused bool) lipgloss.Style {
 	if focused {
 		borderColor = lipgloss.Color("62")
 	}
-	return lipgloss.NewStyle().
-		Width(width).
-		Height(height).
-		Padding(0, 1).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(borderColor)
+	return lipgloss.NewStyle().Width(width).Height(height).Padding(0, 1).
+		Border(lipgloss.RoundedBorder()).BorderForeground(borderColor)
 }
 
 func navigatorWidth(totalWidth int) int {
@@ -379,12 +433,49 @@ func navigatorWidth(totalWidth int) int {
 	return 26
 }
 
-func (m *Model) moveSelection(delta int) {
-	m.selected = min(max(m.selected+delta, 0), len(mockTableNames)-1)
+func (m *Model) startRowLoad(offset, selectedRow int) tea.Cmd {
+	if m.database == nil || len(m.tables) == 0 || m.selected >= len(m.tables) {
+		return nil
+	}
+	m.rowOffset = offset
+	m.rowViewport = 0
+	m.rowSelected = 0
+	m.columnOffset = 0
+	m.rowPage = db.RowPage{}
+	m.rowsLoading = true
+	m.rowsErr = nil
+	return loadRows(m.database, m.tables[m.selected], offset, selectedRow)
+}
+
+func (m *Model) resetRows() {
+	m.rowPage = db.RowPage{}
+	m.rowOffset = 0
+	m.rowViewport = 0
+	m.rowSelected = 0
+	m.columnOffset = 0
+	m.rowsLoading = false
+	m.rowsErr = nil
+}
+
+func (m *Model) moveSelection(delta int) bool {
+	if len(m.tables) == 0 {
+		m.selected = 0
+		m.navigatorOffset = 0
+		return false
+	}
+	previous := m.selected
+	m.selected = min(max(m.selected+delta, 0), len(m.tables)-1)
 	m.ensureSelectionVisible()
+	return m.selected != previous
 }
 
 func (m *Model) ensureSelectionVisible() {
+	if len(m.tables) == 0 {
+		m.selected = 0
+		m.navigatorOffset = 0
+		return
+	}
+	m.selected = min(max(m.selected, 0), len(m.tables)-1)
 	visibleRows := m.visibleNavigatorRows()
 	if m.selected < m.navigatorOffset {
 		m.navigatorOffset = m.selected
@@ -396,7 +487,7 @@ func (m *Model) ensureSelectionVisible() {
 }
 
 func (m Model) maxNavigatorOffset() int {
-	return max(0, len(mockTableNames)-m.visibleNavigatorRows())
+	return max(0, len(m.tables)-m.visibleNavigatorRows())
 }
 
 func (m Model) visibleNavigatorRows() int {
@@ -404,11 +495,78 @@ func (m Model) visibleNavigatorRows() int {
 	return max(1, bodyHeight-5)
 }
 
-func (m *Model) scrollUsers(delta int) {
-	if m.selected != 0 {
+func (m *Model) moveDataUp() tea.Cmd {
+	if m.rowsLoading {
+		return nil
+	}
+	if m.rowSelected > 0 {
+		m.rowSelected--
+		m.ensureSelectedRowVisible()
+		return nil
+	}
+	if m.rowOffset > 0 {
+		return m.startRowLoad(max(0, m.rowOffset-rowPageSize), rowPageSize-1)
+	}
+	return nil
+}
+
+func (m *Model) moveDataDown() tea.Cmd {
+	if m.rowsLoading {
+		return nil
+	}
+	if m.rowSelected < len(m.rowPage.Rows)-1 {
+		m.rowSelected++
+		m.ensureSelectedRowVisible()
+		return nil
+	}
+	if m.rowPage.HasMore {
+		return m.startRowLoad(m.rowOffset+rowPageSize, 0)
+	}
+	return nil
+}
+
+func (m *Model) ensureSelectedRowVisible() {
+	if len(m.rowPage.Rows) == 0 {
+		m.rowSelected = 0
+		m.rowViewport = 0
 		return
 	}
-	m.userOffset = min(max(m.userOffset+delta, 0), m.maxUserOffset())
+	m.rowSelected = min(max(m.rowSelected, 0), len(m.rowPage.Rows)-1)
+	visibleRows := m.visibleDataRows()
+	if m.rowSelected < m.rowViewport {
+		m.rowViewport = m.rowSelected
+	}
+	if m.rowSelected >= m.rowViewport+visibleRows {
+		m.rowViewport = m.rowSelected - visibleRows + 1
+	}
+	m.rowViewport = min(max(m.rowViewport, 0), m.maxRowViewport())
+}
+
+func (m Model) maxRowViewport() int {
+	return max(0, len(m.rowPage.Rows)-m.visibleDataRows())
+}
+
+func (m Model) visibleDataRows() int {
+	bodyHeight := max(m.height, 16) - 2
+	gridHeight := max(5, bodyHeight-5)
+	return max(1, gridHeight-5)
+}
+
+func (m *Model) scrollColumns(delta int) {
+	m.columnOffset = min(max(m.columnOffset+delta, 0), m.maxColumnOffset())
+}
+
+func (m Model) maxColumnOffset() int {
+	return max(0, len(m.rowPage.Columns)-m.visibleDataColumns(m.dataPaneWidth()))
+}
+
+func (m Model) visibleDataColumns(dataWidth int) int {
+	return min(len(m.rowPage.Columns), max(1, (dataWidth-4)/14))
+}
+
+func (m Model) dataPaneWidth() int {
+	width := max(m.width, 64)
+	return width - navigatorWidth(width) - 1
 }
 
 func (m *Model) acceptWheel(button tea.MouseButton) bool {
@@ -421,107 +579,37 @@ func (m *Model) acceptWheel(button tea.MouseButton) bool {
 	return true
 }
 
-func (m Model) maxUserOffset() int {
-	return max(0, len(mockUsers)-m.visibleUserRows())
-}
-
-func (m Model) visibleUserRows() int {
-	return max(1, max(m.height, 16)-9)
-}
-
-func (m *Model) scrollUserColumns(delta int) {
-	if m.selected != 0 {
-		return
+func (m Model) selectedTableName() string {
+	if len(m.tables) == 0 || m.selected >= len(m.tables) {
+		return ""
 	}
-	m.userColumnOffset = min(max(m.userColumnOffset+delta, 0), m.maxUserColumnOffset())
+	return sanitizeText(m.tables[m.selected].Name)
 }
 
-func (m Model) maxUserColumnOffset() int {
-	return max(0, len(mockUserHeaders)-m.visibleUserColumns(m.dataPaneWidth()))
-}
-
-func (m Model) visibleUserColumns(dataWidth int) int {
-	return min(len(mockUserHeaders), max(3, (dataWidth-4)/13))
-}
-
-func (m Model) dataPaneWidth() int {
-	width := max(m.width, 64)
-	return width - navigatorWidth(width) - 1
-}
-
-func buildMockTableNames(count int) []string {
-	commonNames := []string{
-		"users", "accounts", "profiles", "sessions", "roles",
-		"permissions", "orders", "order_items", "products", "categories",
-		"inventory", "warehouses", "payments", "invoices", "shipments",
-		"addresses", "reviews", "coupons", "audit_logs", "events",
+func formatCell(value any) string {
+	if value == nil {
+		return "NULL"
 	}
+	if value, ok := value.([]byte); ok {
+		return sanitizeText(string(value))
+	}
+	return sanitizeText(fmt.Sprint(value))
+}
 
-	names := make([]string, 0, count)
-	for index := range count {
-		if index < len(commonNames) {
-			names = append(names, commonNames[index])
-			continue
+func sanitizeText(text string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return '�'
 		}
-		names = append(names, fmt.Sprintf("archive_table_%03d", index+1))
-	}
-	return names
-}
-
-func buildMockUsers(count int) [][]string {
-	firstNames := []string{"Ada", "Grace", "Alan", "Katherine", "Edsger", "Margaret", "Donald", "Barbara"}
-	lastNames := []string{"Lovelace", "Hopper", "Turing", "Johnson", "Dijkstra", "Hamilton", "Knuth", "Liskov"}
-	roles := []string{"admin", "editor", "viewer", "support"}
-	departments := []string{"Engineering", "Operations", "Analytics", "Support"}
-	countries := []string{"Argentina", "Canada", "Germany", "Japan"}
-	cities := []string{"Buenos Aires", "Toronto", "Berlin", "Tokyo"}
-	timeZones := []string{"UTC-3", "UTC-4", "UTC+2", "UTC+9"}
-	languages := []string{"es", "en", "de", "ja"}
-	plans := []string{"free", "team", "business", "enterprise"}
-
-	rows := make([][]string, 0, count)
-	for index := range count {
-		id := index + 1
-		status := "active"
-		if id%7 == 0 {
-			status = "inactive"
-		}
-		rows = append(rows, []string{
-			fmt.Sprintf("%03d", id),
-			fmt.Sprintf("user%03d", id),
-			firstNames[index%len(firstNames)] + " " + lastNames[(index/len(firstNames))%len(lastNames)],
-			fmt.Sprintf("user%03d@example.com", id),
-			roles[index%len(roles)],
-			departments[index%len(departments)],
-			status,
-			fmt.Sprintf("2026-01-%02d", index%28+1),
-			fmt.Sprintf("2026-07-%02d 10:%02d", index%19+1, index%60),
-			fmt.Sprintf("+1-555-%04d", id),
-			countries[index%len(countries)],
-			cities[index%len(cities)],
-			timeZones[index%len(timeZones)],
-			languages[index%len(languages)],
-			plans[index%len(plans)],
-			fmt.Sprintf("%d", id*3),
-			fmt.Sprintf("%d", index%5),
-			map[bool]string{true: "on", false: "off"}[id%2 == 0],
-			fmt.Sprintf("2026-07-%02d", index%19+1),
-		})
-	}
-	return rows
+		return r
+	}, text)
 }
 
 func truncateLabel(label string, width int) string {
 	if width <= 0 {
 		return ""
 	}
-	if len(label) <= width {
-		return label
-	}
-	if width == 1 {
-		return "…"
-	}
-	return label[:width-1] + "…"
+	return ansi.Truncate(sanitizeText(label), width, "…")
 }
 
 var _ tea.Model = Model{}
