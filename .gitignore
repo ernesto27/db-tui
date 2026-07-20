@@ -1,0 +1,35 @@
+# Build output and test binaries
+/bin/
+/dist/
+/db-tui
+*.exe
+*.test
+
+# Coverage and profiling output
+coverage.out
+coverage.*
+*.coverprofile
+*.prof
+
+# Logs
+*.log
+/logs/
+
+# Local configuration and credentials
+/.env
+/.env.*
+!/.env.example
+/.db-tui.toml
+/db-tui.local.*
+/connections.local.*
+/config.local.*
+/secrets.*
+/.local/
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
