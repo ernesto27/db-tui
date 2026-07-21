@@ -6,6 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/ernestoponce27/db-tui/internal/version"
 )
 
 // View implements tea.Model.
@@ -18,9 +20,10 @@ func (m Model) View() tea.View {
 }
 
 func (m Model) baseView() tea.View {
-	headerTitle := "db-tui  /  PostgreSQL"
+	appVersion := version.Version()
+	headerTitle := fmt.Sprintf("db-tui v%s  /  PostgreSQL", appVersion)
 	if m.databaseName != "" {
-		headerTitle = fmt.Sprintf("db-tui  /  %s  /  PostgreSQL", sanitizeText(m.databaseName))
+		headerTitle = fmt.Sprintf("db-tui v%s  /  %s  /  PostgreSQL", appVersion, sanitizeText(m.databaseName))
 	}
 	header := lipgloss.NewStyle().Width(m.layout.width).Padding(0, 1).Bold(true).
 		Foreground(lipgloss.Color("230")).Background(lipgloss.Color("62")).
