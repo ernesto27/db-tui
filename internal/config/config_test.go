@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ernestoponce27/db-tui/internal/db/postgres"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -14,39 +13,34 @@ func TestLoad(t *testing.T) {
 	tests := []struct {
 		name     string
 		contents string
-		want     postgres.PostgreSQLConfig
+		want     Config
 		wantErr  string
 	}{
 		{
 			name:     "valid configuration",
-			contents: `{"postgresql":{"dsn":"postgres://db_tui@127.0.0.1:5433/chinook?sslmode=disable"}}`,
-			want:     postgres.PostgreSQLConfig{DSN: "postgres://db_tui@127.0.0.1:5433/chinook?sslmode=disable"},
+			contents: `{"connections":[{"name":"local","engine":"postgres","settings":{"hostname":"127.0.0.1","database":"chinook","username":"db_tui","password":"secret","port":"5433","dsn":""},"status":true}]}`,
+			want: Config{Connections: []Connection{{
+				Name:   "local",
+				Engine: "postgres",
+				Settings: Settings{
+					Hostname: "127.0.0.1",
+					Database: "chinook",
+					Username: "db_tui",
+					Password: "secret",
+					Port:     "5433",
+				},
+				Status: true,
+			}}},
 		},
 		{
-			name:     "valid form configuration",
-			contents: `{"postgresql":{"host":"127.0.0.1","port":5433,"databaseName":"chinook","username":"db_tui","password":"secret"}}`,
-			want: postgres.PostgreSQLConfig{
-				Host:         "127.0.0.1",
-				Port:         5433,
-				DatabaseName: "chinook",
-				Username:     "db_tui",
-				Password:     "secret",
-			},
+			name:     "empty configuration",
+			contents: `{}`,
+			want:     Config{},
 		},
 		{
 			name:     "malformed JSON",
-			contents: `{"postgresql":`,
+			contents: `{"connections":`,
 			wantErr:  "decode config",
-		},
-		{
-			name:     "missing PostgreSQL settings",
-			contents: `{}`,
-			wantErr:  `config field "postgresql" is required`,
-		},
-		{
-			name:     "blank connection settings",
-			contents: `{"postgresql":{"dsn":"  "}}`,
-			wantErr:  `config field "postgresql.host" is required`,
 		},
 	}
 
@@ -63,68 +57,70 @@ func TestLoad(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.NotNil(t, config.PostgreSQL)
-			assert.Equal(t, test.want, *config.PostgreSQL)
+			assert.Equal(t, test.want, config)
 		})
 	}
 }
 
-func TestSavePostgreSQLConfig(t *testing.T) {
-	tests := []struct {
-		name     string
-		config   postgres.PostgreSQLConfig
-		wantErr  string
-		wantJSON string
-	}{
-		{
-			name:     "writes PostgreSQL DSN",
-			config:   postgres.PostgreSQLConfig{DSN: "postgres://db_tui:secret@127.0.0.1:5433/chinook?sslmode=disable"},
-			wantJSON: `{"postgresql":{"dsn":"postgres://db_tui:secret@127.0.0.1:5433/chinook?sslmode=disable"}}`,
-		},
-		{
-			name: "writes PostgreSQL form settings without DSN",
-			config: postgres.PostgreSQLConfig{
-				Host:         "127.0.0.1",
-				Port:         5433,
-				DatabaseName: "chinook",
-				Username:     "db_tui",
-				Password:     "secret",
-			},
-			wantJSON: `{"postgresql":{"host":"127.0.0.1","port":5433,"databaseName":"chinook","username":"db_tui","password":"secret"}}`,
-		},
-		{
-			name:    "rejects blank connection settings",
-			config:  postgres.PostgreSQLConfig{},
-			wantErr: `config field "postgresql.host" is required`,
+func TestConfigSaveConnection(t *testing.T) {
+	path := useTemporaryHome(t)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), configDirectoryMode))
+
+	config := Config{
+		Connections: []Connection{{Name: "local", Engine: "postgres"}},
+	}
+	connection := Connection{
+		Name:   "production",
+		Engine: "postgres",
+		Settings: Settings{
+			Hostname: "db.example.com",
+			Database: "chinook",
+			Username: "db_tui",
+			Port:     "5432",
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			path := useTemporaryHome(t)
-			require.NoError(t, os.MkdirAll(filepath.Dir(path), configDirectoryMode))
+	require.NoError(t, config.saveConnection(connection))
+	assert.Equal(t, []Connection{
+		{Name: "local", Engine: "postgres"},
+		connection,
+	}, config.Connections)
 
-			err := SavePostgreSQLConfig(test.config)
-			if test.wantErr != "" {
-				assert.ErrorContains(t, err, test.wantErr)
-				return
-			}
+	contents, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{
+		"connections": [
+			{"name":"local","engine":"postgres","settings":{"hostname":"","database":"","username":"","password":"","port":"","dsn":""},"status":false},
+			{"name":"production","engine":"postgres","settings":{"hostname":"db.example.com","database":"chinook","username":"db_tui","password":"","port":"5432","dsn":""},"status":false}
+		]
+	}`, string(contents))
+}
 
-			require.NoError(t, err)
-			config, err := Load()
-			require.NoError(t, err)
-			require.NotNil(t, config.PostgreSQL)
-			assert.Equal(t, test.config, *config.PostgreSQL)
+func TestConfigSave(t *testing.T) {
+	path := useTemporaryHome(t)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), configDirectoryMode))
 
-			contents, err := os.ReadFile(path)
-			require.NoError(t, err)
-			assert.JSONEq(t, test.wantJSON, string(contents))
+	config := Config{Connections: []Connection{{
+		Name:   "local",
+		Engine: "postgres",
+		Settings: Settings{
+			Hostname: "127.0.0.1",
+			Database: "chinook",
+			Username: "db_tui",
+			Port:     "5433",
+		},
+	}}}
+	config.Connections[0].Settings.Username = "updated_user"
 
-			info, err := os.Stat(path)
-			require.NoError(t, err)
-			assert.Equal(t, os.FileMode(configFileMode), info.Mode().Perm())
-		})
-	}
+	require.NoError(t, config.Save())
+
+	contents, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{
+		"connections": [
+			{"name":"local","engine":"postgres","settings":{"hostname":"127.0.0.1","database":"chinook","username":"updated_user","password":"","port":"5433","dsn":""},"status":false}
+		]
+	}`, string(contents))
 }
 
 func useTemporaryHome(t *testing.T) string {

@@ -11,7 +11,7 @@ import (
 // View implements tea.Model.
 func (m Model) View() tea.View {
 	view := m.baseView()
-	if m.modal != nil {
+	if m.modal != nil || m.connectionsModal != nil {
 		view.Content = m.renderModalOverlay(view.Content)
 	}
 	return view
@@ -42,7 +42,6 @@ func (m Model) baseView() tea.View {
 func (m Model) navigatorStatus() navigatorStatus {
 	return navigatorStatus{
 		databaseName: m.databaseName,
-		startupErr:   m.startupErr,
 		loading:      m.loading,
 		tableLoadErr: m.tableLoadErr,
 	}
@@ -51,7 +50,7 @@ func (m Model) navigatorStatus() navigatorStatus {
 func (m Model) dataStatus() dataStatus {
 	return dataStatus{
 		tableName:     m.navigator.selectedTableName(),
-		startupErr:    m.startupErr,
+		disconnected:  m.database == nil,
 		tablesLoading: m.loading,
 		tableLoadErr:  m.tableLoadErr,
 		noTables:      len(m.navigator.tables) == 0,
@@ -60,7 +59,12 @@ func (m Model) dataStatus() dataStatus {
 }
 
 func (m Model) renderModalOverlay(base string) string {
-	modal := m.modal.view(m.layout.width)
+	var modal string
+	if m.modal != nil {
+		modal = m.modal.view(m.layout.width)
+	} else {
+		modal = m.connectionsModal.view(m.layout.width)
+	}
 
 	return lipgloss.NewCompositor(
 		lipgloss.NewLayer(base),
@@ -72,8 +76,8 @@ func (m Model) renderModalOverlay(base string) string {
 }
 
 func (m Model) footerText() string {
-	if m.startupErr != nil {
-		return "unable to start database session  •  q quit"
+	if m.database == nil {
+		return "welcome to db-tui  •  Ctrl+N new connection  •  Ctrl+L open connections  •  q quit"
 	}
 	if m.loading {
 		return "loading tables  •  q quit"

@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/ernestoponce27/db-tui/internal/db"
-	"github.com/ernestoponce27/db-tui/internal/querylog"
+	"github.com/ernestoponce27/db-tui/internal/logger"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -22,8 +22,6 @@ const listTablesSQL = `
 	WHERE table_schema = 'public'
 		AND table_type = 'BASE TABLE'
 	ORDER BY table_name`
-
-const queryLogPath = "queries.log"
 
 // PostgreSQLConfig contains the settings for one PostgreSQL connection.
 type PostgreSQLConfig struct {
@@ -71,7 +69,7 @@ func (c PostgreSQLConfig) ConnectionDSN() (string, error) {
 
 type postgresql struct {
 	pool   *pgxpool.Pool
-	logger *querylog.Logger
+	logger *logger.Logger
 	name   string
 }
 
@@ -82,7 +80,7 @@ func Connect(ctx context.Context, dsn string) (db.Database, error) {
 		return nil, fmt.Errorf("parse PostgreSQL DSN: %w", err)
 	}
 
-	logger, err := querylog.Open(queryLogPath)
+	logger, err := logger.Open()
 	if err != nil {
 		return nil, fmt.Errorf("open query log: %w", err)
 	}

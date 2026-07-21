@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"net/url"
 	"strconv"
@@ -26,9 +25,6 @@ type ConnectionSettings struct {
 	Username     string
 	Password     string
 }
-
-// SaveConnectionFunc persists a successfully verified database connection.
-type SaveConnectionFunc func(ConnectionSettings) error
 
 type connectionFinishedMsg struct {
 	database db.Database
@@ -70,7 +66,7 @@ func (s ConnectionSettings) connectionDSN() (string, error) {
 	}).String(), nil
 }
 
-func connectAndSave(connect ConnectFunc, saveConnection SaveConnectionFunc, settings ConnectionSettings, attempt uint64) tea.Cmd {
+func connectConnection(connect ConnectFunc, settings ConnectionSettings, attempt uint64) tea.Cmd {
 	return func() tea.Msg {
 		dsn, err := settings.connectionDSN()
 		if err != nil {
@@ -84,14 +80,6 @@ func connectAndSave(connect ConnectFunc, saveConnection SaveConnectionFunc, sett
 		if err != nil {
 			return connectionFinishedMsg{attempt: attempt, err: err}
 		}
-		if err := saveConnection(settings); err != nil {
-			database.Close()
-			return connectionFinishedMsg{
-				attempt: attempt,
-				err:     fmt.Errorf("save connection: %w", err),
-			}
-		}
-
 		return connectionFinishedMsg{database: database, settings: settings, attempt: attempt}
 	}
 }

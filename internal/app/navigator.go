@@ -18,7 +18,6 @@ type navigatorModel struct {
 
 type navigatorStatus struct {
 	databaseName string
-	startupErr   error
 	loading      bool
 	tableLoadErr error
 }
@@ -96,8 +95,6 @@ func (m navigatorModel) tableAtMouse(msg tea.MouseClickMsg, layout appLayout) (i
 func (m navigatorModel) view(status navigatorStatus, layout appLayout, focused bool) string {
 	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render("● " + sanitizeText(status.databaseName)), ""}
 	switch {
-	case status.startupErr != nil:
-		lines = append(lines, "Unable to start database session", truncateLabel(status.startupErr.Error(), max(1, layout.navigator.width-4)))
 	case status.loading:
 		lines = append(lines, "Loading tables…")
 	case status.tableLoadErr != nil:

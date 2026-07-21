@@ -1,3 +1,4 @@
-[] - option to multiple connections to postgresql
+[x] - option to multiple connections to postgresql
+[] - key to remove connection
 [] - support to mysql engine
 [] - section to run raw queries

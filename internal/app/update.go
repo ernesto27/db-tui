@@ -1,6 +1,7 @@
 package app
 
 import (
+	"slices"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -19,6 +20,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		default:
 			return m.updateModal(msg)
+		}
+	}
+	if m.connectionsModal != nil {
+		switch msg.(type) {
+		case tea.MouseClickMsg, tea.MouseWheelMsg:
+			return m, nil
+		default:
+			return m.updateConnectionsModal(msg)
 		}
 	}
 
@@ -86,9 +95,11 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.modal.errorText = ""
 		m.modal.connecting = true
 		m.connectionAttempt++
-		return m, connectAndSave(m.connect, m.saveConnection, settings, m.connectionAttempt)
+		return m, connectConnection(m.connect, settings, m.connectionAttempt)
 	case cancelConnectionMsg:
 		m.modal = nil
+		m.editingConnection = -1
+		m.creatingConnection = false
 		return m, nil
 	case connectionFinishedMsg:
 		if msg.attempt != m.connectionAttempt {
@@ -102,6 +113,30 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.modal.errorText = msg.err.Error()
 			return m, nil
 		}
+		if m.editingConnection >= 0 || m.creatingConnection {
+			updatedConfig := m.config
+			updatedConfig.Connections = slices.Clone(m.config.Connections)
+			if m.editingConnection >= len(m.config.Connections) {
+				msg.database.Close()
+				m.modal.errorText = "selected connection no longer exists"
+				return m, nil
+			}
+			if m.editingConnection >= 0 {
+				updatedConnection := updatedConfig.Connections[m.editingConnection]
+				updatedConnection.Settings = configSettingsFromConnectionSettings(msg.settings)
+				updatedConfig.Connections[m.editingConnection] = updatedConnection
+			} else {
+				updatedConfig.Connections = append(updatedConfig.Connections, newConfigConnection(msg.settings))
+			}
+			if err := updatedConfig.Save(); err != nil {
+				msg.database.Close()
+				m.modal.errorText = "save connection: " + err.Error()
+				return m, nil
+			}
+			m.config = updatedConfig
+			m.editingConnection = -1
+			m.creatingConnection = false
+		}
 
 		if m.database != nil {
 			m.database.Close()
@@ -109,7 +144,6 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.database = msg.database
 		m.databaseName = msg.database.Name()
 		m.savedConnection = msg.settings
-		m.startupErr = nil
 		m.tableLoadErr = nil
 		m.navigator.reset()
 		m.data.reset()
@@ -124,11 +158,43 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
+func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case cancelConnectionsMsg:
+		m.connectionsModal = nil
+		return m, nil
+	case selectConnectionMsg:
+		modal := newConnectionModal(connectionSettingsFromConfig(msg.connection))
+		m.modal = &modal
+		m.connectionsModal = nil
+		m.editingConnection = -1
+		m.creatingConnection = false
+		return m, func() tea.Msg { return submitConnectionMsg{} }
+	case editConnectionMsg:
+		modal := newConnectionModal(connectionSettingsFromConfig(msg.connection))
+		m.modal = &modal
+		m.connectionsModal = nil
+		m.editingConnection = msg.index
+		m.creatingConnection = false
+		return m, m.modal.focus(0)
+	default:
+		modal, command := m.connectionsModal.update(msg)
+		m.connectionsModal = &modal
+		return m, command
+	}
+}
+
 func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch {
-	case key.Matches(msg, m.keys.connect):
-		modal := newConnectionModal(m.savedConnection)
+	case key.Matches(msg, m.keys.connections):
+		modal := newConnectionsModal(m.config)
+		m.connectionsModal = &modal
+		return nil
+	case key.Matches(msg, m.keys.newConnection):
+		modal := newConnectionModal(ConnectionSettings{})
 		m.modal = &modal
+		m.editingConnection = -1
+		m.creatingConnection = true
 		return m.modal.focus(0)
 	case key.Matches(msg, m.keys.quit):
 		return tea.Quit

@@ -19,5 +19,24 @@ services:
       retries: 15
       start_period: 5s
 
+  postgres-pagila:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: pagila
+      POSTGRES_USER: db_tui
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - pagila-postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/pagila.sql:/docker-entrypoint-initdb.d/001_pagila.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U db_tui -d pagila"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+
 volumes:
   postgres-data:
+  pagila-postgres-data:

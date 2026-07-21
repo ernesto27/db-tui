@@ -26,7 +26,7 @@ type dataModel struct {
 
 type dataStatus struct {
 	tableName     string
-	startupErr    error
+	disconnected  bool
 	tablesLoading bool
 	tableLoadErr  error
 	noTables      bool
@@ -118,8 +118,8 @@ func (m dataModel) maxColumnOffset() int {
 
 func (m dataModel) view(status dataStatus, layout appLayout, focused bool) string {
 	switch {
-	case status.startupErr != nil:
-		return panelStyle(layout.data.width, layout.data.height, focused).Render("Unable to start database session:\n" + sanitizeText(status.startupErr.Error()))
+	case status.disconnected:
+		return panelStyle(layout.data.width, layout.data.height, focused).Render("Welcome to db-tui\n\nPress Ctrl+N to create a connection.\nPress Ctrl+L to open saved connections.")
 	case status.tablesLoading:
 		return panelStyle(layout.data.width, layout.data.height, focused).Render("Loading PostgreSQL tables…")
 	case status.tableLoadErr != nil:

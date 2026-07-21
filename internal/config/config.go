@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/ernestoponce27/db-tui/internal/db/postgres"
 )
 
 const (
@@ -17,9 +15,25 @@ const (
 	configFileName      = "config.json"
 )
 
+type Settings struct {
+	Hostname string `json:"hostname"`
+	Database string `json:"database"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Port     string `json:"port"`
+	DSN      string `json:"dsn"`
+}
+
+type Connection struct {
+	Name     string   `json:"name"`
+	Engine   string   `json:"engine"`
+	Settings Settings `json:"settings"`
+	Status   bool     `json:"status"`
+}
+
 // Config contains db-tui connection settings.
 type Config struct {
-	PostgreSQL *postgres.PostgreSQLConfig `json:"postgresql"`
+	Connections []Connection `json:"connections,omitempty"`
 }
 
 // Load reads the db-tui configuration from $HOME/.config/db-tui/config.json.
@@ -46,35 +60,26 @@ func Load() (Config, error) {
 	if err := json.Unmarshal(data, &config); err != nil {
 		return Config{}, fmt.Errorf("decode config: %w", err)
 	}
-	if config.PostgreSQL == nil {
-		return Config{}, errors.New(`config field "postgresql" is required`)
-	}
-	if _, err := config.PostgreSQL.ConnectionDSN(); err != nil {
-		return Config{}, err
-	}
 
 	return config, nil
 }
 
-// SavePostgreSQLDSN writes dsn as the saved PostgreSQL connection.
-func SavePostgreSQLDSN(dsn string) error {
-	return SavePostgreSQLConfig(postgres.PostgreSQLConfig{DSN: dsn})
+func (config *Config) saveConnection(conn Connection) error {
+	config.Connections = append(config.Connections, conn)
+	return config.Save()
 }
 
-// SavePostgreSQLConfig writes PostgreSQL connection settings.
-func SavePostgreSQLConfig(postgreSQLConfig postgres.PostgreSQLConfig) error {
-	if _, err := postgreSQLConfig.ConnectionDSN(); err != nil {
-		return err
-	}
+// Save writes config to the db-tui configuration file.
+func (config Config) Save() error {
 	path, err := configPath()
 	if err != nil {
 		return err
 	}
-	return writeConfig(path, Config{PostgreSQL: &postgreSQLConfig})
+	return writeConfig(path, config)
 }
 
 func createEmptyConfig(path string) ([]byte, error) {
-	data, err := encodeConfig(Config{PostgreSQL: &postgres.PostgreSQLConfig{}})
+	data, err := encodeConfig(Config{})
 	if err != nil {
 		return nil, err
 	}
