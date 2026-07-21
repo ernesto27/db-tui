@@ -31,7 +31,12 @@ not an official Go directory convention.
 The Codex CLI can run in Docker. A practical setup is:
 
 ```dockerfile
+FROM golang:1.26-bookworm AS go
+
 FROM node:22-bookworm-slim
+
+COPY --from=go /usr/local/go /usr/local/go
+ENV PATH="/usr/local/go/bin:${PATH}"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git ripgrep ca-certificates \
