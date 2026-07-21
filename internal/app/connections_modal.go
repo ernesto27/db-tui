@@ -11,8 +11,10 @@ import (
 )
 
 type connectionsModal struct {
-	connections []config.Connection
-	selected    int
+	connections        []config.Connection
+	selected           int
+	confirmingDeletion bool
+	deletionError      string
 }
 
 type cancelConnectionsMsg struct{}
@@ -20,6 +22,10 @@ type selectConnectionMsg struct {
 	connection config.Connection
 }
 type editConnectionMsg struct {
+	index      int
+	connection config.Connection
+}
+type deleteConnectionMsg struct {
 	index      int
 	connection config.Connection
 }
@@ -82,6 +88,20 @@ func newConfigConnection(settings ConnectionSettings) config.Connection {
 
 func (m connectionsModal) update(msg tea.Msg) (connectionsModal, tea.Cmd) {
 	if key, ok := msg.(tea.KeyPressMsg); ok {
+		if m.confirmingDeletion {
+			switch key.String() {
+			case "y":
+				connection := m.connections[m.selected]
+				return m, func() tea.Msg {
+					return deleteConnectionMsg{index: m.selected, connection: connection}
+				}
+			case "n", "esc":
+				m.confirmingDeletion = false
+				m.deletionError = ""
+			}
+			return m, nil
+		}
+
 		switch key.String() {
 		case "up":
 			if len(m.connections) > 0 {
@@ -103,6 +123,12 @@ func (m connectionsModal) update(msg tea.Msg) (connectionsModal, tea.Cmd) {
 			}
 			connection := m.connections[m.selected]
 			return m, func() tea.Msg { return editConnectionMsg{index: m.selected, connection: connection} }
+		case "d":
+			if len(m.connections) == 0 {
+				return m, nil
+			}
+			m.confirmingDeletion = true
+			m.deletionError = ""
 		case "esc":
 			return m, func() tea.Msg { return cancelConnectionsMsg{} }
 		}
@@ -122,6 +148,24 @@ func (m connectionsModal) view(width int) string {
 		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Render("Connections"),
 		"",
 	}
+	if m.confirmingDeletion {
+		connection := m.connections[m.selected]
+		lines = append(lines,
+			"Remove "+truncateLabel(connection.Name, modalWidth-8)+"?",
+			"",
+			lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("y confirm  •  n/Esc cancel"),
+		)
+		if m.deletionError != "" {
+			lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Render(sanitizeText(m.deletionError)))
+		}
+		return lipgloss.NewStyle().
+			Width(modalWidth).
+			Padding(1, 2).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("62")).
+			Render(strings.Join(lines, "\n"))
+	}
+
 	first := max(0, min(m.selected-visibleConnectionRows+1, len(m.connections)-visibleConnectionRows))
 	last := min(first+visibleConnectionRows, len(m.connections))
 	for index, connection := range m.connections[first:last] {
@@ -133,7 +177,7 @@ func (m connectionsModal) view(width int) string {
 		}
 		lines = append(lines, "  "+nameStyle.Render(name)+engineStyle.Render(engine))
 	}
-	lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("↑/↓ move  •  Enter connect  •  Ctrl+E edit  •  Esc close"))
+	lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("↑/↓ move  •  Enter connect  •  Ctrl+E edit  •  d remove  •  Esc close"))
 
 	return lipgloss.NewStyle().
 		Width(modalWidth).

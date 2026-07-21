@@ -177,6 +177,33 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.editingConnection = msg.index
 		m.creatingConnection = false
 		return m, m.modal.focus(0)
+	case deleteConnectionMsg:
+		if msg.index < 0 || msg.index >= len(m.config.Connections) {
+			m.connectionsModal.deletionError = "selected connection no longer exists"
+			return m, nil
+		}
+
+		updatedConfig := m.config
+		updatedConfig.Connections = slices.Delete(slices.Clone(m.config.Connections), msg.index, msg.index+1)
+		if err := updatedConfig.Save(); err != nil {
+			m.connectionsModal.deletionError = "remove connection: " + err.Error()
+			return m, nil
+		}
+
+		m.config = updatedConfig
+		m.connectionsModal = nil
+		if m.database != nil && connectionSettingsFromConfig(msg.connection) == m.savedConnection {
+			m.database.Close()
+			m.database = nil
+			m.databaseName = ""
+			m.savedConnection = ConnectionSettings{}
+			m.loading = false
+			m.tableLoadErr = nil
+			m.navigator.reset()
+			m.data.reset()
+			m.session++
+		}
+		return m, nil
 	default:
 		modal, command := m.connectionsModal.update(msg)
 		m.connectionsModal = &modal
