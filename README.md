@@ -15,6 +15,12 @@ Run the current test suite:
 go test ./...
 ```
 
+## Application version
+
+The version shown in the TUI header is defined in
+[`internal/version/version.json`](internal/version/version.json). Update its
+`version` value, then rebuild db-tui for the change to take effect.
+
 Project direction and implementation work are documented in [PLAN.md](PLAN.md) and [TASKS.md](TASKS.md).
 
 ## Local PostgreSQL
