@@ -1,0 +1,3 @@
+[] - option to multiple connections to postgresql
+[] - support to mysql engine
+[] - section to run raw queries
