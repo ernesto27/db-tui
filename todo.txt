@@ -3,5 +3,5 @@
 [] - support to mysql engine
 [x] - section to run raw queries
 [] - search tables
-[] - option to dump all database file
+[x] - option to dump all database file
 [] - update script sandbox for claude code
