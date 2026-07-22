@@ -2,6 +2,7 @@ package app
 
 import (
 	"slices"
+	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -34,6 +35,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		return m, m.updateKey(msg)
+	case tea.PasteMsg:
+		if m.panel == panelQuery && !m.query.resultsFocused {
+			editor, command := m.query.editor.Update(msg)
+			m.query.editor = editor
+			return m, command
+		}
+		return m, nil
 	case tea.MouseClickMsg:
 		return m, m.updateMouseClick(msg)
 	case tea.MouseWheelMsg:
@@ -46,7 +54,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case spinnerTickMsg:
-		if m.loading || m.data.loading {
+		if m.loading || m.data.loading || m.query.loading {
 			m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
 			return spinnerTick(), true
 		}
@@ -73,11 +81,18 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		m.data.finishLoad(msg.page, msg.selectedRow, msg.err, m.layout)
 		return nil, true
+	case queryFinishedMsg:
+		if msg.session != m.session || msg.request != m.query.request {
+			return nil, true
+		}
+		m.query.finishExecute(msg.result, msg.err)
+		return nil, true
 	case tea.WindowSizeMsg:
 		m.layout = newAppLayout(msg.Width, msg.Height)
 		m.navigator.ensureVisible(m.layout.navigatorListRows)
 		m.data.columnOffset = min(m.data.columnOffset, m.data.maxColumnOffset())
 		m.data.ensureSelectedVisible(m.layout)
+		m.query.resize(m.layout)
 		return nil, true
 	default:
 		return nil, false
@@ -147,6 +162,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tableLoadErr = nil
 		m.navigator.reset()
 		m.data.reset()
+		m.query.reset(m.layout)
 		m.loading = true
 		m.session++
 		m.modal = nil
@@ -201,6 +217,7 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tableLoadErr = nil
 			m.navigator.reset()
 			m.data.reset()
+			m.query.reset(m.layout)
 			m.session++
 		}
 		return m, nil
@@ -223,8 +240,39 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.editingConnection = -1
 		m.creatingConnection = true
 		return m.modal.focus(0)
-	case key.Matches(msg, m.keys.quit):
+	case key.Matches(msg, m.keys.query):
+		m.panel = panelQuery
+		m.focus = focusData
+		m.query.resize(m.layout)
+		return m.query.focusEditor()
+	case key.Matches(msg, m.keys.tableData):
+		m.panel = panelData
+		m.focus = focusData
+		return nil
+	case key.Matches(msg, m.keys.quit) && !(m.panel == panelQuery && !m.query.resultsFocused && msg.String() == "q"):
 		return tea.Quit
+	case m.panel == panelQuery && key.Matches(msg, m.keys.executeQuery):
+		return m.startQuery()
+	case m.panel == panelQuery && key.Matches(msg, m.keys.queryFocus):
+		return m.query.toggleFocus()
+	case m.panel == panelQuery && m.query.resultsFocused && key.Matches(msg, m.keys.up):
+		m.query.scrollResults(-1)
+		return nil
+	case m.panel == panelQuery && m.query.resultsFocused && key.Matches(msg, m.keys.down):
+		m.query.scrollResults(1)
+		return nil
+	case m.panel == panelQuery && m.query.resultsFocused && key.Matches(msg, m.keys.pageUp):
+		m.query.scrollResults(-m.query.resultHeight(m.layout))
+		return nil
+	case m.panel == panelQuery && m.query.resultsFocused && key.Matches(msg, m.keys.pageDown):
+		m.query.scrollResults(m.query.resultHeight(m.layout))
+		return nil
+	case m.panel == panelQuery && m.query.resultsFocused:
+		return nil
+	case m.panel == panelQuery:
+		editor, command := m.query.editor.Update(msg)
+		m.query.editor = editor
+		return command
 	case key.Matches(msg, m.keys.focusLeft):
 		if m.focus == focusData && m.data.columnOffset > 0 {
 			m.data.scrollColumns(-1, m.layout)
@@ -333,6 +381,17 @@ func (m *Model) updateMouseWheel(msg tea.MouseWheelMsg) tea.Cmd {
 		return nil
 	}
 
+	if m.panel == panelQuery {
+		m.focus = focusData
+		switch msg.Button {
+		case tea.MouseWheelUp:
+			m.query.scrollResults(-1)
+		case tea.MouseWheelDown:
+			m.query.scrollResults(1)
+		}
+		return nil
+	}
+
 	m.focus = focusData
 	switch msg.Button {
 	case tea.MouseWheelUp:
@@ -356,6 +415,14 @@ func (m *Model) startRowLoad(offset, selectedRow int) tea.Cmd {
 	}
 	m.data.beginLoad(offset)
 	return tea.Batch(loadRows(m.database, table, offset, selectedRow, m.session), m.startSpinner())
+}
+
+func (m *Model) startQuery() tea.Cmd {
+	if m.database == nil || strings.TrimSpace(m.query.editor.Value()) == "" {
+		return nil
+	}
+	request := m.query.beginExecute()
+	return tea.Batch(executeQuery(m.database, m.query.editor.Value(), m.session, request), m.startSpinner())
 }
 
 func (m *Model) acceptWheel(button tea.MouseButton) bool {

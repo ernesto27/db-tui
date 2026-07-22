@@ -6,6 +6,9 @@ import "context"
 // MaxPageSize is the largest number of rows a single page can contain.
 const MaxPageSize = 100
 
+// MaxQueryResultRows is the largest number of rows returned for a raw query.
+const MaxQueryResultRows = 100
+
 // Table identifies a table available in a database session.
 type Table struct {
 	Name string
@@ -28,6 +31,14 @@ type RowPage struct {
 	HasMore bool
 }
 
+// QueryResult contains rows returned by a SQL statement and its command status.
+// Columns is empty when the statement does not return rows.
+type QueryResult struct {
+	Columns    []string
+	Rows       [][]any
+	CommandTag string
+}
+
 // Database provides operations supported by a connected database.
 type Database interface {
 	// Name returns the connected database name for display.
@@ -35,5 +46,7 @@ type Database interface {
 	ListTables(ctx context.Context) ([]Table, error)
 	// GetRows returns an unordered page of rows from table.
 	GetRows(ctx context.Context, table Table, page PageRequest) (RowPage, error)
+	// Execute runs SQL and returns its first rows and command status.
+	Execute(ctx context.Context, sql string) (QueryResult, error)
 	Close()
 }

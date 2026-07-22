@@ -29,6 +29,13 @@ type rowsLoadedMsg struct {
 	err         error
 }
 
+type queryFinishedMsg struct {
+	result  db.QueryResult
+	session uint64
+	request uint64
+	err     error
+}
+
 func loadTables(database db.Database, session uint64) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
@@ -56,5 +63,15 @@ func loadRows(database db.Database, table db.Table, offset, selectedRow int, ses
 			session:     session,
 			err:         err,
 		}
+	}
+}
+
+func executeQuery(database db.Database, sql string, session, request uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		defer cancel()
+
+		result, err := database.Execute(ctx, sql)
+		return queryFinishedMsg{result: result, session: session, request: request, err: err}
 	}
 }

@@ -23,6 +23,13 @@ const (
 	focusData
 )
 
+type rightPanel uint8
+
+const (
+	panelData rightPanel = iota
+	panelQuery
+)
+
 // Model is the root Bubble Tea application model.
 type Model struct {
 	database           db.Database
@@ -40,6 +47,8 @@ type Model struct {
 	tableLoadErr error
 	navigator    navigatorModel
 	data         dataModel
+	panel        rightPanel
+	query        queryModel
 
 	spinnerFrame    int
 	spinnerRunning  bool
@@ -62,6 +71,7 @@ func New(config config.Config, savedConnection ConnectionSettings, connect Conne
 		session:           1,
 		layout:            newAppLayout(defaultWidth, defaultHeight),
 		keys:              defaultKeyMap(),
+		query:             newQueryModel(newAppLayout(defaultWidth, defaultHeight)),
 	}
 }
 

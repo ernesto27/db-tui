@@ -57,6 +57,8 @@ Set `postgresql.dsn` to the desired connection string. If the file is invalid, t
 
 Press `Ctrl+L` in the TUI to open the PostgreSQL connection modal. You can paste a complete DSN, or enter the host, database name, port, username, and optional password. When a DSN is provided it takes precedence over the individual fields and is saved as `postgresql.dsn`. When you connect with the individual fields, those fields are saved in `postgresql` instead—no generated DSN is written to the configuration file. The app tests the connection before saving it and immediately switches to the successful connection. Connection failures stay in the modal and preserve the entered values.
 
+Press `Ctrl+R` to open the raw SQL panel. Enter any PostgreSQL statement and press `Ctrl+P` to run it; plain Enter adds a new line. After a query runs, its results receive focus and can be scrolled with Up/Down, j/k, PgUp/PgDown, or the mouse wheel. Press Tab to switch between results and the editor. Query results display at most 100 rows. Press `Ctrl+T` to return to the selected table's data view.
+
 For this first version, a password is stored as plaintext inside the DSN. The configuration file is private to the current user (`0600`), but it is not encrypted. Do not commit passwords or credential-bearing database URLs.
 
 ## License

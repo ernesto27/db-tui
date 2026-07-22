@@ -175,6 +175,38 @@ func (p *postgresql) GetRows(ctx context.Context, table db.Table, page db.PageRe
 	return result, nil
 }
 
+// Execute runs arbitrary SQL and returns its first 100 rows and command status.
+func (p *postgresql) Execute(ctx context.Context, sql string) (db.QueryResult, error) {
+	p.logger.Log(sql)
+	rows, err := p.pool.Query(ctx, sql, pgx.QueryExecModeSimpleProtocol)
+	if err != nil {
+		return db.QueryResult{}, fmt.Errorf("execute PostgreSQL query: %w", err)
+	}
+	defer rows.Close()
+
+	fields := rows.FieldDescriptions()
+	result := db.QueryResult{Columns: make([]string, len(fields))}
+	for index, field := range fields {
+		result.Columns[index] = field.Name
+	}
+	for rows.Next() {
+		if len(result.Rows) == db.MaxQueryResultRows {
+			break
+		}
+		values, err := rows.Values()
+		if err != nil {
+			return db.QueryResult{}, fmt.Errorf("read PostgreSQL query row: %w", err)
+		}
+		result.Rows = append(result.Rows, values)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return db.QueryResult{}, fmt.Errorf("iterate PostgreSQL query rows: %w", err)
+	}
+	result.CommandTag = rows.CommandTag().String()
+	return result, nil
+}
+
 // Close releases all connections held by the database.
 func (p *postgresql) Close() {
 	p.pool.Close()

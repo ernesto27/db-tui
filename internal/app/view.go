@@ -28,9 +28,13 @@ func (m Model) baseView() tea.View {
 	header := lipgloss.NewStyle().Width(m.layout.width).Padding(0, 1).Bold(true).
 		Foreground(lipgloss.Color("230")).Background(lipgloss.Color("62")).
 		Render(headerTitle)
+	rightPanel := m.data.view(m.dataStatus(), m.layout, m.focus == focusData)
+	if m.panel == panelQuery {
+		rightPanel = m.query.view(m.layout, m.focus == focusData, m.database != nil, m.spinner())
+	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top,
 		m.navigator.view(m.navigatorStatus(), m.layout, m.focus == focusNavigator), " ",
-		m.data.view(m.dataStatus(), m.layout, m.focus == focusData),
+		rightPanel,
 	)
 	footer := lipgloss.NewStyle().Width(m.layout.width).Padding(0, 1).
 		Foreground(lipgloss.Color("245")).Render(m.footerText())
@@ -80,7 +84,13 @@ func (m Model) renderModalOverlay(base string) string {
 
 func (m Model) footerText() string {
 	if m.database == nil {
-		return "welcome to db-tui  •  Ctrl+N new connection  •  Ctrl+L open connections  •  q quit"
+		if m.panel == panelQuery {
+			return "raw query  •  connection required  •  Ctrl+T table data  •  Ctrl+N new connection  •  Ctrl+L open connections  •  q quit"
+		}
+		return "welcome to db-tui  •  Ctrl+N new connection  •  Ctrl+L open connections  •  Ctrl+R raw query  •  q quit"
+	}
+	if m.panel == panelQuery {
+		return "raw query  •  Ctrl+P execute  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+T table data  •  Ctrl+L connections  •  q quit"
 	}
 	if m.loading {
 		return "loading tables  •  q quit"
@@ -111,7 +121,7 @@ func (m Model) footerText() string {
 			rowStatus += "  •  PgDown next"
 		}
 	}
-	return fmt.Sprintf("%s  •  tables %d–%d/%d  •  focus: %s%s  •  ←/→ switch  •  q quit", m.navigator.selectedTableName(), firstTable, lastTable, len(m.navigator.tables), focusLabel, rowStatus)
+	return fmt.Sprintf("%s  •  tables %d–%d/%d  •  focus: %s%s  •  Ctrl+R raw query  •  ←/→ switch  •  q quit", m.navigator.selectedTableName(), firstTable, lastTable, len(m.navigator.tables), focusLabel, rowStatus)
 }
 
 func panelStyle(width, height int, focused bool) lipgloss.Style {
