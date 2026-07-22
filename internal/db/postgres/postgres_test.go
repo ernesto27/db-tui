@@ -2,6 +2,8 @@ package postgres_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -53,6 +55,33 @@ func TestConnectReturnsErrorForUnreachableDatabase(t *testing.T) {
 		database.Close()
 	}
 	assert.Error(t, err, "Connect() to an unreachable database")
+}
+
+func TestDumpCreatesSQLFile(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+	t.Chdir(t.TempDir())
+
+	if !assert.NoError(t, database.Dump(ctx), "dump database") {
+		return
+	}
+
+	dumpFiles, err := filepath.Glob("chinook_*.sql")
+	if !assert.NoError(t, err, "find generated SQL dump") || !assert.Len(t, dumpFiles, 1) {
+		return
+	}
+
+	contents, err := os.ReadFile(dumpFiles[0])
+	if !assert.NoError(t, err, "read generated SQL dump") {
+		return
+	}
+	assert.Contains(t, string(contents), `CREATE TABLE public."Album"`)
 }
 
 func TestGetRows(t *testing.T) {

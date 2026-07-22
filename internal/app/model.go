@@ -59,6 +59,8 @@ type Model struct {
 	lastWheelButton tea.MouseButton
 
 	config config.Config
+
+	dumpModal *dumpModal
 }
 
 // New creates the root Bubble Tea application model.

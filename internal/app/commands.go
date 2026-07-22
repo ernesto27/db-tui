@@ -11,6 +11,7 @@ import (
 
 const (
 	tableLoadTimeout = 5 * time.Second
+	dumpTimeout      = 30 * time.Minute
 	rowPageSize      = 100
 )
 
@@ -73,5 +74,23 @@ func executeQuery(database db.Database, sql string, session, request uint64) tea
 
 		result, err := database.Execute(ctx, sql)
 		return queryFinishedMsg{result: result, session: session, request: request, err: err}
+	}
+}
+
+type dumpFinishedMsg struct {
+	session uint64
+	err     error
+}
+
+func dumpDatabase(database db.Database, session uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), dumpTimeout)
+		defer cancel()
+
+		err := database.Dump(ctx)
+		return dumpFinishedMsg{
+			session: session,
+			err:     err,
+		}
 	}
 }

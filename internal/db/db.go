@@ -48,5 +48,6 @@ type Database interface {
 	GetRows(ctx context.Context, table Table, page PageRequest) (RowPage, error)
 	// Execute runs SQL and returns its first rows and command status.
 	Execute(ctx context.Context, sql string) (QueryResult, error)
+	Dump(ctx context.Context) error
 	Close()
 }

@@ -13,7 +13,7 @@ import (
 // View implements tea.Model.
 func (m Model) View() tea.View {
 	view := m.baseView()
-	if m.modal != nil || m.connectionsModal != nil {
+	if m.modal != nil || m.connectionsModal != nil || m.dumpModal != nil {
 		view.Content = m.renderModalOverlay(view.Content)
 	}
 	return view
@@ -67,10 +67,13 @@ func (m Model) dataStatus() dataStatus {
 
 func (m Model) renderModalOverlay(base string) string {
 	var modal string
-	if m.modal != nil {
+	switch {
+	case m.modal != nil:
 		modal = m.modal.view(m.layout.width)
-	} else {
+	case m.connectionsModal != nil:
 		modal = m.connectionsModal.view(m.layout.width)
+	default:
+		modal = m.dumpModal.view(m.layout.width, m.spinner())
 	}
 
 	return lipgloss.NewCompositor(
@@ -121,7 +124,9 @@ func (m Model) footerText() string {
 			rowStatus += "  •  PgDown next"
 		}
 	}
-	return fmt.Sprintf("%s  •  tables %d–%d/%d  •  focus: %s%s  •  Ctrl+R raw query  •  ←/→ switch  •  q quit", m.navigator.selectedTableName(), firstTable, lastTable, len(m.navigator.tables), focusLabel, rowStatus)
+
+	return fmt.Sprintf("%s  •  tables %d–%d/%d  •  focus: %s%s  •  Ctrl+D dump database  •  Ctrl+R raw query  •  ←/→ switch  •  q quit",
+		m.navigator.selectedTableName(), firstTable, lastTable, len(m.navigator.tables), focusLabel, rowStatus)
 }
 
 func panelStyle(width, height int, focused bool) lipgloss.Style {

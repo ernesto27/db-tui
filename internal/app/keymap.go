@@ -18,6 +18,7 @@ type keyMap struct {
 	pageDown      key.Binding
 	home          key.Binding
 	end           key.Binding
+	dump          key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -37,5 +38,6 @@ func defaultKeyMap() keyMap {
 		pageDown:      key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdown", "next page")),
 		home:          key.NewBinding(key.WithKeys("home"), key.WithHelp("home", "first table")),
 		end:           key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "last table")),
+		dump:          key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "dump database")),
 	}
 }

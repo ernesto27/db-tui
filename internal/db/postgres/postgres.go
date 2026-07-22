@@ -2,13 +2,15 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"net/url"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ernestoponce27/db-tui/internal/db"
 	"github.com/ernestoponce27/db-tui/internal/logger"
@@ -22,50 +24,6 @@ const listTablesSQL = `
 	WHERE table_schema = 'public'
 		AND table_type = 'BASE TABLE'
 	ORDER BY table_name`
-
-// PostgreSQLConfig contains the settings for one PostgreSQL connection.
-type PostgreSQLConfig struct {
-	DSN          string `json:"dsn,omitempty"`
-	Host         string `json:"host,omitempty"`
-	Port         int    `json:"port,omitempty"`
-	DatabaseName string `json:"databaseName,omitempty"`
-	Username     string `json:"username,omitempty"`
-	Password     string `json:"password,omitempty"`
-}
-
-// ConnectionDSN returns the configured DSN or builds one from individual settings.
-func (c PostgreSQLConfig) ConnectionDSN() (string, error) {
-	if dsn := strings.TrimSpace(c.DSN); dsn != "" {
-		return dsn, nil
-	}
-
-	host := strings.TrimSpace(c.Host)
-	databaseName := strings.TrimSpace(c.DatabaseName)
-	username := strings.TrimSpace(c.Username)
-	if host == "" {
-		return "", errors.New(`config field "postgresql.host" is required`)
-	}
-	if databaseName == "" {
-		return "", errors.New(`config field "postgresql.databaseName" is required`)
-	}
-	if username == "" {
-		return "", errors.New(`config field "postgresql.username" is required`)
-	}
-	if c.Port < 1 || c.Port > 65535 {
-		return "", errors.New(`config field "postgresql.port" must be between 1 and 65535`)
-	}
-
-	user := url.User(username)
-	if c.Password != "" {
-		user = url.UserPassword(username, c.Password)
-	}
-	return (&url.URL{
-		Scheme: "postgres",
-		User:   user,
-		Host:   net.JoinHostPort(host, strconv.Itoa(c.Port)),
-		Path:   "/" + databaseName,
-	}).String(), nil
-}
 
 type postgresql struct {
 	pool   *pgxpool.Pool
@@ -211,4 +169,93 @@ func (p *postgresql) Execute(ctx context.Context, sql string) (db.QueryResult, e
 func (p *postgresql) Close() {
 	p.pool.Close()
 	_ = p.logger.Close()
+}
+
+func (p *postgresql) Dump(ctx context.Context) error {
+	connConfig := p.pool.Config().ConnConfig
+
+	timestamp := time.Now().Format("20060102_150405")
+	filename := connConfig.Database + "_" + timestamp + ".sql"
+	cmd := exec.CommandContext(
+		ctx,
+		"pg_dump",
+		"-h", connConfig.Host,
+		"-p", strconv.Itoa(int(connConfig.Port)),
+		"-U", connConfig.User,
+		"-d", connConfig.Database,
+		"-f", filename,
+	)
+
+	if connConfig.Password != "" {
+		cmd.Env = append(os.Environ(), "PGPASSWORD="+connConfig.Password)
+	}
+
+	_, err := cmd.CombinedOutput()
+	if err != nil {
+		// If command fails try docker exec
+		containerID, err := dockerContainerIDForPort(ctx, int(connConfig.Port))
+		if err != nil {
+			return err
+		}
+
+		file, err := os.Create(filename)
+		if err != nil {
+			return fmt.Errorf("create dump file: %w", err)
+		}
+
+		var stderr bytes.Buffer
+		args := []string{"exec"}
+		if connConfig.Password != "" {
+			args = append(args, "-e", "PGPASSWORD="+connConfig.Password)
+		}
+		args = append(args,
+			containerID,
+			"pg_dump",
+			"-U", connConfig.User,
+			"-d", connConfig.Database,
+		)
+		cmd := exec.CommandContext(ctx, "docker", args...)
+
+		cmd.Stdout = file
+		cmd.Stderr = &stderr
+
+		if err := cmd.Run(); err != nil {
+			_ = file.Close()
+			_ = os.Remove(filename)
+			return fmt.Errorf("docker pg_dump: %w: %s", err, stderr.String())
+		}
+		if err := file.Close(); err != nil {
+			_ = os.Remove(filename)
+			return fmt.Errorf("close dump file: %w", err)
+		}
+
+		return nil
+	}
+
+	return nil
+}
+
+func dockerContainerIDForPort(ctx context.Context, port int) (string, error) {
+	cmd := exec.CommandContext(
+		ctx,
+		"docker",
+		"ps",
+		"--filter", fmt.Sprintf("publish=%d", port),
+		"--format", "{{.ID}}",
+	)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("list Docker containers: %w", err)
+	}
+
+	ids := strings.Fields(string(output))
+	switch len(ids) {
+	case 0:
+		return "", fmt.Errorf("not found")
+	case 1:
+		return ids[0], nil
+	default:
+		return "", fmt.Errorf("multiple Docker containers publish port %d", port)
+	}
 }

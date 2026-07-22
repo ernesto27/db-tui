@@ -32,6 +32,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if m.dumpModal != nil {
+		return m, m.updateDumpModal(msg)
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		return m, m.updateKey(msg)
@@ -93,6 +97,19 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		m.data.columnOffset = min(m.data.columnOffset, m.data.maxColumnOffset())
 		m.data.ensureSelectedVisible(m.layout)
 		m.query.resize(m.layout)
+		return nil, true
+	case dumpFinishedMsg:
+		if msg.session != m.session || m.dumpModal == nil {
+			return nil, true
+		}
+
+		if msg.err != nil {
+			m.dumpModal.state = dumpFailed
+			m.dumpModal.err = msg.err
+			return nil, true
+		}
+
+		m.dumpModal.state = dumpSucceeded
 		return nil, true
 	default:
 		return nil, false
@@ -343,6 +360,13 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 			return m.startRowLoad(0, 0)
 		}
 		return nil
+	case key.Matches(msg, m.keys.dump):
+		if m.database == nil || m.loading || m.data.loading || m.query.loading {
+			return nil
+		}
+		modal := newDumpModal(m.database.Name())
+		m.dumpModal = &modal
+		return nil
 	default:
 		return nil
 	}
@@ -433,4 +457,34 @@ func (m *Model) acceptWheel(button tea.MouseButton) bool {
 	m.lastWheelAt = now
 	m.lastWheelButton = button
 	return true
+}
+
+func (m *Model) updateDumpModal(msg tea.Msg) tea.Cmd {
+	keyMsg, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return nil
+	}
+
+	switch m.dumpModal.state {
+	case dumpConfirming:
+		switch keyMsg.String() {
+		case "enter":
+			m.dumpModal.state = dumpRunning
+			return tea.Batch(
+				dumpDatabase(m.database, m.session),
+				m.startSpinner(),
+			)
+		case "esc":
+			m.dumpModal = nil
+		}
+	case dumpRunning:
+		return nil
+	case dumpSucceeded, dumpFailed:
+		switch keyMsg.String() {
+		case "enter", "esc":
+			m.dumpModal = nil
+		}
+	}
+
+	return nil
 }

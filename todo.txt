@@ -1,6 +1,7 @@
 [x] - option to multiple connections to postgresql
 [x] - key to remove connection
 [] - support to mysql engine
-[] - section to run raw queries
+[x] - section to run raw queries
 [] - search tables
-[] -
+[] - option to dump all database file
+[] - update script sandbox for claude code
