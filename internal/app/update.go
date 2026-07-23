@@ -276,6 +276,19 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(msg, m.keys.tableSearch):
 		m.focus = focusNavigator
 		return m.navigator.startSearch()
+	case m.panel == panelData && key.Matches(msg, m.keys.queryFocus):
+		switch {
+		case m.navigator.searching:
+			m.navigator.finishSearch()
+			m.focus = focusData
+			return nil
+		case m.focus == focusData:
+			m.focus = focusNavigator
+			return nil
+		default:
+			m.focus = focusNavigator
+			return m.navigator.startSearch()
+		}
 	case m.navigator.searching:
 		return m.updateNavigatorSearch(msg)
 	case key.Matches(msg, m.keys.quit) && !(m.panel == panelQuery && !m.query.resultsFocused && msg.String() == "q"):

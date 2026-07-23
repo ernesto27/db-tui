@@ -27,3 +27,14 @@ func TestBaseViewShowsConnectedEngine(t *testing.T) {
 
 	assert.Contains(t, view.Content, "chinook  /  MySQL")
 }
+
+func TestFooterTextDescribesTabNavigation(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook"}
+	model.navigator.tables = []db.Table{{Name: "Album"}}
+
+	assert.Contains(t, model.footerText(), "Tab table/search/data")
+
+	model.panel = panelQuery
+	assert.Contains(t, model.footerText(), "Tab editor/results")
+}
