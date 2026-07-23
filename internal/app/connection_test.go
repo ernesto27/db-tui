@@ -24,6 +24,18 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 			want:     "postgres://saved",
 		},
 		{
+			name: "MySQL fields",
+			settings: ConnectionSettings{
+				Engine:       "mysql",
+				Host:         "127.0.0.1",
+				Port:         3306,
+				DatabaseName: "chinook",
+				Username:     "db_tui",
+				Password:     "secret",
+			},
+			want: "mysql://db_tui:secret@127.0.0.1:3306/chinook",
+		},
+		{
 			name: "valid fields",
 			settings: ConnectionSettings{
 				Host:         "127.0.0.1",
@@ -111,6 +123,11 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 			},
 			want: "postgres://db_tui@[2001:db8::1]:5432/chinook",
 		},
+		{
+			name:     "unknown engine",
+			settings: ConnectionSettings{Engine: "sqlite", DSN: "database.db"},
+			wantErr:  `unsupported database engine "sqlite"`,
+		},
 	}
 
 	for _, test := range tests {
@@ -143,6 +160,7 @@ func TestConnectConnection(t *testing.T) {
 		database     db.Database
 		connectorErr error
 		wantCalls    int
+		wantEngine   string
 		wantDSN      string
 		wantErr      error
 		wantErrText  string
@@ -158,16 +176,18 @@ func TestConnectConnection(t *testing.T) {
 			attempt:      4,
 			connectorErr: connectorErr,
 			wantCalls:    1,
+			wantEngine:   db.EnginePostgreSQL,
 			wantDSN:      "postgres://database",
 			wantErr:      connectorErr,
 		},
 		{
-			name:      "success",
-			settings:  successSettings,
-			attempt:   5,
-			database:  database,
-			wantCalls: 1,
-			wantDSN:   "postgres://db_tui@127.0.0.1:5433/chinook",
+			name:       "success",
+			settings:   successSettings,
+			attempt:    5,
+			database:   database,
+			wantCalls:  1,
+			wantEngine: db.EnginePostgreSQL,
+			wantDSN:    "postgres://db_tui@127.0.0.1:5433/chinook",
 		},
 	}
 
@@ -175,9 +195,11 @@ func TestConnectConnection(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			calls := 0
 			var gotDSN string
+			var gotEngine string
 			var hadDeadline bool
-			connect := func(ctx context.Context, dsn string) (db.Database, error) {
+			connect := func(ctx context.Context, engine, dsn string) (db.Database, error) {
 				calls++
+				gotEngine = engine
 				gotDSN = dsn
 				_, hadDeadline = ctx.Deadline()
 				return test.database, test.connectorErr
@@ -192,6 +214,7 @@ func TestConnectConnection(t *testing.T) {
 				assert.Empty(t, gotDSN)
 				assert.False(t, hadDeadline)
 			} else {
+				assert.Equal(t, test.wantEngine, gotEngine)
 				assert.Equal(t, test.wantDSN, gotDSN)
 				assert.True(t, hadDeadline)
 			}
@@ -209,7 +232,9 @@ func TestConnectConnection(t *testing.T) {
 
 			assert.NoError(t, message.err)
 			assert.Same(t, test.database, message.database)
-			assert.Equal(t, test.settings, message.settings)
+			wantSettings := test.settings
+			wantSettings.Engine = test.wantEngine
+			assert.Equal(t, wantSettings, message.settings)
 		})
 	}
 }

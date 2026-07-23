@@ -12,7 +12,8 @@ import (
 type connectionInput uint8
 
 const (
-	hostInput connectionInput = iota
+	engineInput connectionInput = iota
+	hostInput
 	databaseNameInput
 	portInput
 	usernameInput
@@ -35,13 +36,19 @@ type cancelConnectionMsg struct{}
 
 func newConnectionModal(saved ConnectionSettings) connectionModal {
 	modal := connectionModal{}
+	modal.inputs[engineInput] = newConnectionInput("postgres or mysql")
 	modal.inputs[hostInput] = newConnectionInput("127.0.0.1")
 	modal.inputs[databaseNameInput] = newConnectionInput("database name")
-	modal.inputs[portInput] = newConnectionInput("5432")
+	modal.inputs[portInput] = newConnectionInput("5432 or 3306")
 	modal.inputs[usernameInput] = newConnectionInput("username")
 	modal.inputs[passwordInput] = newConnectionInput("password")
 	modal.inputs[passwordInput].EchoMode = textinput.EchoPassword
-	modal.inputs[dsnInput] = newConnectionInput("postgres://user:password@host:5432/database")
+	modal.inputs[dsnInput] = newConnectionInput("engine-specific DSN")
+	engine, err := saved.normalizedEngine()
+	if err != nil {
+		engine = saved.Engine
+	}
+	modal.inputs[engineInput].SetValue(engine)
 	modal.inputs[hostInput].SetValue(saved.Host)
 	modal.inputs[databaseNameInput].SetValue(saved.DatabaseName)
 	if saved.Port > 0 {
@@ -92,7 +99,12 @@ func (m *connectionModal) focus(delta int) tea.Cmd {
 
 func (m connectionModal) connectionSettings() (ConnectionSettings, error) {
 	if dsn := strings.TrimSpace(m.inputs[dsnInput].Value()); dsn != "" {
-		return ConnectionSettings{DSN: dsn}, nil
+		settings := ConnectionSettings{
+			Engine: strings.TrimSpace(m.inputs[engineInput].Value()),
+			DSN:    dsn,
+		}
+		_, err := settings.normalizedEngine()
+		return settings, err
 	}
 
 	port, err := strconv.Atoi(strings.TrimSpace(m.inputs[portInput].Value()))
@@ -100,6 +112,7 @@ func (m connectionModal) connectionSettings() (ConnectionSettings, error) {
 		port = 0
 	}
 	settings := ConnectionSettings{
+		Engine:       strings.TrimSpace(m.inputs[engineInput].Value()),
 		Host:         strings.TrimSpace(m.inputs[hostInput].Value()),
 		Port:         port,
 		DatabaseName: strings.TrimSpace(m.inputs[databaseNameInput].Value()),
@@ -118,13 +131,12 @@ func (m connectionModal) view(width int) string {
 	lines := []string{
 		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Render("Connect to database"),
 		"",
-		labelStyle.Render("Engine"),
-		fieldStyle.Render("PostgreSQL"),
 	}
 	for _, field := range []struct {
 		label string
 		input connectionInput
 	}{
+		{"Engine", engineInput},
 		{"Host", hostInput},
 		{"Database name", databaseNameInput},
 		{"Port", portInput},
@@ -138,7 +150,7 @@ func (m connectionModal) view(width int) string {
 		lines = append(lines, "", lipgloss.NewStyle().
 			Foreground(lipgloss.Color("210")).
 			Background(lipgloss.Color("52")).
-			Width(modalWidth - 6).
+			Width(modalWidth-6).
 			Padding(0, 1).
 			Render("✕ "+sanitizeText(m.errorText)))
 	}

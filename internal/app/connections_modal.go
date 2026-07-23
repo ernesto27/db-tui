@@ -44,7 +44,8 @@ func newConnectionsModal(appConfig config.Config) connectionsModal {
 func connectionSettingsFromConfig(connection config.Connection) ConnectionSettings {
 	port, _ := strconv.Atoi(strings.TrimSpace(connection.Settings.Port))
 
-	return ConnectionSettings{
+	settings := ConnectionSettings{
+		Engine:       strings.TrimSpace(connection.Engine),
 		DSN:          strings.TrimSpace(connection.Settings.DSN),
 		Host:         strings.TrimSpace(connection.Settings.Hostname),
 		Port:         port,
@@ -52,6 +53,10 @@ func connectionSettingsFromConfig(connection config.Connection) ConnectionSettin
 		Username:     strings.TrimSpace(connection.Settings.Username),
 		Password:     connection.Settings.Password,
 	}
+	if engine, err := settings.normalizedEngine(); err == nil {
+		settings.Engine = engine
+	}
+	return settings
 }
 
 func configSettingsFromConnectionSettings(settings ConnectionSettings) config.Settings {
@@ -71,9 +76,13 @@ func configSettingsFromConnectionSettings(settings ConnectionSettings) config.Se
 }
 
 func newConfigConnection(settings ConnectionSettings) config.Connection {
+	engine, err := settings.normalizedEngine()
+	if err != nil {
+		engine = strings.ToLower(strings.TrimSpace(settings.Engine))
+	}
 	name := strings.TrimSpace(settings.DatabaseName)
 	if name == "" {
-		name = "PostgreSQL connection"
+		name = engineDisplayName(engine) + " connection"
 	}
 	if host := strings.TrimSpace(settings.Host); host != "" {
 		name += " (" + host + ")"
@@ -81,7 +90,7 @@ func newConfigConnection(settings ConnectionSettings) config.Connection {
 
 	return config.Connection{
 		Name:     name,
-		Engine:   "postgres",
+		Engine:   engine,
 		Settings: configSettingsFromConnectionSettings(settings),
 	}
 }

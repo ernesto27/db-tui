@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"strconv"
@@ -13,11 +14,12 @@ import (
 	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
-// ConnectFunc opens a database session for dsn.
-type ConnectFunc func(context.Context, string) (db.Database, error)
+// ConnectFunc opens a database session for an engine and dsn.
+type ConnectFunc func(context.Context, string, string) (db.Database, error)
 
-// ConnectionSettings identifies a PostgreSQL connection entered in the TUI.
+// ConnectionSettings identifies a database connection entered in the TUI.
 type ConnectionSettings struct {
+	Engine       string
 	DSN          string
 	Host         string
 	Port         int
@@ -34,6 +36,10 @@ type connectionFinishedMsg struct {
 }
 
 func (s ConnectionSettings) connectionDSN() (string, error) {
+	engine, err := s.normalizedEngine()
+	if err != nil {
+		return "", err
+	}
 	if dsn := strings.TrimSpace(s.DSN); dsn != "" {
 		return dsn, nil
 	}
@@ -58,16 +64,36 @@ func (s ConnectionSettings) connectionDSN() (string, error) {
 	if s.Password != "" {
 		user = url.UserPassword(username, s.Password)
 	}
+	scheme := "postgres"
+	if engine == db.EngineMySQL {
+		scheme = "mysql"
+	}
 	return (&url.URL{
-		Scheme: "postgres",
+		Scheme: scheme,
 		User:   user,
 		Host:   net.JoinHostPort(host, strconv.Itoa(s.Port)),
 		Path:   "/" + databaseName,
 	}).String(), nil
 }
 
+func (s ConnectionSettings) normalizedEngine() (string, error) {
+	switch engine := strings.ToLower(strings.TrimSpace(s.Engine)); engine {
+	case "", "postgres", "postgresql":
+		return db.EnginePostgreSQL, nil
+	case db.EngineMySQL:
+		return db.EngineMySQL, nil
+	default:
+		return "", fmt.Errorf("unsupported database engine %q", strings.TrimSpace(s.Engine))
+	}
+}
+
 func connectConnection(connect ConnectFunc, settings ConnectionSettings, attempt uint64) tea.Cmd {
 	return func() tea.Msg {
+		engine, err := settings.normalizedEngine()
+		if err != nil {
+			return connectionFinishedMsg{attempt: attempt, err: err}
+		}
+		settings.Engine = engine
 		dsn, err := settings.connectionDSN()
 		if err != nil {
 			return connectionFinishedMsg{attempt: attempt, err: err}
@@ -76,7 +102,7 @@ func connectConnection(connect ConnectFunc, settings ConnectionSettings, attempt
 		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
 		defer cancel()
 
-		database, err := connect(ctx, dsn)
+		database, err := connect(ctx, engine, dsn)
 		if err != nil {
 			return connectionFinishedMsg{attempt: attempt, err: err}
 		}
