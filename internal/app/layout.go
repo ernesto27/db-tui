@@ -2,7 +2,7 @@ package app
 
 const (
 	bodyStartRow          = 1
-	navigatorListStartRow = 4
+	navigatorListStartRow = 5
 )
 
 type paneRect struct {
@@ -48,7 +48,7 @@ func newAppLayout(width, height int) appLayout {
 			height: bodyHeight,
 		},
 		navigatorListY:    bodyStartRow + navigatorListStartRow,
-		navigatorListRows: max(1, height-7),
+		navigatorListRows: max(1, height-8),
 	}
 }
 

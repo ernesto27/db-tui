@@ -90,7 +90,7 @@ func (m Model) footerText() string {
 		if m.panel == panelQuery {
 			return "raw query  •  connection required  •  Ctrl+T table data  •  Ctrl+N new connection  •  Ctrl+L open connections  •  q quit"
 		}
-		return "welcome to db-tui  •  Ctrl+N new connection  •  Ctrl+L open connections  •  Ctrl+R raw query  •  q quit"
+		return "Ctrl+N new connection  •  Ctrl+L open connections  •  Ctrl+R raw query  •  q quit"
 	}
 	if m.panel == panelQuery {
 		return "raw query  •  Ctrl+P execute  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+T table data  •  Ctrl+L connections  •  q quit"
@@ -104,9 +104,11 @@ func (m Model) footerText() string {
 	if len(m.navigator.tables) == 0 {
 		return "no public tables  •  q quit"
 	}
+	visibleTables := m.navigator.visibleTables()
+	if len(visibleTables) == 0 {
+		return "no matching tables  •  Ctrl+F edit search  •  Esc clear search  •  q quit"
+	}
 
-	firstTable := m.navigator.offset + 1
-	lastTable := min(m.navigator.offset+m.layout.navigatorListRows, len(m.navigator.tables))
 	focusLabel := "tables"
 	if m.focus == focusData {
 		focusLabel = "data"
@@ -125,8 +127,8 @@ func (m Model) footerText() string {
 		}
 	}
 
-	return fmt.Sprintf("%s  •  tables %d–%d/%d  •  focus: %s%s  •  Ctrl+D dump database  •  Ctrl+R raw query  •  ←/→ switch  •  q quit",
-		m.navigator.selectedTableName(), firstTable, lastTable, len(m.navigator.tables), focusLabel, rowStatus)
+	return fmt.Sprintf("focus: %s%s  •  Ctrl+F search tables  •  Ctrl+D dump database  •  Ctrl+R raw query  •  ←/→ switch  •  q quit",
+		focusLabel, rowStatus)
 }
 
 func panelStyle(width, height int, focused bool) lipgloss.Style {

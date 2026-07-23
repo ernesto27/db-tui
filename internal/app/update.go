@@ -40,6 +40,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return m, m.updateKey(msg)
 	case tea.PasteMsg:
+		if m.navigator.searching {
+			return m, m.updateNavigatorSearch(msg)
+		}
 		if m.panel == panelQuery && !m.query.resultsFocused {
 			editor, command := m.query.editor.Update(msg)
 			m.query.editor = editor
@@ -93,6 +96,7 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		return nil, true
 	case tea.WindowSizeMsg:
 		m.layout = newAppLayout(msg.Width, msg.Height)
+		m.navigator.resize(m.layout)
 		m.navigator.ensureVisible(m.layout.navigatorListRows)
 		m.data.columnOffset = min(m.data.columnOffset, m.data.maxColumnOffset())
 		m.data.ensureSelectedVisible(m.layout)
@@ -266,6 +270,11 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.panel = panelData
 		m.focus = focusData
 		return nil
+	case key.Matches(msg, m.keys.tableSearch):
+		m.focus = focusNavigator
+		return m.navigator.startSearch()
+	case m.navigator.searching:
+		return m.updateNavigatorSearch(msg)
 	case key.Matches(msg, m.keys.quit) && !(m.panel == panelQuery && !m.query.resultsFocused && msg.String() == "q"):
 		return tea.Quit
 	case m.panel == panelQuery && key.Matches(msg, m.keys.executeQuery):
@@ -356,7 +365,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	case key.Matches(msg, m.keys.end):
-		if m.focus == focusNavigator && m.navigator.selectIndex(len(m.navigator.tables)-1, m.layout.navigatorListRows) {
+		if m.focus == focusNavigator && m.navigator.selectIndex(len(m.navigator.visibleTables())-1, m.layout.navigatorListRows) {
 			return m.startRowLoad(0, 0)
 		}
 		return nil
@@ -370,6 +379,27 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 	default:
 		return nil
 	}
+}
+
+func (m *Model) updateNavigatorSearch(msg tea.Msg) tea.Cmd {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+		switch keyMsg.String() {
+		case "enter":
+			m.navigator.finishSearch()
+			return nil
+		case "esc":
+			if m.navigator.cancelSearch(m.layout.navigatorListRows) {
+				return m.startRowLoad(0, 0)
+			}
+			return nil
+		}
+	}
+
+	selectionChanged, command := m.navigator.updateFilter(msg, m.layout.navigatorListRows)
+	if selectionChanged {
+		return tea.Batch(command, m.startRowLoad(0, 0))
+	}
+	return command
 }
 
 func (m *Model) updateMouseClick(msg tea.MouseClickMsg) tea.Cmd {

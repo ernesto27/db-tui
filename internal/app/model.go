@@ -65,15 +65,19 @@ type Model struct {
 
 // New creates the root Bubble Tea application model.
 func New(config config.Config, savedConnection ConnectionSettings, connect ConnectFunc) Model {
+	layout := newAppLayout(defaultWidth, defaultHeight)
+	navigator := newNavigatorModel()
+	navigator.resize(layout)
 	return Model{
 		savedConnection:   savedConnection,
 		connect:           connect,
 		config:            config,
 		editingConnection: -1,
 		session:           1,
-		layout:            newAppLayout(defaultWidth, defaultHeight),
+		layout:            layout,
 		keys:              defaultKeyMap(),
-		query:             newQueryModel(newAppLayout(defaultWidth, defaultHeight)),
+		navigator:         navigator,
+		query:             newQueryModel(layout),
 	}
 }
 
