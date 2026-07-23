@@ -127,7 +127,7 @@ func (m Model) footerText() string {
 		}
 	}
 
-	return fmt.Sprintf("focus: %s%s  •  Ctrl+F search tables  •  Ctrl+D dump database  •  Ctrl+R raw query  •  ←/→ switch  •  q quit",
+	return fmt.Sprintf("focus: %s%s  •  Ctrl+F search tables  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab table/search/data  •  q quit",
 		focusLabel, rowStatus)
 }
 
