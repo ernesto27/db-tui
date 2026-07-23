@@ -1,7 +1,91 @@
 [x] - option to multiple connections to postgresql
 [x] - key to remove connection
 [] - support to mysql engine
+[] - export data in csv
 [x] - section to run raw queries
 [] - search tables
 [x] - option to dump all database file
 [] - update script sandbox for claude code
+
+
+
+ 1. Keyboard routing in internal/app/update.go:252
+
+     Add table-driven cases such as:
+      - TestUpdateKeyOpensConnectionModal
+      - TestUpdateKeyOpensConnectionsModal
+      - TestUpdateKeySwitchesToQueryPanel
+      - TestUpdateKeySwitchesToDataPanel
+      - TestUpdateKeyStartsNavigatorSearch
+      - TestUpdateKeyDoesNotQuitWhenQueryEditorContainsQ
+      - TestUpdateKeyIgnoresDumpWithoutDatabase
+
+  2. Saved-connections modal in internal/app/connections_modal.go
+
+     Highest-value cases:
+      - Up/down selection stays within bounds.
+      - Enter emits the selected connection message.
+      - Edit emits the correct connection.
+      - Delete requires confirmation.
+      - Escape cancels deletion.
+      - Empty connection list safely ignores actions.
+      - Deleting the active connection closes the database and resets model state.
+      - Conversion between stored connections and connection settings round-trips correctly.
+
+  3. Connection modal behavior in internal/app/connection_modal.go
+
+     Test:
+      - Tab and Shift+Tab wrap through fields.
+      - Escape cancels.
+      - Enter submits valid settings.
+      - Input is ignored while connecting.
+      - connectionSettings() returns the entered values.
+      - Password is masked in the rendered view.
+      - Validation and connector errors appear in the view.
+
+  4. Navigator search lifecycle in internal/app/update.go:384
+
+     Test:
+      - Starting search focuses the filter.
+      - Typing updates visible tables.
+      - Enter accepts the filter.
+      - Escape restores the previous filter.
+      - Changing the selected table starts a row load.
+      - Filtering without changing the selection does not reload rows.
+
+  5. Mouse and wheel routing
+
+     Test:
+      - Clicking a table selects it and loads rows.
+      - Clicking data/query areas changes focus.
+      - Wheel events go only to the focused panel.
+      - Duplicate wheel events inside the debounce window are ignored.
+      - Wheel events after the debounce window are accepted.
+
+  6. Semantic view tests
+
+     Avoid full-screen snapshots. Assert meaningful text and Bubble Tea view properties:
+      - Disconnected screen shows connection instructions.
+      - Loading state shows loading text.
+      - Empty database, empty query result, and error states render correctly.
+      - Query command tags appear.
+      - Password values never appear.
+      - View() enables alternate screen, mouse mode, and the correct title.
+
+  7. Model lifecycle
+
+     Add:
+      - TestModelInitWithoutDatabase
+      - TestModelInitLoadsTables
+      - TestModelCloseClosesDatabase
+      - TestModelCloseWithoutDatabase
+
+  8. Paging and grid edge cases
+
+     Add:
+      - Horizontal column scrolling clamps at both ends.
+      - Ragged rows do not panic.
+      - Missing values render as NULL.
+      - Wide Unicode cells calculate widths correctly.
+      - Very narrow terminal sizes do not produce negative dimensions.
+      - Page navigation preserves or clamps the selected row.

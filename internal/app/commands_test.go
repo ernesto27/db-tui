@@ -1,0 +1,167 @@
+package app
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/ernestoponce27/db-tui/internal/db"
+)
+
+func TestLoadTables(t *testing.T) {
+	wantErr := errors.New("list failed")
+	database := &fakeDatabase{
+		tables:    []db.Table{{Name: "Album"}},
+		tablesErr: wantErr,
+	}
+
+	message, ok := loadTables(database, 7)().(tablesLoadedMsg)
+	require.True(t, ok)
+
+	assert.Equal(t, 1, database.listTablesCalls)
+	assert.True(t, database.listTablesDeadline)
+	assert.Equal(t, database.tables, message.tables)
+	assert.ErrorIs(t, message.err, wantErr)
+	assert.Equal(t, uint64(7), message.session)
+}
+
+func TestLoadRows(t *testing.T) {
+	wantErr := errors.New("rows failed")
+	tests := []struct {
+		name        string
+		database    *fakeDatabase
+		table       db.Table
+		offset      int
+		selectedRow int
+		session     uint64
+		wantPage    db.RowPage
+		wantErr     error
+	}{
+		{
+			name: "success",
+			database: &fakeDatabase{page: db.RowPage{
+				Columns: []string{"TrackId"},
+				Rows:    [][]any{{1}},
+				HasMore: true,
+			}},
+			table:       db.Table{Name: "Track"},
+			offset:      200,
+			selectedRow: 4,
+			session:     9,
+			wantPage: db.RowPage{
+				Columns: []string{"TrackId"},
+				Rows:    [][]any{{1}},
+				HasMore: true,
+			},
+		},
+		{
+			name:        "error",
+			database:    &fakeDatabase{pageErr: wantErr},
+			table:       db.Table{Name: "Track"},
+			offset:      0,
+			selectedRow: 0,
+			session:     2,
+			wantErr:     wantErr,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			message, ok := loadRows(
+				test.database,
+				test.table,
+				test.offset,
+				test.selectedRow,
+				test.session,
+			)().(rowsLoadedMsg)
+			require.True(t, ok)
+
+			assert.Equal(t, 1, test.database.getRowsCalls)
+			assert.Equal(t, test.table, test.database.getRowsTable)
+			assert.Equal(t, db.PageRequest{
+				Offset: test.offset,
+				Limit:  rowPageSize,
+			}, test.database.getRowsRequest)
+			assert.True(t, test.database.getRowsDeadline)
+			assert.Equal(t, test.wantPage, message.page)
+			assert.Equal(t, test.table.Name, message.tableName)
+			assert.Equal(t, test.offset, message.offset)
+			assert.Equal(t, test.selectedRow, message.selectedRow)
+			assert.Equal(t, test.session, message.session)
+			assert.ErrorIs(t, message.err, test.wantErr)
+		})
+	}
+}
+
+func TestExecuteQuery(t *testing.T) {
+	wantErr := errors.New("query failed")
+	tests := []struct {
+		name       string
+		database   *fakeDatabase
+		sql        string
+		session    uint64
+		request    uint64
+		wantResult db.QueryResult
+		wantErr    error
+	}{
+		{
+			name: "success",
+			database: &fakeDatabase{queryResult: db.QueryResult{
+				Columns:    []string{"count"},
+				Rows:       [][]any{{3}},
+				CommandTag: "SELECT 1",
+			}},
+			sql:     "SELECT count(*)",
+			session: 4,
+			request: 12,
+			wantResult: db.QueryResult{
+				Columns:    []string{"count"},
+				Rows:       [][]any{{3}},
+				CommandTag: "SELECT 1",
+			},
+		},
+		{
+			name:     "error",
+			database: &fakeDatabase{queryErr: wantErr},
+			sql:      "broken",
+			session:  4,
+			request:  12,
+			wantErr:  wantErr,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			message, ok := executeQuery(
+				test.database,
+				test.sql,
+				test.session,
+				test.request,
+			)().(queryFinishedMsg)
+			require.True(t, ok)
+
+			assert.Equal(t, 1, test.database.executeCalls)
+			assert.Equal(t, test.sql, test.database.executedSQL)
+			assert.True(t, test.database.executeDeadline)
+			assert.Equal(t, test.wantResult, message.result)
+			assert.Equal(t, test.session, message.session)
+			assert.Equal(t, test.request, message.request)
+			assert.ErrorIs(t, message.err, test.wantErr)
+		})
+	}
+}
+
+func TestDumpDatabase(t *testing.T) {
+	wantErr := errors.New("dump failed")
+	database := &fakeDatabase{dumpErr: wantErr}
+
+	message, ok := dumpDatabase(database, 15)().(dumpFinishedMsg)
+	require.True(t, ok)
+
+	assert.Equal(t, 1, database.dumpCalls)
+	assert.True(t, database.dumpDeadline)
+	assert.Equal(t, uint64(15), message.session)
+	assert.ErrorIs(t, message.err, wantErr)
+}

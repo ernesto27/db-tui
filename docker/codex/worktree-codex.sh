@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Create a sibling worktree and open it in the existing codex-cli container.
+# Example: ./docker/codex/worktree-codex.sh feature/add-query-log --model gpt-5.6-sol "Add a query-log view."
 
 set -euo pipefail
 

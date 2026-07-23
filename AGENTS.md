@@ -28,7 +28,7 @@ Use `gofmt`; the formatter determines indentation. Keep package names short, low
 
 ## Testing Guidelines
 
-Use Go's `testing` package, `testify/assert`, and table-driven subtests for varied inputs. Add focused regression coverage at the lowest practical layer, especially for paging bounds, identifier quoting, cancellation, layout edges, SQL `NULL`, and query-log behavior. No numeric coverage threshold is set, but every behavior change needs relevant tests. Do not make integration tests depend on remote databases or credentials.
+Every new feature must include automated tests that verify its expected behavior. A feature is not complete until its tests are added and passing. Use Go's `testing` package, `testify/assert`, and table-driven subtests for varied inputs. Add focused regression coverage at the lowest practical layer, especially for paging bounds, identifier quoting, cancellation, layout edges, SQL `NULL`, and query-log behavior. No numeric coverage threshold is set, but every behavior change needs relevant tests. Do not make integration tests depend on remote databases or credentials.
 
 ## Commit & Pull Request Guidelines
 
