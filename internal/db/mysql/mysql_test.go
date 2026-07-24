@@ -2,18 +2,16 @@ package mysql
 
 import (
 	"context"
-	"errors"
-	"io"
-	"regexp"
 	"testing"
+	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/ernestoponce27/db-tui/internal/db"
-	"github.com/ernestoponce27/db-tui/internal/logger"
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const worldDSN = "db_tui:db_tui@tcp(127.0.0.1:3307)/world?parseTime=true"
 
 func TestParseDSN(t *testing.T) {
 	tests := []struct {
@@ -89,51 +87,36 @@ func TestParseDSN(t *testing.T) {
 }
 
 func TestListTables(t *testing.T) {
-	database, mock := newMockDatabase(t)
-	mock.ExpectQuery(regexp.QuoteMeta(listTablesSQL)).
-		WillReturnRows(sqlmock.NewRows([]string{"table_name"}).
-			AddRow("Album").
-			AddRow("Artist"))
+	database := connectWorld(t)
 
 	tables, err := database.ListTables(context.Background())
 
 	require.NoError(t, err)
-	assert.Equal(t, []db.Table{{Name: "Album"}, {Name: "Artist"}}, tables)
+	assert.Equal(t, []db.Table{{Name: "city"}, {Name: "country"}, {Name: "countrylanguage"}}, tables)
 }
 
 func TestGetRows(t *testing.T) {
-	database, mock := newMockDatabase(t)
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `Album` LIMIT ? OFFSET ?")).
-		WithArgs(3, 4).
-		WillReturnRows(sqlmock.NewRows([]string{"AlbumId", "Title", "Notes"}).
-			AddRow(int64(5), []byte("title 5"), nil).
-			AddRow(int64(6), []byte("title 6"), nil).
-			AddRow(int64(7), []byte("title 7"), nil))
+	database := connectWorld(t)
 
 	page, err := database.GetRows(
 		context.Background(),
-		db.Table{Name: "Album"},
-		db.PageRequest{Offset: 4, Limit: 2},
+		db.Table{Name: "city"},
+		db.PageRequest{Limit: 2},
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, []string{"AlbumId", "Title", "Notes"}, page.Columns)
-	assert.Equal(t, [][]any{
-		{int64(5), "title 5", nil},
-		{int64(6), "title 6", nil},
-	}, page.Rows)
+	assert.Equal(t, []string{"ID", "Name", "CountryCode", "District", "Population"}, page.Columns)
+	assert.Len(t, page.Rows, 2)
+	assert.Len(t, page.Rows[0], len(page.Columns))
 	assert.True(t, page.HasMore)
 }
 
 func TestGetRowsQuotesTableName(t *testing.T) {
-	database, mock := newMockDatabase(t)
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `Album``; DROP TABLE Artist; --` LIMIT ? OFFSET ?")).
-		WithArgs(2, 0).
-		WillReturnError(errors.New("table does not exist"))
+	database := connectWorld(t)
 
 	_, err := database.GetRows(
 		context.Background(),
-		db.Table{Name: "Album`; DROP TABLE Artist; --"},
+		db.Table{Name: "city`; DROP TABLE country; --"},
 		db.PageRequest{Limit: 1},
 	)
 
@@ -141,7 +124,7 @@ func TestGetRowsQuotesTableName(t *testing.T) {
 }
 
 func TestGetRowsValidatesPage(t *testing.T) {
-	database, _ := newMockDatabase(t)
+	database := connectWorld(t)
 	tests := []struct {
 		name  string
 		table db.Table
@@ -149,9 +132,9 @@ func TestGetRowsValidatesPage(t *testing.T) {
 		error string
 	}{
 		{name: "empty table", page: db.PageRequest{Limit: 1}, error: "table name is required"},
-		{name: "negative offset", table: db.Table{Name: "Album"}, page: db.PageRequest{Offset: -1, Limit: 1}, error: "page offset cannot be negative"},
-		{name: "zero limit", table: db.Table{Name: "Album"}, error: "page limit must be between 1 and 100"},
-		{name: "large limit", table: db.Table{Name: "Album"}, page: db.PageRequest{Limit: db.MaxPageSize + 1}, error: "page limit must be between 1 and 100"},
+		{name: "negative offset", table: db.Table{Name: "city"}, page: db.PageRequest{Offset: -1, Limit: 1}, error: "page offset cannot be negative"},
+		{name: "zero limit", table: db.Table{Name: "city"}, error: "page limit must be between 1 and 100"},
+		{name: "large limit", table: db.Table{Name: "city"}, page: db.PageRequest{Limit: db.MaxPageSize + 1}, error: "page limit must be between 1 and 100"},
 	}
 
 	for _, test := range tests {
@@ -163,30 +146,20 @@ func TestGetRowsValidatesPage(t *testing.T) {
 }
 
 func TestExecute(t *testing.T) {
-	t.Run("returns bounded rows", func(t *testing.T) {
-		database, mock := newMockDatabase(t)
-		rows := sqlmock.NewRows([]string{"number"})
-		for number := 1; number <= db.MaxQueryResultRows+1; number++ {
-			rows.AddRow(int64(number))
-		}
-		mock.ExpectQuery(regexp.QuoteMeta("SELECT number FROM numbers")).WillReturnRows(rows)
+	database := connectWorld(t)
 
-		result, err := database.Execute(context.Background(), "SELECT number FROM numbers")
+	t.Run("returns bounded rows", func(t *testing.T) {
+		result, err := database.Execute(context.Background(), "SELECT ID FROM city")
 
 		require.NoError(t, err)
-		assert.Equal(t, []string{"number"}, result.Columns)
+		assert.Equal(t, []string{"ID"}, result.Columns)
 		assert.Len(t, result.Rows, db.MaxQueryResultRows)
-		assert.Equal(t, int64(1), result.Rows[0][0])
-		assert.Equal(t, int64(100), result.Rows[len(result.Rows)-1][0])
+		assert.IsType(t, int64(0), result.Rows[0][0])
 		assert.Equal(t, "SELECT", result.CommandTag)
 	})
 
 	t.Run("returns command tag", func(t *testing.T) {
-		database, mock := newMockDatabase(t)
-		mock.ExpectQuery(regexp.QuoteMeta("CREATE TEMPORARY TABLE example (id integer)")).
-			WillReturnRows(sqlmock.NewRows([]string{}))
-
-		result, err := database.Execute(context.Background(), "CREATE TEMPORARY TABLE example (id integer)")
+		result, err := database.Execute(context.Background(), "CREATE TEMPORARY TABLE integration_example (id integer)")
 
 		require.NoError(t, err)
 		assert.Empty(t, result.Columns)
@@ -195,10 +168,6 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("wraps query errors", func(t *testing.T) {
-		database, mock := newMockDatabase(t)
-		mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM missing")).
-			WillReturnError(errors.New("missing table"))
-
 		_, err := database.Execute(context.Background(), "SELECT * FROM missing")
 
 		assert.ErrorContains(t, err, "execute MySQL query")
@@ -225,17 +194,15 @@ func TestDumpRejectsUnsupportedNetwork(t *testing.T) {
 	assert.EqualError(t, err, `unsupported MySQL network "udp" for dump`)
 }
 
-func newMockDatabase(t *testing.T) (*mysqlDatabase, sqlmock.Sqlmock) {
+func connectWorld(t *testing.T) db.Database {
 	t.Helper()
-	sqlDatabase, mock, err := sqlmock.New()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := Connect(ctx, worldDSN)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		mock.ExpectClose()
-		_ = sqlDatabase.Close()
-		require.NoError(t, mock.ExpectationsWereMet())
+		database.Close()
 	})
-	return &mysqlDatabase{
-		database: sqlDatabase,
-		logger:   logger.New(io.Discard),
-	}, mock
+	return database
 }

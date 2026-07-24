@@ -20,7 +20,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 	}{
 		{
 			name:     "explicit DSN takes precedence",
-			settings: ConnectionSettings{DSN: " postgres://saved "},
+			settings: ConnectionSettings{Engine: db.EnginePostgreSQL, DSN: " postgres://saved "},
 			want:     "postgres://saved",
 		},
 		{
@@ -38,6 +38,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "valid fields",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Host:         "127.0.0.1",
 				Port:         5433,
 				DatabaseName: "chinook",
@@ -49,6 +50,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "missing host",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Port:         5432,
 				DatabaseName: "chinook",
 				Username:     "db_tui",
@@ -58,6 +60,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "missing database",
 			settings: ConnectionSettings{
+				Engine:   db.EnginePostgreSQL,
 				Host:     "127.0.0.1",
 				Port:     5432,
 				Username: "db_tui",
@@ -67,6 +70,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "missing username",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Host:         "127.0.0.1",
 				Port:         5432,
 				DatabaseName: "chinook",
@@ -76,6 +80,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "zero port",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Host:         "127.0.0.1",
 				DatabaseName: "chinook",
 				Username:     "db_tui",
@@ -85,6 +90,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "negative port",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Host:         "127.0.0.1",
 				Port:         -1,
 				DatabaseName: "chinook",
@@ -95,6 +101,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "port above maximum",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Host:         "127.0.0.1",
 				Port:         65536,
 				DatabaseName: "chinook",
@@ -105,6 +112,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "credentials and database are escaped",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Host:         "db.example.com",
 				Port:         5432,
 				DatabaseName: "sales data",
@@ -116,6 +124,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "IPv6 host",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Host:         "2001:db8::1",
 				Port:         5432,
 				DatabaseName: "chinook",
@@ -127,6 +136,16 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 			name:     "unknown engine",
 			settings: ConnectionSettings{Engine: "sqlite", DSN: "database.db"},
 			wantErr:  `unsupported database engine "sqlite"`,
+		},
+		{
+			name:     "blank engine",
+			settings: ConnectionSettings{DSN: "postgres://database"},
+			wantErr:  `unsupported database engine ""`,
+		},
+		{
+			name:     "PostgreSQL alias is rejected",
+			settings: ConnectionSettings{Engine: "postgresql", DSN: "postgres://database"},
+			wantErr:  `unsupported database engine "postgresql"`,
 		},
 	}
 
@@ -147,6 +166,7 @@ func TestConnectConnection(t *testing.T) {
 	connectorErr := errors.New("connect failed")
 	database := &fakeDatabase{name: "chinook"}
 	successSettings := ConnectionSettings{
+		Engine:       db.EnginePostgreSQL,
 		Host:         "127.0.0.1",
 		Port:         5433,
 		DatabaseName: "chinook",
@@ -167,12 +187,13 @@ func TestConnectConnection(t *testing.T) {
 	}{
 		{
 			name:        "validation failure does not call connector",
+			settings:    ConnectionSettings{Engine: db.EnginePostgreSQL},
 			attempt:     3,
 			wantErrText: "host is required",
 		},
 		{
 			name:         "connector error",
-			settings:     ConnectionSettings{DSN: "postgres://database"},
+			settings:     ConnectionSettings{Engine: db.EnginePostgreSQL, DSN: "postgres://database"},
 			attempt:      4,
 			connectorErr: connectorErr,
 			wantCalls:    1,

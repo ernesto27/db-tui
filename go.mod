@@ -6,7 +6,6 @@ require (
 	charm.land/bubbles/v2 v2.1.1
 	charm.land/bubbletea/v2 v2.0.8
 	charm.land/lipgloss/v2 v2.0.5
-	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/jackc/pgx/v5 v5.10.0

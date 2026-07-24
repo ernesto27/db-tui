@@ -3,6 +3,7 @@ package app
 import (
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/ernestoponce27/db-tui/internal/config"
@@ -33,10 +34,10 @@ func TestConnectionSettingsFromConfigPreservesEngine(t *testing.T) {
 	}, settings)
 }
 
-func TestConnectionSettingsFromConfigDefaultsLegacyEngineToPostgreSQL(t *testing.T) {
+func TestConnectionSettingsFromConfigPreservesMissingEngine(t *testing.T) {
 	settings := connectionSettingsFromConfig(config.Connection{})
 
-	assert.Equal(t, db.EnginePostgreSQL, settings.Engine)
+	assert.Empty(t, settings.Engine)
 }
 
 func TestNewConfigConnectionUsesMySQLEngine(t *testing.T) {
@@ -61,4 +62,18 @@ func TestConnectionModalKeepsEngineWithExplicitDSN(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, db.EngineMySQL, settings.Engine)
 	assert.Equal(t, "db_tui@tcp(localhost:3306)/chinook", settings.DSN)
+}
+
+func TestConnectionModalSelectsDatabaseEngine(t *testing.T) {
+	modal := newConnectionModal(ConnectionSettings{})
+
+	assert.Equal(t, db.EnginePostgreSQL, modal.engine())
+	assert.Equal(t, "5432", modal.inputs[portInput].Value())
+
+	updated, command := modal.update(keyPress(tea.KeyRight, "", 0))
+
+	assert.Nil(t, command)
+	assert.Equal(t, db.EngineMySQL, updated.engine())
+	assert.Equal(t, "3306", updated.inputs[portInput].Value())
+	assert.Contains(t, updated.view(80), "MySQL")
 }

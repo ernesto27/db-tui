@@ -2,6 +2,7 @@
 package mysql
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -289,13 +290,15 @@ func commandTag(statement string) string {
 func (m *mysqlDatabase) Dump(ctx context.Context) error {
 	filename := safeFilename(m.config.DBName) + "_" + time.Now().Format("20060102_150405") + ".sql"
 	args := []string{"--user=" + m.config.User, "--result-file=" + filename, "--single-transaction"}
+	var port string
 
 	switch m.config.Net {
 	case "", "tcp", "tcp4", "tcp6":
-		host, port, err := net.SplitHostPort(m.config.Addr)
+		host, parsedPort, err := net.SplitHostPort(m.config.Addr)
 		if err != nil {
 			return fmt.Errorf("parse MySQL address: %w", err)
 		}
+		port = parsedPort
 		args = append(args, "--protocol=tcp", "--host="+host, "--port="+port)
 	case "unix":
 		args = append(args, "--socket="+m.config.Addr)
@@ -311,9 +314,75 @@ func (m *mysqlDatabase) Dump(ctx context.Context) error {
 	output, err := command.CombinedOutput()
 	if err != nil {
 		_ = os.Remove(filename)
+		if errors.Is(err, exec.ErrNotFound) && port != "" {
+			return m.dumpFromDocker(ctx, filename, port)
+		}
 		return fmt.Errorf("mysqldump: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
+}
+
+func (m *mysqlDatabase) dumpFromDocker(ctx context.Context, filename, port string) error {
+	containerID, err := dockerContainerIDForPort(ctx, port)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("create dump file: %w", err)
+	}
+
+	var stderr bytes.Buffer
+	args := []string{"exec"}
+	if m.config.Passwd != "" {
+		args = append(args, "-e", "MYSQL_PWD="+m.config.Passwd)
+	}
+	args = append(args,
+		containerID,
+		"mysqldump",
+		"--user="+m.config.User,
+		"--single-transaction",
+		m.config.DBName,
+	)
+	command := exec.CommandContext(ctx, "docker", args...)
+	command.Stdout = file
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		_ = file.Close()
+		_ = os.Remove(filename)
+		return fmt.Errorf("docker mysqldump: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(filename)
+		return fmt.Errorf("close dump file: %w", err)
+	}
+
+	return nil
+}
+
+func dockerContainerIDForPort(ctx context.Context, port string) (string, error) {
+	command := exec.CommandContext(
+		ctx,
+		"docker",
+		"ps",
+		"--filter", "publish="+port,
+		"--format", "{{.ID}}",
+	)
+	output, err := command.Output()
+	if err != nil {
+		return "", fmt.Errorf("list Docker containers: %w", err)
+	}
+
+	ids := strings.Fields(string(output))
+	switch len(ids) {
+	case 0:
+		return "", fmt.Errorf("not found")
+	case 1:
+		return ids[0], nil
+	default:
+		return "", fmt.Errorf("multiple Docker containers publish port %s", port)
+	}
 }
 
 func safeFilename(name string) string {

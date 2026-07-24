@@ -77,13 +77,13 @@ func (s ConnectionSettings) connectionDSN() (string, error) {
 }
 
 func (s ConnectionSettings) normalizedEngine() (string, error) {
-	switch engine := strings.ToLower(strings.TrimSpace(s.Engine)); engine {
-	case "", "postgres", "postgresql":
+	switch s.Engine {
+	case db.EnginePostgreSQL:
 		return db.EnginePostgreSQL, nil
 	case db.EngineMySQL:
 		return db.EngineMySQL, nil
 	default:
-		return "", fmt.Errorf("unsupported database engine %q", strings.TrimSpace(s.Engine))
+		return "", fmt.Errorf("unsupported database engine %q", s.Engine)
 	}
 }
 

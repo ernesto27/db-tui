@@ -44,7 +44,7 @@ The Chinook dump is in `docker/postgres/init/001_chinook.sql`. PostgreSQL runs f
 
 ## Database connections
 
-On startup, db-tui creates `$HOME/.config/db-tui/config.json` when necessary. Press `Ctrl+N` to create a connection or `Ctrl+L` to open saved connections. Set the engine field to `postgres` or `mysql`, then either enter the individual connection fields or an engine-specific DSN.
+On startup, db-tui creates `$HOME/.config/db-tui/config.json` when necessary. Press `Ctrl+N` to create a connection or `Ctrl+L` to open saved connections. Select PostgreSQL or MySQL with Left/Right while the Engine field is focused, then either enter the individual connection fields or an engine-specific DSN.
 
 PostgreSQL accepts URL DSNs:
 

@@ -37,6 +37,26 @@ services:
       retries: 15
       start_period: 5s
 
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: world
+      MYSQL_USER: db_tui
+      MYSQL_PASSWORD: db_tui
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u db_tui -pdb_tui"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
+
 volumes:
   postgres-data:
   pagila-postgres-data:
+  mysql-data:
