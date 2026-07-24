@@ -46,6 +46,62 @@ func TestListTables(t *testing.T) {
 	assert.Equal(t, want, tables, "ListTables()")
 }
 
+func TestTableDDL(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	ddl, err := database.TableDDL(ctx, db.Table{Name: "Album"})
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.Contains(t, ddl, "CREATE TABLE public.\"Album\" (")
+	assert.Contains(t, ddl, "\"AlbumId\" int4 NOT NULL")
+	assert.Contains(t, ddl, `CONSTRAINT "PK_Album" PRIMARY KEY ("AlbumId")`)
+	assert.Contains(t, ddl, `CONSTRAINT "FK_AlbumArtistId" FOREIGN KEY ("ArtistId") REFERENCES public."Artist"("ArtistId")`)
+	assert.Contains(t, ddl, `CREATE INDEX "IFK_AlbumArtistId" ON public."Album" USING btree ("ArtistId");`)
+	assert.NotContains(t, ddl, "ALTER TABLE")
+}
+
+func TestTableDDLIncludesColumnClauses(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+	_, err = database.Execute(ctx, `CREATE TABLE public.ddl_review_demo (
+		id serial PRIMARY KEY,
+		created_at timestamptz NOT NULL DEFAULT now(),
+		label varchar(20) COLLATE "C" DEFAULT 'x',
+		total int GENERATED ALWAYS AS (id * 2) STORED,
+		external_id int GENERATED ALWAYS AS IDENTITY
+	)`)
+	if !assert.NoError(t, err, "create DDL regression table") {
+		return
+	}
+	t.Cleanup(func() {
+		_, _ = database.Execute(context.Background(), "DROP TABLE IF EXISTS public.ddl_review_demo")
+	})
+
+	ddl, err := database.TableDDL(ctx, db.Table{Name: "ddl_review_demo"})
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.Contains(t, ddl, `"id" int4 DEFAULT nextval(`)
+	assert.Contains(t, ddl, `"created_at" timestamp with time zone DEFAULT now() NOT NULL`)
+	assert.Contains(t, ddl, `"label" varchar(20) COLLATE "C" DEFAULT 'x'::character varying`)
+	assert.Contains(t, ddl, `"total" int4 GENERATED ALWAYS AS ((id * 2)) STORED`)
+	assert.Contains(t, ddl, `"external_id" int4 GENERATED ALWAYS AS IDENTITY`)
+}
+
 func TestConnectReturnsErrorForUnreachableDatabase(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

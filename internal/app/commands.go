@@ -30,6 +30,14 @@ type rowsLoadedMsg struct {
 	err         error
 }
 
+type tableDDLLoadedMsg struct {
+	tableName string
+	sql       string
+	session   uint64
+	request   uint64
+	err       error
+}
+
 type queryFinishedMsg struct {
 	result  db.QueryResult
 	session uint64
@@ -63,6 +71,22 @@ func loadRows(database db.Database, table db.Table, offset, selectedRow int, ses
 			page:        page,
 			session:     session,
 			err:         err,
+		}
+	}
+}
+
+func loadTableDDL(database db.Database, table db.Table, session, request uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		defer cancel()
+
+		sql, err := database.TableDDL(ctx, table)
+		return tableDDLLoadedMsg{
+			tableName: table.Name,
+			sql:       sql,
+			session:   session,
+			request:   request,
+			err:       err,
 		}
 	}
 }

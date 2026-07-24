@@ -27,6 +27,15 @@ func sanitizeText(text string) string {
 	}, text)
 }
 
+func sanitizeMultilineText(text string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' || !unicode.IsControl(r) {
+			return r
+		}
+		return '�'
+	}, text)
+}
+
 func truncateLabel(label string, width int) string {
 	if width <= 0 {
 		return ""

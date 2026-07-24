@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,6 +89,24 @@ func TestParseDSN(t *testing.T) {
 	}
 }
 
+func TestEnsureTrailingSemicolon(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "adds semicolon", input: "CREATE TABLE `city` (id int)", want: "CREATE TABLE `city` (id int);"},
+		{name: "keeps semicolon", input: "CREATE TABLE `city` (id int);", want: "CREATE TABLE `city` (id int);"},
+		{name: "preserves formatting", input: "CREATE TABLE `city` (\n  id int\n)\n", want: "CREATE TABLE `city` (\n  id int\n);"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, ensureTrailingSemicolon(test.input))
+		})
+	}
+}
+
 func TestListTables(t *testing.T) {
 	database := connectWorld(t)
 
@@ -95,6 +114,16 @@ func TestListTables(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []db.Table{{Name: "city"}, {Name: "country"}, {Name: "countrylanguage"}}, tables)
+}
+
+func TestTableDDL(t *testing.T) {
+	database := connectWorld(t)
+
+	ddl, err := database.TableDDL(context.Background(), db.Table{Name: "city"})
+
+	require.NoError(t, err)
+	assert.Contains(t, ddl, "CREATE TABLE `city`")
+	assert.True(t, strings.HasSuffix(ddl, ";"))
 }
 
 func TestGetRows(t *testing.T) {

@@ -8,6 +8,49 @@
 [] - update script sandbox for claude code
 
 
+# Three-release product roadmap
+
+Target: make db-tui useful for personal daily work while giving it the
+discoverability and safety expected from a public developer tool.
+
+Direction: foundation first.
+
+## Release 1: Schema Inspector
+
+- Inspect columns, types, nullability, and defaults.
+- Show primary keys, foreign keys, and indexes.
+- View table DDL.
+- Jump between related tables.
+- Add a schema/details panel beside table data.
+
+This release is read-only and extends the existing navigator and
+driver-neutral database interface.
+
+## Release 2: Query Workspace
+
+- Keep query history for the current connection.
+- Save and name queries.
+- Search query history.
+- Open and save SQL files.
+- Show query execution duration and affected-row count.
+- Support PostgreSQL and MySQL EXPLAIN output.
+
+This release turns the raw-query panel into a practical daily workspace.
+
+## Release 3: Safe Data Editing
+
+- Edit a single cell or row.
+- Insert and delete rows.
+- Preview generated SQL before execution.
+- Require primary keys when targeting updates and deletes.
+- Provide transaction mode with commit and rollback.
+- Clearly distinguish modified, committed, and failed rows.
+
+This release builds on schema metadata and prioritizes safe, explicit writes.
+
+Product progression: Explore -> Query -> Modify.
+
+
 
  1. Keyboard routing in internal/app/update.go:252
 

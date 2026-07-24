@@ -98,6 +98,8 @@ type Database interface {
 	ListTables(ctx context.Context) ([]Table, error)
 	// GetRows returns an unordered page of rows from table.
 	GetRows(ctx context.Context, table Table, page PageRequest) (RowPage, error)
+	// TableDDL returns a fresh executable structural DDL script for table.
+	TableDDL(ctx context.Context, table Table) (string, error)
 	// Execute runs SQL and returns its first rows and command status.
 	Execute(ctx context.Context, sql string) (QueryResult, error)
 	Dump(ctx context.Context) error

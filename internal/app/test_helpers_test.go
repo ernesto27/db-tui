@@ -21,6 +21,8 @@ type fakeDatabase struct {
 
 	queryResult db.QueryResult
 	queryErr    error
+	ddl         string
+	ddlErr      error
 
 	dumpErr        error
 	exportErr      error
@@ -35,6 +37,9 @@ type fakeDatabase struct {
 	executeCalls        int
 	executedSQL         string
 	executeDeadline     bool
+	tableDDLCalls       int
+	tableDDLTable       db.Table
+	tableDDLDeadline    bool
 	dumpCalls           int
 	dumpDeadline        bool
 	exportCalls         int
@@ -76,6 +81,13 @@ func (f *fakeDatabase) Execute(
 	f.executedSQL = sql
 	_, f.executeDeadline = ctx.Deadline()
 	return f.queryResult, f.queryErr
+}
+
+func (f *fakeDatabase) TableDDL(ctx context.Context, table db.Table) (string, error) {
+	f.tableDDLCalls++
+	f.tableDDLTable = table
+	_, f.tableDDLDeadline = ctx.Deadline()
+	return f.ddl, f.ddlErr
 }
 
 func (f *fakeDatabase) Dump(ctx context.Context) error {

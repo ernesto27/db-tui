@@ -154,6 +154,22 @@ func (m *mysqlDatabase) GetRows(ctx context.Context, table db.Table, page db.Pag
 	return m.getRows(ctx, table, &page)
 }
 
+// TableDDL returns MySQL's executable CREATE TABLE statement for table.
+func (m *mysqlDatabase) TableDDL(ctx context.Context, table db.Table) (string, error) {
+	if table.Name == "" {
+		return "", errors.New("table name is required")
+	}
+
+	query := "SHOW CREATE TABLE " + quoteIdentifier(table.Name)
+	m.logger.Log(query)
+
+	var returnedName, statement string
+	if err := m.database.QueryRowContext(ctx, query).Scan(&returnedName, &statement); err != nil {
+		return "", fmt.Errorf("show MySQL table DDL: %w", err)
+	}
+	return ensureTrailingSemicolon(statement), nil
+}
+
 func (m *mysqlDatabase) getRows(ctx context.Context, table db.Table, page *db.PageRequest) (db.RowPage, error) {
 	if table.Name == "" {
 		return db.RowPage{}, errors.New("table name is required")
@@ -282,6 +298,14 @@ func scanRow(rows *sql.Rows, columnTypes []*sql.ColumnType) ([]any, error) {
 
 func quoteIdentifier(identifier string) string {
 	return "`" + strings.ReplaceAll(identifier, "`", "``") + "`"
+}
+
+func ensureTrailingSemicolon(statement string) string {
+	statement = strings.TrimRight(statement, " \t\r\n")
+	if strings.HasSuffix(statement, ";") {
+		return statement
+	}
+	return statement + ";"
 }
 
 func commandTag(statement string) string {

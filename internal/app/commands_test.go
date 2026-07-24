@@ -95,6 +95,35 @@ func TestLoadRows(t *testing.T) {
 	}
 }
 
+func TestLoadTableDDL(t *testing.T) {
+	wantErr := errors.New("DDL failed")
+	tests := []struct {
+		name     string
+		database *fakeDatabase
+		wantSQL  string
+		wantErr  error
+	}{
+		{name: "success", database: &fakeDatabase{ddl: "CREATE TABLE public.\"Album\" ();"}, wantSQL: "CREATE TABLE public.\"Album\" ();"},
+		{name: "error", database: &fakeDatabase{ddlErr: wantErr}, wantErr: wantErr},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			message, ok := loadTableDDL(test.database, db.Table{Name: "Album"}, 7, 3)().(tableDDLLoadedMsg)
+			require.True(t, ok)
+
+			assert.Equal(t, 1, test.database.tableDDLCalls)
+			assert.Equal(t, db.Table{Name: "Album"}, test.database.tableDDLTable)
+			assert.True(t, test.database.tableDDLDeadline)
+			assert.Equal(t, "Album", message.tableName)
+			assert.Equal(t, test.wantSQL, message.sql)
+			assert.Equal(t, uint64(7), message.session)
+			assert.Equal(t, uint64(3), message.request)
+			assert.ErrorIs(t, message.err, test.wantErr)
+		})
+	}
+}
+
 func TestExecuteQuery(t *testing.T) {
 	wantErr := errors.New("query failed")
 	tests := []struct {

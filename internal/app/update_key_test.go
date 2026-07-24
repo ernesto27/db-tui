@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ernestoponce27/db-tui/internal/config"
+	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
 func TestUpdateKeyRouting(t *testing.T) {
@@ -77,6 +78,21 @@ func TestUpdateKeyRouting(t *testing.T) {
 			assert: func(t *testing.T, got Model, command tea.Cmd) {
 				assert.Nil(t, command)
 				assert.Nil(t, got.dumpModal)
+			},
+		},
+		{
+			name: "opens table DDL from raw query mode",
+			setup: func(model *Model) {
+				model.database = &fakeDatabase{name: "chinook", ddl: "CREATE TABLE public.\"Album\" ();"}
+				model.navigator.tables = []db.Table{{Name: "Album"}}
+				model.panel = panelQuery
+			},
+			message: keyPress('g', "", tea.ModCtrl),
+			assert: func(t *testing.T, got Model, command tea.Cmd) {
+				require.NotNil(t, got.ddlModal)
+				assert.True(t, got.ddlModal.loading)
+				assert.Equal(t, "Album", got.ddlModal.tableName)
+				require.NotNil(t, command)
 			},
 		},
 		{

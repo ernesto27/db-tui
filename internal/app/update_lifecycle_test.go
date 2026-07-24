@@ -155,6 +155,38 @@ func TestUpdateAppliesMatchingRowError(t *testing.T) {
 	assert.ErrorIs(t, updated.data.err, wantErr)
 }
 
+func TestUpdateAppliesOnlyCurrentTableDDLResult(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.session = 8
+	model.navigator.tables = []db.Table{{Name: "Album"}}
+	modal := newDDLModal("Album")
+	model.ddlModal = &modal
+	model.ddlRequest = 4
+
+	updated, command := updateModel(t, model, tableDDLLoadedMsg{
+		tableName: "Album",
+		sql:       "CREATE TABLE public.\"Album\" ();",
+		session:   8,
+		request:   4,
+	})
+
+	assert.Nil(t, command)
+	require.NotNil(t, updated.ddlModal)
+	assert.False(t, updated.ddlModal.loading)
+	assert.Equal(t, "CREATE TABLE public.\"Album\" ();", updated.ddlModal.sql)
+
+	stale, command := updateModel(t, updated, tableDDLLoadedMsg{
+		tableName: "Album",
+		sql:       "stale",
+		session:   8,
+		request:   3,
+	})
+
+	assert.Nil(t, command)
+	require.NotNil(t, stale.ddlModal)
+	assert.Equal(t, "CREATE TABLE public.\"Album\" ();", stale.ddlModal.sql)
+}
+
 func TestUpdateIgnoresStaleQueryResult(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.session = 5

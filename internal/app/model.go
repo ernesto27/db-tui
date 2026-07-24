@@ -63,6 +63,8 @@ type Model struct {
 
 	dumpModal   *dumpModal
 	exportModal *exportModal
+	ddlModal    *ddlModal
+	ddlRequest  uint64
 }
 
 // New creates the root Bubble Tea application model.

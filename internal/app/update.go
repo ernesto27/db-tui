@@ -40,6 +40,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.exportModal != nil {
 		return m, m.updateExportModal(msg)
 	}
+	if m.ddlModal != nil {
+		return m, m.updateDDLModal(msg)
+	}
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -67,6 +70,7 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case spinnerTickMsg:
 		if m.loading || m.data.loading || m.query.loading ||
+			(m.ddlModal != nil && m.ddlModal.loading) ||
 			(m.dumpModal != nil && m.dumpModal.isRunning()) ||
 			(m.exportModal != nil && m.exportModal.isRunning()) {
 			m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
@@ -95,6 +99,13 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		m.data.finishLoad(msg.page, msg.selectedRow, msg.err, m.layout)
 		return nil, true
+	case tableDDLLoadedMsg:
+		table, ok := m.navigator.selectedTable()
+		if msg.session != m.session || m.ddlModal == nil || msg.request != m.ddlRequest || !ok || table.Name != msg.tableName || m.ddlModal.tableName != msg.tableName {
+			return nil, true
+		}
+		m.ddlModal.finish(msg.sql, msg.err, m.layout)
+		return nil, true
 	case queryFinishedMsg:
 		if msg.session != m.session || msg.request != m.query.request {
 			return nil, true
@@ -108,6 +119,9 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		m.data.columnOffset = min(m.data.columnOffset, m.data.maxColumnOffset())
 		m.data.ensureSelectedVisible(m.layout)
 		m.query.resize(m.layout)
+		if m.ddlModal != nil {
+			m.ddlModal.clamp(m.layout)
+		}
 		return nil, true
 	case dumpFinishedMsg:
 		if msg.session != m.session || m.dumpModal == nil {
@@ -206,6 +220,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.navigator.reset()
 		m.data.reset()
 		m.query.reset(m.layout)
+		m.ddlModal = nil
 		m.loading = true
 		m.session++
 		m.modal = nil
@@ -262,6 +277,7 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.navigator.reset()
 			m.data.reset()
 			m.query.reset(m.layout)
+			m.ddlModal = nil
 			m.session++
 		}
 		return m, nil
@@ -293,6 +309,15 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.panel = panelData
 		m.focus = focusData
 		return nil
+	case key.Matches(msg, m.keys.tableDDL):
+		table, ok := m.navigator.selectedTable()
+		if m.database == nil || !ok {
+			return nil
+		}
+		m.ddlRequest++
+		modal := newDDLModal(table.Name)
+		m.ddlModal = &modal
+		return tea.Batch(loadTableDDL(m.database, table, m.session, m.ddlRequest), m.startSpinner())
 	case key.Matches(msg, m.keys.tableSearch):
 		m.focus = focusNavigator
 		return m.navigator.startSearch()
@@ -601,5 +626,31 @@ func (m *Model) updateExportModal(msg tea.Msg) tea.Cmd {
 		}
 	}
 
+	return nil
+}
+
+func (m *Model) updateDDLModal(msg tea.Msg) tea.Cmd {
+	keyMsg, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return nil
+	}
+
+	switch {
+	case keyMsg.String() == "esc":
+		m.ddlModal = nil
+	case key.Matches(keyMsg, m.keys.up):
+		m.ddlModal.scroll(-1, m.layout)
+	case key.Matches(keyMsg, m.keys.down):
+		m.ddlModal.scroll(1, m.layout)
+	case key.Matches(keyMsg, m.keys.pageUp):
+		m.ddlModal.scroll(-m.ddlModal.visibleRows(m.layout), m.layout)
+	case key.Matches(keyMsg, m.keys.pageDown):
+		m.ddlModal.scroll(m.ddlModal.visibleRows(m.layout), m.layout)
+	case key.Matches(keyMsg, m.keys.home):
+		m.ddlModal.offset = 0
+	case key.Matches(keyMsg, m.keys.end):
+		m.ddlModal.offset = len(m.ddlModal.lines(m.layout))
+		m.ddlModal.clamp(m.layout)
+	}
 	return nil
 }
