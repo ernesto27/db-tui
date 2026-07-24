@@ -14,7 +14,7 @@ import (
 // View implements tea.Model.
 func (m Model) View() tea.View {
 	view := m.baseView()
-	if m.modal != nil || m.connectionsModal != nil || m.dumpModal != nil || m.exportModal != nil {
+	if m.helpModal != nil || m.modal != nil || m.connectionsModal != nil || m.dumpModal != nil || m.exportModal != nil {
 		view.Content = m.renderModalOverlay(view.Content)
 	}
 	return view
@@ -43,7 +43,7 @@ func (m Model) baseView() tea.View {
 		rightPanel,
 	)
 	footer := lipgloss.NewStyle().Width(m.layout.width).Padding(0, 1).
-		Foreground(lipgloss.Color("245")).Render(m.footerText())
+		Foreground(lipgloss.Color("245")).Render("? help  •  " + m.footerText())
 
 	view := tea.NewView(strings.Join([]string{header, body, footer}, "\n"))
 	view.AltScreen = true
@@ -85,6 +85,8 @@ func (m Model) dataStatus() dataStatus {
 func (m Model) renderModalOverlay(base string) string {
 	var modal string
 	switch {
+	case m.helpModal != nil:
+		modal = m.helpModal.view(m.layout.width)
 	case m.modal != nil:
 		modal = m.modal.view(m.layout.width)
 	case m.connectionsModal != nil:

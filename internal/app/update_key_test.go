@@ -18,6 +18,14 @@ func TestUpdateKeyRouting(t *testing.T) {
 		assert  func(*testing.T, Model, tea.Cmd)
 	}{
 		{
+			name:    "opens keyboard shortcuts",
+			message: keyPress('?', "?", 0),
+			assert: func(t *testing.T, got Model, command tea.Cmd) {
+				assert.Nil(t, command)
+				require.NotNil(t, got.helpModal)
+			},
+		},
+		{
 			name:    "opens connection modal",
 			message: keyPress('n', "", tea.ModCtrl),
 			assert: func(t *testing.T, got Model, _ tea.Cmd) {
@@ -135,4 +143,28 @@ func TestUpdateKeyRouting(t *testing.T) {
 			test.assert(t, got, command)
 		})
 	}
+}
+
+func TestHelpModalClosesWithEscapeAndPreservesUnderlyingModal(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	connectionModal := newConnectionModal(ConnectionSettings{})
+	model.modal = &connectionModal
+
+	updated, command := updateModel(t, model, keyPress('?', "?", 0))
+
+	assert.Nil(t, command)
+	require.NotNil(t, updated.helpModal)
+	require.NotNil(t, updated.modal)
+
+	updated, command = updateModel(t, updated, keyPress('q', "q", 0))
+
+	assert.Nil(t, command)
+	require.NotNil(t, updated.helpModal)
+	require.NotNil(t, updated.modal)
+
+	updated, command = updateModel(t, updated, keyPress(tea.KeyEscape, "", 0))
+
+	assert.Nil(t, command)
+	assert.Nil(t, updated.helpModal)
+	assert.NotNil(t, updated.modal)
 }
