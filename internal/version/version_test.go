@@ -1,12 +1,11 @@
 package version
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestVersion(t *testing.T) {
-	if got := Version(); strings.TrimSpace(got) == "" {
-		t.Error("Version() returned an empty version")
-	}
+	assert.Equal(t, "0.2.1", Version())
 }
