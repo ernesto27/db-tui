@@ -14,7 +14,7 @@ import (
 // View implements tea.Model.
 func (m Model) View() tea.View {
 	view := m.baseView()
-	if m.modal != nil || m.connectionsModal != nil || m.dumpModal != nil {
+	if m.modal != nil || m.connectionsModal != nil || m.dumpModal != nil || m.exportModal != nil {
 		view.Content = m.renderModalOverlay(view.Content)
 	}
 	return view
@@ -89,8 +89,10 @@ func (m Model) renderModalOverlay(base string) string {
 		modal = m.modal.view(m.layout.width)
 	case m.connectionsModal != nil:
 		modal = m.connectionsModal.view(m.layout.width)
-	default:
+	case m.dumpModal != nil:
 		modal = m.dumpModal.view(m.layout.width, m.spinner())
+	default:
+		modal = m.exportModal.view(m.layout.width, m.spinner())
 	}
 
 	return lipgloss.NewCompositor(
@@ -110,7 +112,11 @@ func (m Model) footerText() string {
 		return "Ctrl+N new connection  •  Ctrl+L open connections  •  Ctrl+R raw query  •  q quit"
 	}
 	if m.panel == panelQuery {
-		return "raw query  •  Ctrl+P execute  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+T table data  •  Ctrl+L connections  •  q quit"
+		exportHelp := ""
+		if !m.query.loading && m.query.err == nil && len(m.query.result.Columns) > 0 && strings.TrimSpace(m.query.lastExecutedSQL) != "" {
+			exportHelp = "  •  Ctrl+E export results"
+		}
+		return "raw query  •  Ctrl+P execute" + exportHelp + "  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+T table data  •  Ctrl+L connections  •  q quit"
 	}
 	if m.loading {
 		return "loading tables  •  q quit"
@@ -144,8 +150,9 @@ func (m Model) footerText() string {
 		}
 	}
 
-	return fmt.Sprintf("focus: %s%s  •  Ctrl+F search tables  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab table/search/data  •  q quit",
-		focusLabel, rowStatus)
+	exportHelp := "  •  Ctrl+E export CSV"
+	return fmt.Sprintf("focus: %s%s  •  Ctrl+F search tables%s  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab table/search/data  •  q quit",
+		focusLabel, rowStatus, exportHelp)
 }
 
 func panelStyle(width, height int, focused bool) lipgloss.Style {

@@ -19,13 +19,14 @@ const (
 )
 
 type queryModel struct {
-	editor         textarea.Model
-	result         db.QueryResult
-	loading        bool
-	err            error
-	request        uint64
-	viewport       int
-	resultsFocused bool
+	editor          textarea.Model
+	result          db.QueryResult
+	loading         bool
+	err             error
+	request         uint64
+	lastExecutedSQL string
+	viewport        int
+	resultsFocused  bool
 }
 
 func newQueryModel(layout appLayout) queryModel {
@@ -51,12 +52,13 @@ func (m *queryModel) resize(layout appLayout) {
 	m.editor.SetHeight(queryEditorViewportHeight(layout))
 }
 
-func (m *queryModel) beginExecute() uint64 {
+func (m *queryModel) beginExecute(sql string) uint64 {
 	m.loading = true
 	m.err = nil
 	m.result = db.QueryResult{}
 	m.viewport = 0
 	m.resultsFocused = false
+	m.lastExecutedSQL = sql
 	m.request++
 	return m.request
 }

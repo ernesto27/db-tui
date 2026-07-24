@@ -19,7 +19,7 @@ func TestQueryBeginExecuteResetsPreviousState(t *testing.T) {
 	query.resultsFocused = true
 	query.request = 7
 
-	request := query.beginExecute()
+	request := query.beginExecute("SELECT 1")
 
 	assert.Equal(t, uint64(8), request)
 	assert.Equal(t, uint64(8), query.request)
@@ -28,6 +28,7 @@ func TestQueryBeginExecuteResetsPreviousState(t *testing.T) {
 	assert.NoError(t, query.err)
 	assert.Zero(t, query.viewport)
 	assert.False(t, query.resultsFocused)
+	assert.Equal(t, "SELECT 1", query.lastExecutedSQL)
 }
 
 func TestQueryFinishExecuteFocusesReturnedRows(t *testing.T) {

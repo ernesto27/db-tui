@@ -7,6 +7,8 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
 // Update implements tea.Model.
@@ -35,6 +37,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.dumpModal != nil {
 		return m, m.updateDumpModal(msg)
 	}
+	if m.exportModal != nil {
+		return m, m.updateExportModal(msg)
+	}
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -61,7 +66,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case spinnerTickMsg:
-		if m.loading || m.data.loading || m.query.loading {
+		if m.loading || m.data.loading || m.query.loading ||
+			(m.dumpModal != nil && m.dumpModal.isRunning()) ||
+			(m.exportModal != nil && m.exportModal.isRunning()) {
 			m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
 			return spinnerTick(), true
 		}
@@ -114,6 +121,19 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		}
 
 		m.dumpModal.state = dumpSucceeded
+		return nil, true
+	case exportFinishedMsg:
+		if msg.session != m.session || m.exportModal == nil {
+			return nil, true
+		}
+
+		if msg.err != nil {
+			m.exportModal.state = exportFailed
+			m.exportModal.err = msg.err
+			return nil, true
+		}
+
+		m.exportModal.state = exportSucceeded
 		return nil, true
 	default:
 		return nil, false
@@ -293,6 +313,13 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		return m.updateNavigatorSearch(msg)
 	case key.Matches(msg, m.keys.quit) && !(m.panel == panelQuery && !m.query.resultsFocused && msg.String() == "q"):
 		return tea.Quit
+	case key.Matches(msg, m.keys.export) && m.panel == panelQuery:
+		if m.database == nil || m.query.loading || m.query.err != nil || len(m.query.result.Columns) == 0 || strings.TrimSpace(m.query.lastExecutedSQL) == "" {
+			return nil
+		}
+		modal := newQueryExportModal(m.query.lastExecutedSQL)
+		m.exportModal = &modal
+		return nil
 	case m.panel == panelQuery && key.Matches(msg, m.keys.executeQuery):
 		return m.startQuery()
 	case m.panel == panelQuery && key.Matches(msg, m.keys.queryFocus):
@@ -391,6 +418,14 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		modal := newDumpModal(m.database.Name())
 		m.dumpModal = &modal
+		return nil
+	case key.Matches(msg, m.keys.export):
+		table, ok := m.navigator.selectedTable()
+		if m.database == nil || !ok || m.loading || m.data.loading || m.query.loading {
+			return nil
+		}
+		modal := newExportModal(table.Name)
+		m.exportModal = &modal
 		return nil
 	default:
 		return nil
@@ -491,7 +526,7 @@ func (m *Model) startQuery() tea.Cmd {
 	if m.database == nil || strings.TrimSpace(m.query.editor.Value()) == "" {
 		return nil
 	}
-	request := m.query.beginExecute()
+	request := m.query.beginExecute(m.query.editor.Value())
 	return tea.Batch(executeQuery(m.database, m.query.editor.Value(), m.session, request), m.startSpinner())
 }
 
@@ -529,6 +564,40 @@ func (m *Model) updateDumpModal(msg tea.Msg) tea.Cmd {
 		switch keyMsg.String() {
 		case "enter", "esc":
 			m.dumpModal = nil
+		}
+	}
+
+	return nil
+}
+
+func (m *Model) updateExportModal(msg tea.Msg) tea.Cmd {
+	keyMsg, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return nil
+	}
+
+	switch m.exportModal.state {
+	case exportConfirming:
+		switch keyMsg.String() {
+		case "enter":
+			m.exportModal.state = exportRunning
+			command := exportTable(m.database, db.Table{Name: m.exportModal.tableName}, m.session)
+			if m.exportModal.source == exportQuerySource {
+				command = exportQuery(m.database, m.exportModal.query, m.session)
+			}
+			return tea.Batch(
+				command,
+				m.startSpinner(),
+			)
+		case "esc":
+			m.exportModal = nil
+		}
+	case exportRunning:
+		return nil
+	case exportSucceeded, exportFailed:
+		switch keyMsg.String() {
+		case "enter", "esc":
+			m.exportModal = nil
 		}
 	}
 

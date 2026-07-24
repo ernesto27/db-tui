@@ -2,6 +2,8 @@ package mysql
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -145,6 +147,42 @@ func TestGetRowsValidatesPage(t *testing.T) {
 	}
 }
 
+func TestExport(t *testing.T) {
+	database := connectWorld(t)
+	t.Chdir(t.TempDir())
+
+	require.NoError(t, database.Export(context.Background(), db.Table{Name: "city"}))
+
+	exportFiles, err := filepath.Glob("city_*.csv")
+	if !assert.NoError(t, err, "find generated CSV export") || !assert.Len(t, exportFiles, 1) {
+		return
+	}
+
+	contents, err := os.ReadFile(exportFiles[0])
+	if !assert.NoError(t, err, "read generated CSV export") {
+		return
+	}
+	assert.Contains(t, string(contents), "ID,Name,CountryCode,District,Population\n")
+}
+
+func TestExportQuery(t *testing.T) {
+	database := connectWorld(t)
+	t.Chdir(t.TempDir())
+
+	require.NoError(t, database.ExportQuery(context.Background(), "SELECT ID FROM city"))
+
+	exportFiles, err := filepath.Glob("query_*.csv")
+	if !assert.NoError(t, err, "find generated CSV query export") || !assert.Len(t, exportFiles, 1) {
+		return
+	}
+
+	contents, err := os.ReadFile(exportFiles[0])
+	if !assert.NoError(t, err, "read generated CSV query export") {
+		return
+	}
+	assert.Contains(t, string(contents), "ID\n")
+}
+
 func TestExecute(t *testing.T) {
 	database := connectWorld(t)
 
@@ -172,13 +210,6 @@ func TestExecute(t *testing.T) {
 
 		assert.ErrorContains(t, err, "execute MySQL query")
 	})
-}
-
-func TestSafeFilename(t *testing.T) {
-	assert.Equal(t, "chinook", safeFilename("chinook"))
-	assert.Equal(t, "mysql", safeFilename(".."))
-	assert.Equal(t, "database_name", safeFilename("database name"))
-	assert.Equal(t, "passwd", safeFilename("../../passwd"))
 }
 
 func TestDumpRejectsUnsupportedNetwork(t *testing.T) {

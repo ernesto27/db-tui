@@ -61,7 +61,8 @@ type Model struct {
 
 	config config.Config
 
-	dumpModal *dumpModal
+	dumpModal   *dumpModal
+	exportModal *exportModal
 }
 
 // New creates the root Bubble Tea application model.

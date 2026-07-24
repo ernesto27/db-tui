@@ -22,20 +22,28 @@ type fakeDatabase struct {
 	queryResult db.QueryResult
 	queryErr    error
 
-	dumpErr error
+	dumpErr        error
+	exportErr      error
+	exportQueryErr error
 
-	listTablesCalls    int
-	listTablesDeadline bool
-	getRowsCalls       int
-	getRowsTable       db.Table
-	getRowsRequest     db.PageRequest
-	getRowsDeadline    bool
-	executeCalls       int
-	executedSQL        string
-	executeDeadline    bool
-	dumpCalls          int
-	dumpDeadline       bool
-	closeCalls         int
+	listTablesCalls     int
+	listTablesDeadline  bool
+	getRowsCalls        int
+	getRowsTable        db.Table
+	getRowsRequest      db.PageRequest
+	getRowsDeadline     bool
+	executeCalls        int
+	executedSQL         string
+	executeDeadline     bool
+	dumpCalls           int
+	dumpDeadline        bool
+	exportCalls         int
+	exportTable         db.Table
+	exportDeadline      bool
+	exportQueryCalls    int
+	exportedQuery       string
+	exportQueryDeadline bool
+	closeCalls          int
 }
 
 func (f *fakeDatabase) Name() string {
@@ -74,6 +82,20 @@ func (f *fakeDatabase) Dump(ctx context.Context) error {
 	f.dumpCalls++
 	_, f.dumpDeadline = ctx.Deadline()
 	return f.dumpErr
+}
+
+func (f *fakeDatabase) Export(ctx context.Context, table db.Table) error {
+	f.exportCalls++
+	f.exportTable = table
+	_, f.exportDeadline = ctx.Deadline()
+	return f.exportErr
+}
+
+func (f *fakeDatabase) ExportQuery(ctx context.Context, query string) error {
+	f.exportQueryCalls++
+	f.exportedQuery = query
+	_, f.exportQueryDeadline = ctx.Deadline()
+	return f.exportQueryErr
 }
 
 func (f *fakeDatabase) Close() {

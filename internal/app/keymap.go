@@ -20,6 +20,7 @@ type keyMap struct {
 	home          key.Binding
 	end           key.Binding
 	dump          key.Binding
+	export        key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -41,5 +42,6 @@ func defaultKeyMap() keyMap {
 		home:          key.NewBinding(key.WithKeys("home"), key.WithHelp("home", "first table")),
 		end:           key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "last table")),
 		dump:          key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "dump database")),
+		export:        key.NewBinding(key.WithKeys("ctrl+e"), key.WithHelp("ctrl+e", "export CSV")),
 	}
 }

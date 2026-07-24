@@ -1,13 +1,59 @@
 // Package db defines database-engine-neutral types and session behavior.
 package db
 
-import "context"
+import (
+	"context"
+	"errors"
+	"path/filepath"
+	"strings"
+	"time"
+)
 
 // MaxPageSize is the largest number of rows a single page can contain.
 const MaxPageSize = 100
 
 // MaxQueryResultRows is the largest number of rows returned for a raw query.
 const MaxQueryResultRows = 100
+
+const filenameTimestampLayout = "20060102_150405"
+
+// TimestampedFilename returns a filename with prefix, the current timestamp, and extension.
+//
+// The extension must not include a leading period.
+func TimestampedFilename(prefix, extension string) string {
+	return prefix + "_" + time.Now().Format(filenameTimestampLayout) + "." + extension
+}
+
+// SafeFilename returns a safe single filename component derived from name.
+func SafeFilename(name string) string {
+	name = filepath.Base(strings.TrimSpace(name))
+	name = strings.Map(func(character rune) rune {
+		switch {
+		case character >= 'a' && character <= 'z':
+			return character
+		case character >= 'A' && character <= 'Z':
+			return character
+		case character >= '0' && character <= '9':
+			return character
+		case character == '-', character == '_', character == '.':
+			return character
+		default:
+			return '_'
+		}
+	}, name)
+	if strings.Trim(name, ".") == "" {
+		return "export"
+	}
+	return name
+}
+
+// ValidateSelectQuery reports whether query contains SELECT.
+func ValidateSelectQuery(query string) error {
+	if !strings.Contains(strings.ToUpper(query), "SELECT") {
+		return errors.New("only SELECT queries can be exported")
+	}
+	return nil
+}
 
 // Supported database engines.
 const (
@@ -55,5 +101,7 @@ type Database interface {
 	// Execute runs SQL and returns its first rows and command status.
 	Execute(ctx context.Context, sql string) (QueryResult, error)
 	Dump(ctx context.Context) error
+	Export(ctx context.Context, table Table) error
+	ExportQuery(ctx context.Context, sql string) error
 	Close()
 }

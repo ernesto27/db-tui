@@ -82,6 +82,11 @@ type dumpFinishedMsg struct {
 	err     error
 }
 
+type exportFinishedMsg struct {
+	session uint64
+	err     error
+}
+
 func dumpDatabase(database db.Database, session uint64) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), dumpTimeout)
@@ -89,6 +94,32 @@ func dumpDatabase(database db.Database, session uint64) tea.Cmd {
 
 		err := database.Dump(ctx)
 		return dumpFinishedMsg{
+			session: session,
+			err:     err,
+		}
+	}
+}
+
+func exportTable(database db.Database, table db.Table, session uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), dumpTimeout)
+		defer cancel()
+
+		err := database.Export(ctx, table)
+		return exportFinishedMsg{
+			session: session,
+			err:     err,
+		}
+	}
+}
+
+func exportQuery(database db.Database, sql string, session uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), dumpTimeout)
+		defer cancel()
+
+		err := database.ExportQuery(ctx, sql)
+		return exportFinishedMsg{
 			session: session,
 			err:     err,
 		}

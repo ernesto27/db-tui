@@ -11,11 +11,10 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/ernestoponce27/db-tui/internal/csvexport"
 	"github.com/ernestoponce27/db-tui/internal/db"
 	"github.com/ernestoponce27/db-tui/internal/logger"
 	mysqldriver "github.com/go-sql-driver/mysql"
@@ -152,21 +151,34 @@ func (m *mysqlDatabase) ListTables(ctx context.Context) ([]db.Table, error) {
 
 // GetRows returns an unordered page of rows from a MySQL table.
 func (m *mysqlDatabase) GetRows(ctx context.Context, table db.Table, page db.PageRequest) (db.RowPage, error) {
+	return m.getRows(ctx, table, &page)
+}
+
+func (m *mysqlDatabase) getRows(ctx context.Context, table db.Table, page *db.PageRequest) (db.RowPage, error) {
 	if table.Name == "" {
 		return db.RowPage{}, errors.New("table name is required")
 	}
-	if page.Offset < 0 {
-		return db.RowPage{}, errors.New("page offset cannot be negative")
-	}
-	if page.Limit < 1 || page.Limit > db.MaxPageSize {
-		return db.RowPage{}, fmt.Errorf("page limit must be between 1 and %d", db.MaxPageSize)
+	if page != nil {
+		if page.Offset < 0 {
+			return db.RowPage{}, errors.New("page offset cannot be negative")
+		}
+		if page.Limit < 1 || page.Limit > db.MaxPageSize {
+			return db.RowPage{}, fmt.Errorf("page limit must be between 1 and %d", db.MaxPageSize)
+		}
 	}
 
 	tableName := quoteIdentifier(table.Name)
-	queryLimit := page.Limit + 1
-	query := fmt.Sprintf("SELECT * FROM %s LIMIT ? OFFSET ?", tableName)
-	m.logger.Log(fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", tableName, queryLimit, page.Offset))
-	rows, err := m.database.QueryContext(ctx, query, queryLimit, page.Offset)
+	query := fmt.Sprintf("SELECT * FROM %s", tableName)
+	args := make([]any, 0, 2)
+	if page != nil {
+		query += " LIMIT ? OFFSET ?"
+		queryLimit := page.Limit + 1
+		args = append(args, queryLimit, page.Offset)
+		m.logger.Log(fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", tableName, queryLimit, page.Offset))
+	} else {
+		m.logger.Log(query)
+	}
+	rows, err := m.database.QueryContext(ctx, query, args...)
 	if err != nil {
 		return db.RowPage{}, fmt.Errorf("query MySQL rows: %w", err)
 	}
@@ -192,7 +204,7 @@ func (m *mysqlDatabase) GetRows(ctx context.Context, table db.Table, page db.Pag
 		return db.RowPage{}, fmt.Errorf("iterate MySQL rows: %w", err)
 	}
 
-	if len(result.Rows) > page.Limit {
+	if page != nil && len(result.Rows) > page.Limit {
 		result.HasMore = true
 		result.Rows = result.Rows[:page.Limit]
 	}
@@ -206,6 +218,11 @@ func (m *mysqlDatabase) Execute(ctx context.Context, statement string) (db.Query
 	if err != nil {
 		return db.QueryResult{}, fmt.Errorf("execute MySQL query: %w", err)
 	}
+
+	return readQueryResult(rows, db.MaxQueryResultRows, commandTag(statement))
+}
+
+func readQueryResult(rows *sql.Rows, rowLimit int, commandTag string) (db.QueryResult, error) {
 	defer rows.Close()
 
 	columns, err := rows.Columns()
@@ -216,12 +233,9 @@ func (m *mysqlDatabase) Execute(ctx context.Context, statement string) (db.Query
 	if err != nil {
 		return db.QueryResult{}, fmt.Errorf("read MySQL query column types: %w", err)
 	}
-	result := db.QueryResult{
-		Columns:    columns,
-		CommandTag: commandTag(statement),
-	}
+	result := db.QueryResult{Columns: columns, CommandTag: commandTag}
 	for rows.Next() {
-		if len(result.Rows) == db.MaxQueryResultRows {
+		if rowLimit > 0 && len(result.Rows) == rowLimit {
 			break
 		}
 		values, err := scanRow(rows, columnTypes)
@@ -288,7 +302,7 @@ func commandTag(statement string) string {
 
 // Dump writes the connected database to a timestamped SQL file using mysqldump.
 func (m *mysqlDatabase) Dump(ctx context.Context) error {
-	filename := safeFilename(m.config.DBName) + "_" + time.Now().Format("20060102_150405") + ".sql"
+	filename := db.TimestampedFilename(db.SafeFilename(m.config.DBName), "sql")
 	args := []string{"--user=" + m.config.User, "--result-file=" + filename, "--single-transaction"}
 	var port string
 
@@ -361,6 +375,50 @@ func (m *mysqlDatabase) dumpFromDocker(ctx context.Context, filename, port strin
 	return nil
 }
 
+func (m *mysqlDatabase) Export(ctx context.Context, table db.Table) error {
+	data, err := m.getRows(ctx, table, nil)
+	if err != nil {
+		return err
+	}
+
+	filename := db.TimestampedFilename(db.SafeFilename(table.Name), "csv")
+	if err := csvexport.Write(filename, data.Columns, data.Rows); err != nil {
+		return fmt.Errorf("write CSV export: %w", err)
+	}
+
+	return nil
+}
+
+// ExportQuery re-runs a SELECT query in a read-only transaction and writes all rows to CSV.
+func (m *mysqlDatabase) ExportQuery(ctx context.Context, statement string) error {
+	if err := db.ValidateSelectQuery(statement); err != nil {
+		return err
+	}
+
+	tx, err := m.database.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return fmt.Errorf("begin MySQL export transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	m.logger.Log(statement)
+	rows, err := tx.QueryContext(ctx, statement)
+	if err != nil {
+		return fmt.Errorf("query MySQL export rows: %w", err)
+	}
+
+	result, err := readQueryResult(rows, 0, "")
+	if err != nil {
+		return err
+	}
+
+	filename := db.TimestampedFilename("query", "csv")
+	if err := csvexport.Write(filename, result.Columns, result.Rows); err != nil {
+		return fmt.Errorf("write CSV query export: %w", err)
+	}
+	return nil
+}
+
 func dockerContainerIDForPort(ctx context.Context, port string) (string, error) {
 	command := exec.CommandContext(
 		ctx,
@@ -383,28 +441,6 @@ func dockerContainerIDForPort(ctx context.Context, port string) (string, error) 
 	default:
 		return "", fmt.Errorf("multiple Docker containers publish port %s", port)
 	}
-}
-
-func safeFilename(name string) string {
-	name = filepath.Base(strings.TrimSpace(name))
-	name = strings.Map(func(character rune) rune {
-		switch {
-		case character >= 'a' && character <= 'z':
-			return character
-		case character >= 'A' && character <= 'Z':
-			return character
-		case character >= '0' && character <= '9':
-			return character
-		case character == '-', character == '_', character == '.':
-			return character
-		default:
-			return '_'
-		}
-	}, name)
-	if strings.Trim(name, ".") == "" {
-		return "mysql"
-	}
-	return name
 }
 
 // Close releases all connections held by the database.

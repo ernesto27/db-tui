@@ -3,7 +3,7 @@
 [] - support to mysql engine
 [] - export data in csv
 [x] - section to run raw queries
-[] - search tables
+[x] - search tables
 [x] - option to dump all database file
 [] - update script sandbox for claude code
 

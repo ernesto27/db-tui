@@ -10,8 +10,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/ernestoponce27/db-tui/internal/csvexport"
 	"github.com/ernestoponce27/db-tui/internal/db"
 	"github.com/ernestoponce27/db-tui/internal/logger"
 	"github.com/jackc/pgx/v5"
@@ -89,21 +89,36 @@ func (p *postgresql) ListTables(ctx context.Context) ([]db.Table, error) {
 
 // GetRows returns an unordered page of rows from a public PostgreSQL table.
 func (p *postgresql) GetRows(ctx context.Context, table db.Table, page db.PageRequest) (db.RowPage, error) {
+	return p.getRows(ctx, table, &page)
+}
+
+// getRows returns all rows when page is nil, or a bounded page when it is provided.
+func (p *postgresql) getRows(ctx context.Context, table db.Table, page *db.PageRequest) (db.RowPage, error) {
 	if table.Name == "" {
 		return db.RowPage{}, errors.New("table name is required")
 	}
-	if page.Offset < 0 {
-		return db.RowPage{}, errors.New("page offset cannot be negative")
-	}
-	if page.Limit < 1 || page.Limit > db.MaxPageSize {
-		return db.RowPage{}, fmt.Errorf("page limit must be between 1 and %d", db.MaxPageSize)
+	if page != nil {
+		if page.Offset < 0 {
+			return db.RowPage{}, errors.New("page offset cannot be negative")
+		}
+		if page.Limit < 1 || page.Limit > db.MaxPageSize {
+			return db.RowPage{}, fmt.Errorf("page limit must be between 1 and %d", db.MaxPageSize)
+		}
 	}
 
 	tableName := pgx.Identifier{"public", table.Name}.Sanitize()
-	query := fmt.Sprintf("SELECT * FROM %s LIMIT $1 OFFSET $2", tableName)
-	queryLimit := page.Limit + 1
-	p.logger.Log(fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", tableName, queryLimit, page.Offset))
-	rows, err := p.pool.Query(ctx, query, queryLimit, page.Offset)
+	query := fmt.Sprintf("SELECT * FROM %s", tableName)
+	args := make([]any, 0, 2)
+	if page != nil {
+		query += " LIMIT $1 OFFSET $2"
+		queryLimit := page.Limit + 1
+		args = append(args, queryLimit, page.Offset)
+		p.logger.Log(fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", tableName, queryLimit, page.Offset))
+	} else {
+		p.logger.Log(query)
+	}
+
+	rows, err := p.pool.Query(ctx, query, args...)
 	if err != nil {
 		return db.RowPage{}, fmt.Errorf("query PostgreSQL rows: %w", err)
 	}
@@ -125,7 +140,7 @@ func (p *postgresql) GetRows(ctx context.Context, table db.Table, page db.PageRe
 		return db.RowPage{}, fmt.Errorf("iterate PostgreSQL rows: %w", err)
 	}
 
-	if len(result.Rows) > page.Limit {
+	if page != nil && len(result.Rows) > page.Limit {
 		result.HasMore = true
 		result.Rows = result.Rows[:page.Limit]
 	}
@@ -140,15 +155,19 @@ func (p *postgresql) Execute(ctx context.Context, sql string) (db.QueryResult, e
 	if err != nil {
 		return db.QueryResult{}, fmt.Errorf("execute PostgreSQL query: %w", err)
 	}
+
+	return readQueryResult(rows, db.MaxQueryResultRows)
+}
+
+func readQueryResult(rows pgx.Rows, rowLimit int) (db.QueryResult, error) {
 	defer rows.Close()
 
-	fields := rows.FieldDescriptions()
-	result := db.QueryResult{Columns: make([]string, len(fields))}
-	for index, field := range fields {
+	result := db.QueryResult{Columns: make([]string, len(rows.FieldDescriptions()))}
+	for index, field := range rows.FieldDescriptions() {
 		result.Columns[index] = field.Name
 	}
 	for rows.Next() {
-		if len(result.Rows) == db.MaxQueryResultRows {
+		if rowLimit > 0 && len(result.Rows) == rowLimit {
 			break
 		}
 		values, err := rows.Values()
@@ -174,8 +193,7 @@ func (p *postgresql) Close() {
 func (p *postgresql) Dump(ctx context.Context) error {
 	connConfig := p.pool.Config().ConnConfig
 
-	timestamp := time.Now().Format("20060102_150405")
-	filename := connConfig.Database + "_" + timestamp + ".sql"
+	filename := db.TimestampedFilename(db.SafeFilename(connConfig.Database), "sql")
 	cmd := exec.CommandContext(
 		ctx,
 		"pg_dump",
@@ -232,6 +250,50 @@ func (p *postgresql) Dump(ctx context.Context) error {
 		return nil
 	}
 
+	return nil
+}
+
+func (p *postgresql) Export(ctx context.Context, table db.Table) error {
+	data, err := p.getRows(ctx, table, nil)
+	if err != nil {
+		return err
+	}
+
+	filename := db.TimestampedFilename(db.SafeFilename(table.Name), "csv")
+	if err := csvexport.Write(filename, data.Columns, data.Rows); err != nil {
+		return fmt.Errorf("write CSV export: %w", err)
+	}
+
+	return nil
+}
+
+// ExportQuery re-runs a SELECT query in a read-only transaction and writes all rows to CSV.
+func (p *postgresql) ExportQuery(ctx context.Context, statement string) error {
+	if err := db.ValidateSelectQuery(statement); err != nil {
+		return err
+	}
+
+	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return fmt.Errorf("begin PostgreSQL export transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	p.logger.Log(statement)
+	rows, err := tx.Query(ctx, statement, pgx.QueryExecModeSimpleProtocol)
+	if err != nil {
+		return fmt.Errorf("query PostgreSQL export rows: %w", err)
+	}
+
+	result, err := readQueryResult(rows, 0)
+	if err != nil {
+		return err
+	}
+
+	filename := db.TimestampedFilename("query", "csv")
+	if err := csvexport.Write(filename, result.Columns, result.Rows); err != nil {
+		return fmt.Errorf("write CSV query export: %w", err)
+	}
 	return nil
 }
 

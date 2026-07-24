@@ -165,3 +165,17 @@ func TestDumpDatabase(t *testing.T) {
 	assert.Equal(t, uint64(15), message.session)
 	assert.ErrorIs(t, message.err, wantErr)
 }
+
+func TestExportQuery(t *testing.T) {
+	wantErr := errors.New("export failed")
+	database := &fakeDatabase{exportQueryErr: wantErr}
+
+	message, ok := exportQuery(database, "SELECT * FROM Album", 15)().(exportFinishedMsg)
+	require.True(t, ok)
+
+	assert.Equal(t, 1, database.exportQueryCalls)
+	assert.Equal(t, "SELECT * FROM Album", database.exportedQuery)
+	assert.True(t, database.exportQueryDeadline)
+	assert.Equal(t, uint64(15), message.session)
+	assert.ErrorIs(t, message.err, wantErr)
+}

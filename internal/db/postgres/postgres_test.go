@@ -84,6 +84,46 @@ func TestDumpCreatesSQLFile(t *testing.T) {
 	assert.Contains(t, string(contents), `CREATE TABLE public."Album"`)
 }
 
+func TestExport(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	t.Chdir(t.TempDir())
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	assert.NoError(t, database.Export(ctx, db.Table{Name: "Album"}))
+}
+
+func TestExportQuery(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	t.Chdir(t.TempDir())
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	assert.NoError(t, database.ExportQuery(ctx, "SELECT generate_series(1, 101) AS number"))
+
+	exportFiles, err := filepath.Glob("query_*.csv")
+	if !assert.NoError(t, err, "find generated CSV query export") || !assert.Len(t, exportFiles, 1) {
+		return
+	}
+
+	contents, err := os.ReadFile(exportFiles[0])
+	if !assert.NoError(t, err, "read generated CSV query export") {
+		return
+	}
+	assert.Contains(t, string(contents), "number\n")
+	assert.Contains(t, string(contents), "\n101\n")
+}
+
 func TestGetRows(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
