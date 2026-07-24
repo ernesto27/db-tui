@@ -7,12 +7,15 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
 type connectionInput uint8
 
 const (
-	hostInput connectionInput = iota
+	engineInput connectionInput = iota
+	hostInput
 	databaseNameInput
 	portInput
 	usernameInput
@@ -23,11 +26,14 @@ const (
 
 const connectionModalInputWidth = 42
 
+var connectionEngines = []string{db.EnginePostgreSQL, db.EngineMySQL}
+
 type connectionModal struct {
-	inputs     [connectionInputCount]textinput.Model
-	focused    connectionInput
-	errorText  string
-	connecting bool
+	inputs      [connectionInputCount]textinput.Model
+	engineIndex int
+	focused     connectionInput
+	errorText   string
+	connecting  bool
 }
 
 type submitConnectionMsg struct{}
@@ -37,11 +43,16 @@ func newConnectionModal(saved ConnectionSettings) connectionModal {
 	modal := connectionModal{}
 	modal.inputs[hostInput] = newConnectionInput("127.0.0.1")
 	modal.inputs[databaseNameInput] = newConnectionInput("database name")
-	modal.inputs[portInput] = newConnectionInput("5432")
+	modal.inputs[portInput] = newConnectionInput("5432 or 3306")
 	modal.inputs[usernameInput] = newConnectionInput("username")
 	modal.inputs[passwordInput] = newConnectionInput("password")
 	modal.inputs[passwordInput].EchoMode = textinput.EchoPassword
-	modal.inputs[dsnInput] = newConnectionInput("postgres://user:password@host:5432/database")
+	modal.inputs[dsnInput] = newConnectionInput("engine-specific DSN")
+	engine, err := saved.normalizedEngine()
+	if err != nil {
+		engine = db.EnginePostgreSQL
+	}
+	modal.setEngine(engine)
 	modal.inputs[hostInput].SetValue(saved.Host)
 	modal.inputs[databaseNameInput].SetValue(saved.DatabaseName)
 	if saved.Port > 0 {
@@ -67,6 +78,17 @@ func (m connectionModal) update(msg tea.Msg) (connectionModal, tea.Cmd) {
 	}
 
 	if key, ok := msg.(tea.KeyPressMsg); ok {
+		if m.focused == engineInput {
+			switch key.String() {
+			case "left", "up":
+				m.selectEngine(-1)
+				return m, nil
+			case "right", "down":
+				m.selectEngine(1)
+				return m, nil
+			}
+		}
+
 		switch key.String() {
 		case "tab":
 			return m, m.focus(1)
@@ -79,20 +101,66 @@ func (m connectionModal) update(msg tea.Msg) (connectionModal, tea.Cmd) {
 		}
 	}
 
+	if m.focused == engineInput {
+		return m, nil
+	}
+
 	var command tea.Cmd
 	m.inputs[m.focused], command = m.inputs[m.focused].Update(msg)
 	return m, command
 }
 
 func (m *connectionModal) focus(delta int) tea.Cmd {
-	m.inputs[m.focused].Blur()
+	if m.focused != engineInput {
+		m.inputs[m.focused].Blur()
+	}
 	m.focused = connectionInput((int(m.focused) + delta + int(connectionInputCount)) % int(connectionInputCount))
+	if m.focused == engineInput {
+		return nil
+	}
 	return m.inputs[m.focused].Focus()
+}
+
+func (m connectionModal) engine() string {
+	return connectionEngines[m.engineIndex]
+}
+
+func (m *connectionModal) selectEngine(delta int) {
+	previousEngine := m.engine()
+	m.engineIndex = (m.engineIndex + delta + len(connectionEngines)) % len(connectionEngines)
+	previousPort := defaultPortForEngine(previousEngine)
+	if port := m.inputs[portInput].Value(); port == "" || port == previousPort {
+		m.inputs[portInput].SetValue(defaultPortForEngine(m.engine()))
+	}
+}
+
+func (m *connectionModal) setEngine(engine string) {
+	for index, candidate := range connectionEngines {
+		if engine == candidate {
+			m.engineIndex = index
+			break
+		}
+	}
+	if m.inputs[portInput].Value() == "" {
+		m.inputs[portInput].SetValue(defaultPortForEngine(m.engine()))
+	}
+}
+
+func defaultPortForEngine(engine string) string {
+	if engine == db.EngineMySQL {
+		return "3306"
+	}
+	return "5432"
 }
 
 func (m connectionModal) connectionSettings() (ConnectionSettings, error) {
 	if dsn := strings.TrimSpace(m.inputs[dsnInput].Value()); dsn != "" {
-		return ConnectionSettings{DSN: dsn}, nil
+		settings := ConnectionSettings{
+			Engine: m.engine(),
+			DSN:    dsn,
+		}
+		_, err := settings.normalizedEngine()
+		return settings, err
 	}
 
 	port, err := strconv.Atoi(strings.TrimSpace(m.inputs[portInput].Value()))
@@ -100,6 +168,7 @@ func (m connectionModal) connectionSettings() (ConnectionSettings, error) {
 		port = 0
 	}
 	settings := ConnectionSettings{
+		Engine:       m.engine(),
 		Host:         strings.TrimSpace(m.inputs[hostInput].Value()),
 		Port:         port,
 		DatabaseName: strings.TrimSpace(m.inputs[databaseNameInput].Value()),
@@ -118,9 +187,15 @@ func (m connectionModal) view(width int) string {
 	lines := []string{
 		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Render("Connect to database"),
 		"",
-		labelStyle.Render("Engine"),
-		fieldStyle.Render("PostgreSQL"),
 	}
+	engineStyle := fieldStyle
+	if m.focused == engineInput {
+		engineStyle = engineStyle.Foreground(lipgloss.Color("230")).Bold(true)
+	}
+	lines = append(lines,
+		labelStyle.Render("Engine"),
+		engineStyle.Render("◀ "+engineDisplayName(m.engine())+" ▶"),
+	)
 	for _, field := range []struct {
 		label string
 		input connectionInput
@@ -138,7 +213,7 @@ func (m connectionModal) view(width int) string {
 		lines = append(lines, "", lipgloss.NewStyle().
 			Foreground(lipgloss.Color("210")).
 			Background(lipgloss.Color("52")).
-			Width(modalWidth - 6).
+			Width(modalWidth-6).
 			Padding(0, 1).
 			Render("✕ "+sanitizeText(m.errorText)))
 	}
@@ -147,7 +222,7 @@ func (m connectionModal) view(width int) string {
 	} else {
 		lines = append(lines,
 			"",
-			lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("Tab/Shift+Tab move  •  Enter connect  •  Esc cancel"),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("Tab move  •  ←/→ select engine  •  Enter connect  •  Esc cancel"),
 		)
 	}
 

@@ -34,6 +34,7 @@ const (
 type Model struct {
 	database           db.Database
 	databaseName       string
+	databaseEngine     string
 	savedConnection    ConnectionSettings
 	connect            ConnectFunc
 	modal              *connectionModal

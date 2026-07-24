@@ -9,6 +9,12 @@ const MaxPageSize = 100
 // MaxQueryResultRows is the largest number of rows returned for a raw query.
 const MaxQueryResultRows = 100
 
+// Supported database engines.
+const (
+	EnginePostgreSQL = "postgres"
+	EngineMySQL      = "mysql"
+)
+
 // Table identifies a table available in a database session.
 type Table struct {
 	Name string

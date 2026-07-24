@@ -20,12 +20,25 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 	}{
 		{
 			name:     "explicit DSN takes precedence",
-			settings: ConnectionSettings{DSN: " postgres://saved "},
+			settings: ConnectionSettings{Engine: db.EnginePostgreSQL, DSN: " postgres://saved "},
 			want:     "postgres://saved",
+		},
+		{
+			name: "MySQL fields",
+			settings: ConnectionSettings{
+				Engine:       "mysql",
+				Host:         "127.0.0.1",
+				Port:         3306,
+				DatabaseName: "chinook",
+				Username:     "db_tui",
+				Password:     "secret",
+			},
+			want: "mysql://db_tui:secret@127.0.0.1:3306/chinook",
 		},
 		{
 			name: "valid fields",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Host:         "127.0.0.1",
 				Port:         5433,
 				DatabaseName: "chinook",
@@ -37,6 +50,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "missing host",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Port:         5432,
 				DatabaseName: "chinook",
 				Username:     "db_tui",
@@ -46,6 +60,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "missing database",
 			settings: ConnectionSettings{
+				Engine:   db.EnginePostgreSQL,
 				Host:     "127.0.0.1",
 				Port:     5432,
 				Username: "db_tui",
@@ -55,6 +70,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "missing username",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Host:         "127.0.0.1",
 				Port:         5432,
 				DatabaseName: "chinook",
@@ -64,6 +80,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "zero port",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Host:         "127.0.0.1",
 				DatabaseName: "chinook",
 				Username:     "db_tui",
@@ -73,6 +90,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "negative port",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Host:         "127.0.0.1",
 				Port:         -1,
 				DatabaseName: "chinook",
@@ -83,6 +101,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "port above maximum",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Host:         "127.0.0.1",
 				Port:         65536,
 				DatabaseName: "chinook",
@@ -93,6 +112,7 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "credentials and database are escaped",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Host:         "db.example.com",
 				Port:         5432,
 				DatabaseName: "sales data",
@@ -104,12 +124,28 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 		{
 			name: "IPv6 host",
 			settings: ConnectionSettings{
+				Engine:       db.EnginePostgreSQL,
 				Host:         "2001:db8::1",
 				Port:         5432,
 				DatabaseName: "chinook",
 				Username:     "db_tui",
 			},
 			want: "postgres://db_tui@[2001:db8::1]:5432/chinook",
+		},
+		{
+			name:     "unknown engine",
+			settings: ConnectionSettings{Engine: "sqlite", DSN: "database.db"},
+			wantErr:  `unsupported database engine "sqlite"`,
+		},
+		{
+			name:     "blank engine",
+			settings: ConnectionSettings{DSN: "postgres://database"},
+			wantErr:  `unsupported database engine ""`,
+		},
+		{
+			name:     "PostgreSQL alias is rejected",
+			settings: ConnectionSettings{Engine: "postgresql", DSN: "postgres://database"},
+			wantErr:  `unsupported database engine "postgresql"`,
 		},
 	}
 
@@ -130,6 +166,7 @@ func TestConnectConnection(t *testing.T) {
 	connectorErr := errors.New("connect failed")
 	database := &fakeDatabase{name: "chinook"}
 	successSettings := ConnectionSettings{
+		Engine:       db.EnginePostgreSQL,
 		Host:         "127.0.0.1",
 		Port:         5433,
 		DatabaseName: "chinook",
@@ -143,31 +180,35 @@ func TestConnectConnection(t *testing.T) {
 		database     db.Database
 		connectorErr error
 		wantCalls    int
+		wantEngine   string
 		wantDSN      string
 		wantErr      error
 		wantErrText  string
 	}{
 		{
 			name:        "validation failure does not call connector",
+			settings:    ConnectionSettings{Engine: db.EnginePostgreSQL},
 			attempt:     3,
 			wantErrText: "host is required",
 		},
 		{
 			name:         "connector error",
-			settings:     ConnectionSettings{DSN: "postgres://database"},
+			settings:     ConnectionSettings{Engine: db.EnginePostgreSQL, DSN: "postgres://database"},
 			attempt:      4,
 			connectorErr: connectorErr,
 			wantCalls:    1,
+			wantEngine:   db.EnginePostgreSQL,
 			wantDSN:      "postgres://database",
 			wantErr:      connectorErr,
 		},
 		{
-			name:      "success",
-			settings:  successSettings,
-			attempt:   5,
-			database:  database,
-			wantCalls: 1,
-			wantDSN:   "postgres://db_tui@127.0.0.1:5433/chinook",
+			name:       "success",
+			settings:   successSettings,
+			attempt:    5,
+			database:   database,
+			wantCalls:  1,
+			wantEngine: db.EnginePostgreSQL,
+			wantDSN:    "postgres://db_tui@127.0.0.1:5433/chinook",
 		},
 	}
 
@@ -175,9 +216,11 @@ func TestConnectConnection(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			calls := 0
 			var gotDSN string
+			var gotEngine string
 			var hadDeadline bool
-			connect := func(ctx context.Context, dsn string) (db.Database, error) {
+			connect := func(ctx context.Context, engine, dsn string) (db.Database, error) {
 				calls++
+				gotEngine = engine
 				gotDSN = dsn
 				_, hadDeadline = ctx.Deadline()
 				return test.database, test.connectorErr
@@ -192,6 +235,7 @@ func TestConnectConnection(t *testing.T) {
 				assert.Empty(t, gotDSN)
 				assert.False(t, hadDeadline)
 			} else {
+				assert.Equal(t, test.wantEngine, gotEngine)
 				assert.Equal(t, test.wantDSN, gotDSN)
 				assert.True(t, hadDeadline)
 			}
@@ -209,7 +253,9 @@ func TestConnectConnection(t *testing.T) {
 
 			assert.NoError(t, message.err)
 			assert.Same(t, test.database, message.database)
-			assert.Equal(t, test.settings, message.settings)
+			wantSettings := test.settings
+			wantSettings.Engine = test.wantEngine
+			assert.Equal(t, wantSettings, message.settings)
 		})
 	}
 }

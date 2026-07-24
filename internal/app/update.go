@@ -159,6 +159,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.editingConnection >= 0 {
 				updatedConnection := updatedConfig.Connections[m.editingConnection]
+				updatedConnection.Engine = msg.settings.Engine
 				updatedConnection.Settings = configSettingsFromConnectionSettings(msg.settings)
 				updatedConfig.Connections[m.editingConnection] = updatedConnection
 			} else {
@@ -179,6 +180,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.database = msg.database
 		m.databaseName = msg.database.Name()
+		m.databaseEngine = msg.settings.Engine
 		m.savedConnection = msg.settings
 		m.tableLoadErr = nil
 		m.navigator.reset()
@@ -233,6 +235,7 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.database.Close()
 			m.database = nil
 			m.databaseName = ""
+			m.databaseEngine = ""
 			m.savedConnection = ConnectionSettings{}
 			m.loading = false
 			m.tableLoadErr = nil

@@ -18,6 +18,16 @@ func TestBaseViewShowsVersion(t *testing.T) {
 	assert.Contains(t, view.Content, "db-tui v"+version.Version())
 }
 
+func TestBaseViewShowsConnectedEngine(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.databaseName = "chinook"
+	model.databaseEngine = db.EngineMySQL
+
+	view := model.baseView()
+
+	assert.Contains(t, view.Content, "chinook  /  MySQL")
+}
+
 func TestFooterTextDescribesTabNavigation(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.database = &fakeDatabase{name: "chinook"}
