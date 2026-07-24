@@ -9,7 +9,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git ripgrep ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install --global @openai/codex
+ARG CODEX_VERSION=latest
+RUN npm install --global "@openai/codex@${CODEX_VERSION}"
 
 WORKDIR /workspace
 ENTRYPOINT ["codex"]

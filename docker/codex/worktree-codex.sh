@@ -5,9 +5,51 @@
 set -euo pipefail
 
 usage() {
-  printf 'Usage: %s <branch-name> [--model <model>] <prompt...>\n' "${0##*/}" >&2
+  printf 'Usage: %s [--check-codex-update] | <branch-name> [--model <model>] <prompt...>\n' "${0##*/}" >&2
   exit 2
 }
+
+ensure_codex_image_latest() {
+  local repo_root=$1
+  local installed latest rebuilt
+
+  installed=$(docker run --rm --entrypoint codex codex-cli --version | awk '{print $NF}')
+  latest=$(docker run --rm --entrypoint npm codex-cli view @openai/codex version)
+
+  printf 'Codex image version: %s\n' "$installed"
+  printf 'Latest version:      %s\n' "$latest"
+
+  if [[ $installed == "$latest" ]]; then
+    printf 'Codex image is up to date.\n'
+    return
+  fi
+
+  printf 'Update available. Rebuilding the Codex image.\n'
+  docker build \
+    --build-arg "CODEX_VERSION=$latest" \
+    --tag codex-cli \
+    --file "$repo_root/docker/codex/Dockerfile" \
+    "$repo_root"
+
+  rebuilt=$(docker run --rm --entrypoint codex codex-cli --version | awk '{print $NF}')
+  if [[ $rebuilt != "$latest" ]]; then
+    printf 'error: rebuilt Codex image is %s; expected %s\n' "$rebuilt" "$latest" >&2
+    return 1
+  fi
+
+  printf 'Codex image rebuilt at version %s.\n' "$rebuilt"
+}
+
+if [[ ${1:-} == --check-codex-update ]]; then
+  [[ $# -eq 1 ]] || usage
+  execution_dir=$(pwd -P)
+  repo_root=$(git -C "$execution_dir" rev-parse --show-toplevel) || {
+    printf 'error: %s is not inside a Git repository\n' "$execution_dir" >&2
+    exit 1
+  }
+  ensure_codex_image_latest "$repo_root"
+  exit 0
+fi
 
 [[ $# -ge 2 ]] || usage
 
@@ -22,11 +64,14 @@ fi
 
 [[ $# -ge 1 ]] || usage
 prompt=$*
+
 execution_dir=$(pwd -P)
 repo_root=$(git -C "$execution_dir" rev-parse --show-toplevel) || {
   printf 'error: %s is not inside a Git repository\n' "$execution_dir" >&2
   exit 1
 }
+
+ensure_codex_image_latest "$repo_root"
 
 git check-ref-format --branch "$branch_name" >/dev/null || {
   printf 'error: invalid branch name: %s\n' "$branch_name" >&2
@@ -63,9 +108,9 @@ docker run -it "${codex_container_args[@]}" \
   --dangerously-bypass-approvals-and-sandbox \
   --model "$model" \
   --config 'model_reasoning_effort="high"' \
-  exec "$prompt"
+  exec "$prompt do not use superpowerer or any spec skills, you decide all"
 
-
+git -C "$worktree_dir" add -A
 
 git -C "$worktree_dir" commit -m "$prompt"
 git -C "$worktree_dir" push --set-upstream origin "$branch_name"

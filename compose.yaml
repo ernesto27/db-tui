@@ -50,7 +50,7 @@ services:
       - mysql-data:/var/lib/mysql
       - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u db_tui -pdb_tui"]
+      test: ["CMD-SHELL", "mysqladmin ping --protocol=tcp -h 127.0.0.1 -u db_tui -pdb_tui"]
       interval: 2s
       timeout: 3s
       retries: 15
