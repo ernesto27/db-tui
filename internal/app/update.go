@@ -17,6 +17,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, command
 	}
 
+	if m.helpModal != nil {
+		if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
+			m.helpModal = nil
+		}
+		return m, nil
+	}
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && key.Matches(keyMsg, m.keys.help) {
+		modal := newHelpModal(m.keys)
+		m.helpModal = &modal
+		return m, nil
+	}
+
 	if m.modal != nil {
 		switch msg.(type) {
 		case tea.MouseClickMsg, tea.MouseWheelMsg:

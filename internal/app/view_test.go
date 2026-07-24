@@ -38,3 +38,9 @@ func TestFooterTextDescribesTabNavigation(t *testing.T) {
 	model.panel = panelQuery
 	assert.Contains(t, model.footerText(), "Tab editor/results")
 }
+
+func TestBaseViewAdvertisesKeyboardShortcuts(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+
+	assert.Contains(t, model.baseView().Content, "? help")
+}

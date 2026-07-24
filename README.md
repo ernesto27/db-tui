@@ -63,6 +63,8 @@ When a DSN is provided it takes precedence over the individual fields. The app t
 
 Press `Ctrl+R` to open the raw SQL panel. Enter a statement for the connected database and press `Ctrl+P` to run it; plain Enter adds a new line. After a query runs, its results receive focus and can be scrolled with Up/Down, j/k, PgUp/PgDown, or the mouse wheel. Press Tab to switch between results and the editor. Query results display at most 100 rows. Press `Ctrl+T` to return to the selected table's data view. In the table-data view, Tab cycles focus between the table list, the table filter, and the data list; Ctrl+F opens the filter directly.
 
+Press `?` anywhere to open the complete keyboard-shortcut reference. Press `Esc` to close it and return to the previous screen or modal.
+
 Passwords are stored as plaintext in the connection fields or DSN. The configuration file is private to the current user (`0600`), but it is not encrypted. Do not commit passwords or credential-bearing database URLs.
 
 ## License
