@@ -156,7 +156,7 @@ func (m Model) footerText() string {
 		}
 	}
 
-	exportHelp := "  •  Ctrl+E export CSV"
+	exportHelp := "  •  Ctrl+E export"
 	return fmt.Sprintf("focus: %s%s  •  Ctrl+F search tables%s  •  Ctrl+G table DDL  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab table/search/data  •  q quit",
 		focusLabel, rowStatus, exportHelp)
 }

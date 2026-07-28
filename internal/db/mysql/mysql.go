@@ -16,6 +16,7 @@ import (
 
 	"github.com/ernestoponce27/db-tui/internal/csvexport"
 	"github.com/ernestoponce27/db-tui/internal/db"
+	"github.com/ernestoponce27/db-tui/internal/jsonexport"
 	"github.com/ernestoponce27/db-tui/internal/logger"
 	mysqldriver "github.com/go-sql-driver/mysql"
 )
@@ -399,15 +400,23 @@ func (m *mysqlDatabase) dumpFromDocker(ctx context.Context, filename, port strin
 	return nil
 }
 
-func (m *mysqlDatabase) Export(ctx context.Context, table db.Table) error {
+func (m *mysqlDatabase) Export(ctx context.Context, table db.Table, typeVal string) error {
 	data, err := m.getRows(ctx, table, nil)
 	if err != nil {
 		return err
 	}
 
-	filename := db.TimestampedFilename(db.SafeFilename(table.Name), "csv")
-	if err := csvexport.Write(filename, data.Columns, data.Rows); err != nil {
-		return fmt.Errorf("write CSV export: %w", err)
+	switch typeVal {
+	case db.ExportTypeCSV:
+		filename := db.TimestampedFilename(db.SafeFilename(table.Name), db.ExportTypeCSV)
+		if err := csvexport.Write(filename, data.Columns, data.Rows); err != nil {
+			return fmt.Errorf("write CSV export: %w", err)
+		}
+	case db.ExportTypeJSON:
+		filename := db.TimestampedFilename(db.SafeFilename(table.Name), db.ExportTypeJSON)
+		if err := jsonexport.Write(filename, table.Name, data.Columns, data.Rows); err != nil {
+			return fmt.Errorf("write JSON export: %w", err)
+		}
 	}
 
 	return nil

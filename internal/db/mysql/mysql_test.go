@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -180,7 +181,7 @@ func TestExport(t *testing.T) {
 	database := connectWorld(t)
 	t.Chdir(t.TempDir())
 
-	require.NoError(t, database.Export(context.Background(), db.Table{Name: "city"}))
+	require.NoError(t, database.Export(context.Background(), db.Table{Name: "city"}, db.ExportTypeCSV))
 
 	exportFiles, err := filepath.Glob("city_*.csv")
 	if !assert.NoError(t, err, "find generated CSV export") || !assert.Len(t, exportFiles, 1) {
@@ -192,6 +193,26 @@ func TestExport(t *testing.T) {
 		return
 	}
 	assert.Contains(t, string(contents), "ID,Name,CountryCode,District,Population\n")
+}
+
+func TestExportJSON(t *testing.T) {
+	database := connectWorld(t)
+	t.Chdir(t.TempDir())
+
+	require.NoError(t, database.Export(context.Background(), db.Table{Name: "city"}, db.ExportTypeJSON))
+
+	exportFiles, err := filepath.Glob("city_*.json")
+	if !assert.NoError(t, err, "find generated JSON export") || !assert.Len(t, exportFiles, 1) {
+		return
+	}
+
+	contents, err := os.ReadFile(exportFiles[0])
+	if !assert.NoError(t, err, "read generated JSON export") {
+		return
+	}
+	var document map[string][]map[string]any
+	require.NoError(t, json.Unmarshal(contents, &document))
+	assert.NotEmpty(t, document["city"])
 }
 
 func TestExportQuery(t *testing.T) {

@@ -124,12 +124,12 @@ func dumpDatabase(database db.Database, session uint64) tea.Cmd {
 	}
 }
 
-func exportTable(database db.Database, table db.Table, session uint64) tea.Cmd {
+func exportTable(database db.Database, table db.Table, format string, session uint64) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), dumpTimeout)
 		defer cancel()
 
-		err := database.Export(ctx, table)
+		err := database.Export(ctx, table, format)
 		return exportFinishedMsg{
 			session: session,
 			err:     err,

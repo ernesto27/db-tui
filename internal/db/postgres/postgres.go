@@ -13,8 +13,10 @@ import (
 
 	"github.com/ernestoponce27/db-tui/internal/csvexport"
 	"github.com/ernestoponce27/db-tui/internal/db"
+	"github.com/ernestoponce27/db-tui/internal/jsonexport"
 	"github.com/ernestoponce27/db-tui/internal/logger"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -253,18 +255,37 @@ func (p *postgresql) Dump(ctx context.Context) error {
 	return nil
 }
 
-func (p *postgresql) Export(ctx context.Context, table db.Table) error {
+func (p *postgresql) Export(ctx context.Context, table db.Table, typeVal string) error {
 	data, err := p.getRows(ctx, table, nil)
 	if err != nil {
 		return err
 	}
 
-	filename := db.TimestampedFilename(db.SafeFilename(table.Name), "csv")
-	if err := csvexport.Write(filename, data.Columns, data.Rows); err != nil {
-		return fmt.Errorf("write CSV export: %w", err)
+	switch typeVal {
+	case db.ExportTypeCSV:
+		filename := db.TimestampedFilename(db.SafeFilename(table.Name), db.ExportTypeCSV)
+		if err := csvexport.Write(filename, data.Columns, data.Rows); err != nil {
+			return fmt.Errorf("write CSV export: %w", err)
+		}
+	case db.ExportTypeJSON:
+		filename := db.TimestampedFilename(db.SafeFilename(table.Name), db.ExportTypeJSON)
+		normalizeJSONValues(data.Rows)
+		if err := jsonexport.Write(filename, table.Name, data.Columns, data.Rows); err != nil {
+			return fmt.Errorf("write JSON export: %w", err)
+		}
 	}
 
 	return nil
+}
+
+func normalizeJSONValues(rows [][]any) {
+	for _, row := range rows {
+		for index, value := range row {
+			if infinity, ok := value.(pgtype.InfinityModifier); ok {
+				row[index] = infinity.String()
+			}
+		}
+	}
 }
 
 // ExportQuery re-runs a SELECT query in a read-only transaction and writes all rows to CSV.

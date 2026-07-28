@@ -2,6 +2,7 @@ package postgres_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -151,7 +152,36 @@ func TestExport(t *testing.T) {
 	}
 	t.Cleanup(database.Close)
 
-	assert.NoError(t, database.Export(ctx, db.Table{Name: "Album"}))
+	assert.NoError(t, database.Export(ctx, db.Table{Name: "Album"}, db.ExportTypeCSV))
+}
+
+func TestExportJSON(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	t.Chdir(t.TempDir())
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	assert.NoError(t, database.Export(ctx, db.Table{Name: "Album"}, db.ExportTypeJSON))
+
+	exportFiles, err := filepath.Glob("Album_*.json")
+	if !assert.NoError(t, err, "find generated JSON export") || !assert.Len(t, exportFiles, 1) {
+		return
+	}
+
+	contents, err := os.ReadFile(exportFiles[0])
+	if !assert.NoError(t, err, "read generated JSON export") {
+		return
+	}
+	var document map[string][]map[string]any
+	if !assert.NoError(t, json.Unmarshal(contents, &document)) {
+		return
+	}
+	assert.NotEmpty(t, document["Album"])
 }
 
 func TestExportQuery(t *testing.T) {

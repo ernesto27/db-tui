@@ -602,11 +602,22 @@ func (m *Model) updateExportModal(msg tea.Msg) tea.Cmd {
 	}
 
 	switch m.exportModal.state {
+	case exportSelecting:
+		switch keyMsg.String() {
+		case "up", "k":
+			m.exportModal.format = db.ExportTypeCSV
+		case "down", "j":
+			m.exportModal.format = db.ExportTypeJSON
+		case "enter":
+			m.exportModal.state = exportConfirming
+		case "esc":
+			m.exportModal = nil
+		}
 	case exportConfirming:
 		switch keyMsg.String() {
 		case "enter":
 			m.exportModal.state = exportRunning
-			command := exportTable(m.database, db.Table{Name: m.exportModal.tableName}, m.session)
+			command := exportTable(m.database, db.Table{Name: m.exportModal.tableName}, m.exportModal.format, m.session)
 			if m.exportModal.source == exportQuerySource {
 				command = exportQuery(m.database, m.exportModal.query, m.session)
 			}

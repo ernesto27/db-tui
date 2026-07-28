@@ -44,6 +44,6 @@ func defaultKeyMap() keyMap {
 		home:          key.NewBinding(key.WithKeys("home"), key.WithHelp("home", "first table")),
 		end:           key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "last table")),
 		dump:          key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "dump database")),
-		export:        key.NewBinding(key.WithKeys("ctrl+e"), key.WithHelp("ctrl+e", "export CSV")),
+		export:        key.NewBinding(key.WithKeys("ctrl+e"), key.WithHelp("ctrl+e", "export")),
 	}
 }

@@ -59,6 +59,10 @@ func ValidateSelectQuery(query string) error {
 const (
 	EnginePostgreSQL = "postgres"
 	EngineMySQL      = "mysql"
+
+	// ExportTypeCSV identifies CSV table exports.
+	ExportTypeCSV  = "csv"
+	ExportTypeJSON = "json"
 )
 
 // Table identifies a table available in a database session.
@@ -103,7 +107,8 @@ type Database interface {
 	// Execute runs SQL and returns its first rows and command status.
 	Execute(ctx context.Context, sql string) (QueryResult, error)
 	Dump(ctx context.Context) error
-	Export(ctx context.Context, table Table) error
+	// Export writes all table rows using typeVal as the export format.
+	Export(ctx context.Context, table Table, typeVal string) error
 	ExportQuery(ctx context.Context, sql string) error
 	Close()
 }

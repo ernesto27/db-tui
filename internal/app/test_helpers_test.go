@@ -44,6 +44,7 @@ type fakeDatabase struct {
 	dumpDeadline        bool
 	exportCalls         int
 	exportTable         db.Table
+	exportType          string
 	exportDeadline      bool
 	exportQueryCalls    int
 	exportedQuery       string
@@ -96,9 +97,10 @@ func (f *fakeDatabase) Dump(ctx context.Context) error {
 	return f.dumpErr
 }
 
-func (f *fakeDatabase) Export(ctx context.Context, table db.Table) error {
+func (f *fakeDatabase) Export(ctx context.Context, table db.Table, typeVal string) error {
 	f.exportCalls++
 	f.exportTable = table
+	f.exportType = typeVal
 	_, f.exportDeadline = ctx.Deadline()
 	return f.exportErr
 }

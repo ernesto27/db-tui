@@ -4,12 +4,15 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+
+	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
 type exportModalState uint8
 
 const (
-	exportConfirming exportModalState = iota
+	exportSelecting exportModalState = iota
+	exportConfirming
 	exportRunning
 	exportSucceeded
 	exportFailed
@@ -27,18 +30,25 @@ type exportModal struct {
 	source    exportSource
 	tableName string
 	query     string
+	format    string
 	err       error
 }
 
 func newExportModal(tableName string) exportModal {
 	return exportModal{
-		state:     exportConfirming,
+		state:     exportSelecting,
 		tableName: tableName,
+		format:    db.ExportTypeCSV,
 	}
 }
 
 func newQueryExportModal(query string) exportModal {
-	return exportModal{state: exportConfirming, source: exportQuerySource, query: query}
+	return exportModal{
+		state:  exportConfirming,
+		source: exportQuerySource,
+		query:  query,
+		format: db.ExportTypeCSV,
+	}
 }
 
 func (m exportModal) isRunning() bool {
@@ -52,14 +62,24 @@ func (m exportModal) view(width int, spinner string) string {
 		lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("230")).
-			Render("CSV export"),
+			Render("Export format"),
 		"",
 	}
 
 	switch m.state {
+	case exportSelecting:
+		lines = append(lines,
+			"Export "+m.description()+" as:",
+			m.formatOption(db.ExportTypeCSV),
+			m.formatOption(db.ExportTypeJSON),
+			"",
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color("245")).
+				Render("↑/↓ or j/k choose  •  Enter continue  •  Esc cancel"),
+		)
 	case exportConfirming:
 		lines = append(lines,
-			"Export "+m.description()+" to CSV?",
+			"Export "+m.description()+" to "+m.formatName()+"?",
 			"",
 			lipgloss.NewStyle().
 				Foreground(lipgloss.Color("245")).
@@ -69,7 +89,7 @@ func (m exportModal) view(width int, spinner string) string {
 		lines = append(lines,
 			lipgloss.NewStyle().
 				Foreground(lipgloss.Color("86")).
-				Render(spinner+" Exporting "+m.description()+" to CSV…"),
+				Render(spinner+" Exporting "+m.description()+" to "+m.formatName()+"…"),
 			"",
 			lipgloss.NewStyle().
 				Foreground(lipgloss.Color("245")).
@@ -79,7 +99,7 @@ func (m exportModal) view(width int, spinner string) string {
 		lines = append(lines,
 			lipgloss.NewStyle().
 				Foreground(lipgloss.Color("86")).
-				Render("✓ CSV exported successfully"),
+				Render("✓ "+m.formatName()+" exported successfully"),
 			"",
 			lipgloss.NewStyle().
 				Foreground(lipgloss.Color("245")).
@@ -89,7 +109,7 @@ func (m exportModal) view(width int, spinner string) string {
 		lines = append(lines,
 			lipgloss.NewStyle().
 				Foreground(lipgloss.Color("203")).
-				Render("✕ CSV export failed"),
+				Render("✕ "+m.formatName()+" export failed"),
 			sanitizeText(m.err.Error()),
 			"",
 			lipgloss.NewStyle().
@@ -105,6 +125,18 @@ func (m exportModal) view(width int, spinner string) string {
 		BorderForeground(lipgloss.Color("62")).
 		Background(lipgloss.Color("235")).
 		Render(strings.Join(lines, "\n"))
+}
+
+func (m exportModal) formatOption(format string) string {
+	prefix := "  "
+	if m.format == format {
+		prefix = "› "
+	}
+	return prefix + strings.ToUpper(format)
+}
+
+func (m exportModal) formatName() string {
+	return strings.ToUpper(m.format)
 }
 
 func (m exportModal) description() string {

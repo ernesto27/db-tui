@@ -208,3 +208,23 @@ func TestExportQuery(t *testing.T) {
 	assert.Equal(t, uint64(15), message.session)
 	assert.ErrorIs(t, message.err, wantErr)
 }
+
+func TestExportTable(t *testing.T) {
+	wantErr := errors.New("export failed")
+
+	for _, format := range []string{db.ExportTypeCSV, db.ExportTypeJSON} {
+		t.Run(format, func(t *testing.T) {
+			database := &fakeDatabase{exportErr: wantErr}
+
+			message, ok := exportTable(database, db.Table{Name: "Album"}, format, 15)().(exportFinishedMsg)
+			require.True(t, ok)
+
+			assert.Equal(t, 1, database.exportCalls)
+			assert.Equal(t, db.Table{Name: "Album"}, database.exportTable)
+			assert.Equal(t, format, database.exportType)
+			assert.True(t, database.exportDeadline)
+			assert.Equal(t, uint64(15), message.session)
+			assert.ErrorIs(t, message.err, wantErr)
+		})
+	}
+}

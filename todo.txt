@@ -1,11 +1,15 @@
 [x] - option to multiple connections to postgresql
 [x] - key to remove connection
-[] - support to mysql engine
-[] - export data in csv
+[x] - support to mysql engine
+[x] - export data in csv
 [x] - section to run raw queries
 [x] - search tables
 [x] - option to dump all database file
-[] - update script sandbox for claude code
+[] - add sqlite support
+[] - export to json data
+
+
+
 
 
 # Three-release product roadmap
