@@ -59,6 +59,7 @@ func ValidateSelectQuery(query string) error {
 const (
 	EnginePostgreSQL = "postgres"
 	EngineMySQL      = "mysql"
+	EngineSQLite     = "sqlite"
 
 	// ExportTypeCSV identifies CSV table exports.
 	ExportTypeCSV  = "csv"

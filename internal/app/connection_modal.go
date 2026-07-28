@@ -26,7 +26,7 @@ const (
 
 const connectionModalInputWidth = 42
 
-var connectionEngines = []string{db.EnginePostgreSQL, db.EngineMySQL}
+var connectionEngines = []string{db.EnginePostgreSQL, db.EngineMySQL, db.EngineSQLite}
 
 type connectionModal struct {
 	inputs      [connectionInputCount]textinput.Model
@@ -114,7 +114,15 @@ func (m *connectionModal) focus(delta int) tea.Cmd {
 	if m.focused != engineInput {
 		m.inputs[m.focused].Blur()
 	}
-	m.focused = connectionInput((int(m.focused) + delta + int(connectionInputCount)) % int(connectionInputCount))
+	inputs := connectionInputsForEngine(m.engine())
+	current := 0
+	for index, input := range inputs {
+		if input == m.focused {
+			current = index
+			break
+		}
+	}
+	m.focused = inputs[(current+delta+len(inputs))%len(inputs)]
 	if m.focused == engineInput {
 		return nil
 	}
@@ -128,6 +136,7 @@ func (m connectionModal) engine() string {
 func (m *connectionModal) selectEngine(delta int) {
 	previousEngine := m.engine()
 	m.engineIndex = (m.engineIndex + delta + len(connectionEngines)) % len(connectionEngines)
+	m.setDSNPlaceholder()
 	previousPort := defaultPortForEngine(previousEngine)
 	if port := m.inputs[portInput].Value(); port == "" || port == previousPort {
 		m.inputs[portInput].SetValue(defaultPortForEngine(m.engine()))
@@ -141,19 +150,46 @@ func (m *connectionModal) setEngine(engine string) {
 			break
 		}
 	}
+	m.setDSNPlaceholder()
 	if m.inputs[portInput].Value() == "" {
 		m.inputs[portInput].SetValue(defaultPortForEngine(m.engine()))
 	}
+}
+
+func (m *connectionModal) setDSNPlaceholder() {
+	if m.engine() == db.EngineSQLite {
+		m.inputs[dsnInput].Placeholder = "path/to/database.db"
+		return
+	}
+	m.inputs[dsnInput].Placeholder = "engine-specific DSN"
 }
 
 func defaultPortForEngine(engine string) string {
 	if engine == db.EngineMySQL {
 		return "3306"
 	}
+	if engine == db.EngineSQLite {
+		return ""
+	}
 	return "5432"
 }
 
+func connectionInputsForEngine(engine string) []connectionInput {
+	if engine == db.EngineSQLite {
+		return []connectionInput{engineInput, dsnInput}
+	}
+	return []connectionInput{engineInput, hostInput, databaseNameInput, portInput, usernameInput, passwordInput, dsnInput}
+}
+
 func (m connectionModal) connectionSettings() (ConnectionSettings, error) {
+	if m.engine() == db.EngineSQLite {
+		settings := ConnectionSettings{
+			Engine: db.EngineSQLite,
+			DSN:    strings.TrimSpace(m.inputs[dsnInput].Value()),
+		}
+		_, err := settings.connectionDSN()
+		return settings, err
+	}
 	if dsn := strings.TrimSpace(m.inputs[dsnInput].Value()); dsn != "" {
 		settings := ConnectionSettings{
 			Engine: m.engine(),
@@ -196,7 +232,7 @@ func (m connectionModal) view(width int) string {
 		labelStyle.Render("Engine"),
 		engineStyle.Render("◀ "+engineDisplayName(m.engine())+" ▶"),
 	)
-	for _, field := range []struct {
+	fields := []struct {
 		label string
 		input connectionInput
 	}{
@@ -206,7 +242,14 @@ func (m connectionModal) view(width int) string {
 		{"Username", usernameInput},
 		{"Password", passwordInput},
 		{"DSN (optional)", dsnInput},
-	} {
+	}
+	if m.engine() == db.EngineSQLite {
+		fields = []struct {
+			label string
+			input connectionInput
+		}{{"Database file", dsnInput}}
+	}
+	for _, field := range fields {
 		lines = append(lines, labelStyle.Render(field.label), fieldStyle.Render(m.inputs[field.input].View()))
 	}
 	if m.errorText != "" {

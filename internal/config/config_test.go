@@ -123,6 +123,24 @@ func TestConfigSave(t *testing.T) {
 	}`, string(contents))
 }
 
+func TestConfigPersistsSQLiteDatabasePathInExistingDSNField(t *testing.T) {
+	path := useTemporaryHome(t)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), configDirectoryMode))
+
+	config := Config{Connections: []Connection{{
+		Name:   "Employee",
+		Engine: "sqlite",
+		Settings: Settings{
+			DSN: "docker/sqlite/employee.db",
+		},
+	}}}
+
+	require.NoError(t, config.Save())
+	contents, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"connections":[{"name":"Employee","engine":"sqlite","settings":{"hostname":"","database":"","username":"","password":"","port":"","dsn":"docker/sqlite/employee.db"},"status":false}]}`, string(contents))
+}
+
 func useTemporaryHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()

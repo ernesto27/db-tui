@@ -76,4 +76,27 @@ func TestConnectionModalSelectsDatabaseEngine(t *testing.T) {
 	assert.Equal(t, db.EngineMySQL, updated.engine())
 	assert.Equal(t, "3306", updated.inputs[portInput].Value())
 	assert.Contains(t, updated.view(80), "MySQL")
+
+	updated, command = updated.update(keyPress(tea.KeyRight, "", 0))
+
+	assert.Nil(t, command)
+	assert.Equal(t, "sqlite", updated.engine())
+	view := updated.view(80)
+	assert.Contains(t, view, "SQLite")
+	assert.Contains(t, view, "Database file")
+	assert.Equal(t, "path/to/database.db", updated.inputs[dsnInput].Placeholder)
+	assert.NotContains(t, view, "Host")
+	assert.NotContains(t, view, "Username")
+}
+
+func TestSQLiteConnectionSettingsRoundTripThroughDSN(t *testing.T) {
+	settings := ConnectionSettings{Engine: "sqlite", DSN: "/data/reporting.db"}
+
+	connection := newConfigConnection(settings)
+	restored := connectionSettingsFromConfig(connection)
+
+	assert.Equal(t, "sqlite", connection.Engine)
+	assert.Regexp(t, `^reporting\.db-\d+$`, connection.Name)
+	assert.Equal(t, "/data/reporting.db", connection.Settings.DSN)
+	assert.Equal(t, settings, restored)
 }

@@ -1,12 +1,12 @@
 # db-tui
 
-`db-tui` is a keyboard-driven terminal database client written in Go with Bubble Tea. It supports PostgreSQL and MySQL for browsing database objects, writing SQL, inspecting bounded query results, and creating database dumps.
+`db-tui` is a keyboard-driven terminal database client written in Go with Bubble Tea. It supports PostgreSQL, MySQL, and SQLite for browsing database objects, writing SQL, inspecting bounded query results, and creating database dumps.
 
 ## Requirements
 
 - Go 1.26 or newer
-- A PostgreSQL or MySQL server
-- `pg_dump` or `mysqldump` when using the dump command
+- A PostgreSQL or MySQL server, or a local SQLite database file
+- `pg_dump`, `mysqldump`, or `sqlite3` when using the corresponding dump command
 
 ## Development
 
@@ -15,6 +15,10 @@ Run the current test suite:
 ```sh
 go test ./...
 ```
+
+SQLite adapter tests use the checked-in Employee fixture at
+`docker/sqlite/employee.db`. Tests open it read-only; no database is
+downloaded or modified at test time.
 
 ## Application version
 
@@ -44,7 +48,7 @@ The Chinook dump is in `docker/postgres/init/001_chinook.sql`. PostgreSQL runs f
 
 ## Database connections
 
-On startup, db-tui creates `$HOME/.config/db-tui/config.json` when necessary. Press `Ctrl+N` to create a connection or `Ctrl+L` to open saved connections. Select PostgreSQL or MySQL with Left/Right while the Engine field is focused, then either enter the individual connection fields or an engine-specific DSN.
+On startup, db-tui creates `$HOME/.config/db-tui/config.json` when necessary. Press `Ctrl+N` to create a connection or `Ctrl+L` to open saved connections. Select PostgreSQL, MySQL, or SQLite with Left/Right while the Engine field is focused. Server engines accept the individual connection fields or an engine-specific DSN; SQLite accepts a local database-file path only, stored in the existing `dsn` setting.
 
 PostgreSQL accepts URL DSNs:
 
@@ -58,6 +62,17 @@ MySQL accepts both the native `go-sql-driver/mysql` form and URL form:
 user:password@tcp(host:3306)/database?parseTime=true
 mysql://user:password@host:3306/database?parseTime=true
 ```
+
+SQLite uses the pure-Go `modernc.org/sqlite` driver, so connecting does not
+require CGO or a system SQLite library. Enter a local path such as:
+
+```text
+docker/sqlite/employee.db
+/data/reporting.db
+```
+
+The `sqlite3` executable is required only when using the SQLite database dump
+command; browsing, queries, DDL, and CSV/JSON exports do not require it.
 
 When a DSN is provided it takes precedence over the individual fields. The app tests the connection before saving it and immediately switches to the successful connection. Connection failures stay in the modal and preserve the entered values.
 

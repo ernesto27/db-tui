@@ -43,6 +43,9 @@ func (s ConnectionSettings) connectionDSN() (string, error) {
 	if dsn := strings.TrimSpace(s.DSN); dsn != "" {
 		return dsn, nil
 	}
+	if engine == db.EngineSQLite {
+		return "", errors.New("SQLite database file is required")
+	}
 
 	host := strings.TrimSpace(s.Host)
 	databaseName := strings.TrimSpace(s.DatabaseName)
@@ -82,6 +85,8 @@ func (s ConnectionSettings) normalizedEngine() (string, error) {
 		return db.EnginePostgreSQL, nil
 	case db.EngineMySQL:
 		return db.EngineMySQL, nil
+	case db.EngineSQLite:
+		return db.EngineSQLite, nil
 	default:
 		return "", fmt.Errorf("unsupported database engine %q", s.Engine)
 	}

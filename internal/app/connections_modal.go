@@ -1,6 +1,8 @@
 package app
 
 import (
+	"math/rand/v2"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -8,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/ernestoponce27/db-tui/internal/config"
+	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
 type connectionsModal struct {
@@ -81,6 +84,9 @@ func newConfigConnection(settings ConnectionSettings) config.Connection {
 		engine = strings.ToLower(strings.TrimSpace(settings.Engine))
 	}
 	name := strings.TrimSpace(settings.DatabaseName)
+	if name == "" && engine == db.EngineSQLite && strings.TrimSpace(settings.DSN) != "" {
+		name = filepath.Base(strings.TrimSpace(settings.DSN)) + "-" + strconv.Itoa(rand.IntN(1_000_000))
+	}
 	if name == "" {
 		name = engineDisplayName(engine) + " connection"
 	}

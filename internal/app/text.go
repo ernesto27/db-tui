@@ -12,8 +12,8 @@ func formatCell(value any) string {
 	if value == nil {
 		return "NULL"
 	}
-	if value, ok := value.([]byte); ok {
-		return sanitizeText(string(value))
+	if _, ok := value.([]byte); ok {
+		return "BINARY DATA"
 	}
 	return sanitizeText(fmt.Sprint(value))
 }

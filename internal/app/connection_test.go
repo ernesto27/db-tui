@@ -133,9 +133,14 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 			want: "postgres://db_tui@[2001:db8::1]:5432/chinook",
 		},
 		{
-			name:     "unknown engine",
-			settings: ConnectionSettings{Engine: "sqlite", DSN: "database.db"},
-			wantErr:  `unsupported database engine "sqlite"`,
+			name:     "SQLite database file",
+			settings: ConnectionSettings{Engine: "sqlite", DSN: " ./database.db "},
+			want:     "./database.db",
+		},
+		{
+			name:     "SQLite requires database file",
+			settings: ConnectionSettings{Engine: "sqlite"},
+			wantErr:  "SQLite database file is required",
 		},
 		{
 			name:     "blank engine",
@@ -209,6 +214,15 @@ func TestConnectConnection(t *testing.T) {
 			wantCalls:  1,
 			wantEngine: db.EnginePostgreSQL,
 			wantDSN:    "postgres://db_tui@127.0.0.1:5433/chinook",
+		},
+		{
+			name:       "SQLite passes database file to connector",
+			settings:   ConnectionSettings{Engine: "sqlite", DSN: "docker/sqlite/employee.db"},
+			attempt:    6,
+			database:   database,
+			wantCalls:  1,
+			wantEngine: "sqlite",
+			wantDSN:    "docker/sqlite/employee.db",
 		},
 	}
 

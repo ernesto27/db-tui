@@ -15,7 +15,7 @@ func TestFormatCell(t *testing.T) {
 		want  string
 	}{
 		{name: "SQL NULL", value: nil, want: "NULL"},
-		{name: "byte slice", value: []byte("hello"), want: "hello"},
+		{name: "binary data", value: []byte("hello"), want: "BINARY DATA"},
 		{name: "number", value: 42, want: "42"},
 		{name: "control character", value: "safe\x1b[31m", want: "safe�[31m"},
 	}
