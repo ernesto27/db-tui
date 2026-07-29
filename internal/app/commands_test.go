@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -177,6 +178,7 @@ func TestExecuteQuery(t *testing.T) {
 			assert.Equal(t, test.wantResult, message.result)
 			assert.Equal(t, test.session, message.session)
 			assert.Equal(t, test.request, message.request)
+			assert.GreaterOrEqual(t, message.elapsed, time.Duration(0))
 			assert.ErrorIs(t, message.err, test.wantErr)
 		})
 	}

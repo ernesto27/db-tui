@@ -1,5 +1,9 @@
 # Glossary
 
+## Client-observed elapsed time
+
+The duration measured by the raw-query command from immediately before `db.Database.Execute` until it returns. It includes driver work, network transfer where applicable, and bounded result decoding; it is not a database-server-only execution metric. The raw-query UI labels this value `Execution time`.
+
 ## JSON table export
 
 A complete-data export of the selected table as one JSON document. The selected table name is the sole top-level key and its value is an array of objects keyed by database column name. SQL `NULL` is encoded as JSON `null`.

@@ -10,9 +10,10 @@ import (
 )
 
 const (
-	tableLoadTimeout = 5 * time.Second
-	dumpTimeout      = 30 * time.Minute
-	rowPageSize      = 100
+	tableLoadTimeout      = 5 * time.Second
+	dumpTimeout           = 30 * time.Minute
+	queryExecutionTimeout = 20 * time.Minute
+	rowPageSize           = 100
 )
 
 type tablesLoadedMsg struct {
@@ -43,6 +44,7 @@ type queryFinishedMsg struct {
 	session uint64
 	request uint64
 	err     error
+	elapsed time.Duration
 }
 
 func loadTables(database db.Database, session uint64) tea.Cmd {
@@ -93,11 +95,18 @@ func loadTableDDL(database db.Database, table db.Table, session, request uint64)
 
 func executeQuery(database db.Database, sql string, session, request uint64) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), queryExecutionTimeout)
 		defer cancel()
 
+		started := time.Now()
 		result, err := database.Execute(ctx, sql)
-		return queryFinishedMsg{result: result, session: session, request: request, err: err}
+		return queryFinishedMsg{
+			result:  result,
+			session: session,
+			request: request,
+			err:     err,
+			elapsed: time.Since(started),
+		}
 	}
 }
 

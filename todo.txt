@@ -7,7 +7,9 @@
 [x] - option to dump all database file
 [x] - add sqlite support
 [x] - export to json data
-
+[] - when remove a table in raw query do a refresh table[
+[] - in raw query show execution time, rows affected
+[] - when show ddl i want to be able to copy
 
 
 

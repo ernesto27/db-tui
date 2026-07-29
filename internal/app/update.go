@@ -113,7 +113,7 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		if msg.session != m.session || msg.request != m.query.request {
 			return nil, true
 		}
-		m.query.finishExecute(msg.result, msg.err)
+		m.query.finishExecute(msg.result, msg.elapsed, msg.err)
 		return nil, true
 	case tea.WindowSizeMsg:
 		m.layout = newAppLayout(msg.Width, msg.Height)
@@ -593,7 +593,7 @@ func (m *Model) startRowLoad(offset, selectedRow int) tea.Cmd {
 }
 
 func (m *Model) startQuery() tea.Cmd {
-	if m.database == nil || strings.TrimSpace(m.query.editor.Value()) == "" {
+	if m.database == nil || m.query.loading || strings.TrimSpace(m.query.editor.Value()) == "" {
 		return nil
 	}
 	request := m.query.beginExecute(m.query.editor.Value())

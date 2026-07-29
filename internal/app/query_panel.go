@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
@@ -19,14 +20,15 @@ const (
 )
 
 type queryModel struct {
-	editor          textarea.Model
-	result          db.QueryResult
-	loading         bool
-	err             error
-	request         uint64
-	lastExecutedSQL string
-	viewport        int
-	resultsFocused  bool
+	editor            textarea.Model
+	result            db.QueryResult
+	loading           bool
+	err               error
+	request           uint64
+	lastExecutedSQL   string
+	viewport          int
+	resultsFocused    bool
+	executionDuration time.Duration
 }
 
 func newQueryModel(layout appLayout) queryModel {
@@ -60,14 +62,16 @@ func (m *queryModel) beginExecute(sql string) uint64 {
 	m.resultsFocused = false
 	m.lastExecutedSQL = sql
 	m.request++
+	m.executionDuration = 0
 	return m.request
 }
 
-func (m *queryModel) finishExecute(result db.QueryResult, err error) {
+func (m *queryModel) finishExecute(result db.QueryResult, duration time.Duration, err error) {
 	m.loading = false
 	m.result = result
 	m.err = err
 	m.viewport = 0
+	m.executionDuration = duration
 	m.resultsFocused = len(result.Rows) > 0
 	if m.resultsFocused {
 		m.editor.Blur()
@@ -96,6 +100,10 @@ func (m *queryModel) scrollResults(delta int) {
 	m.viewport = min(max(m.viewport+delta, 0), len(m.result.Rows)-1)
 }
 
+func (m queryModel) executionTimeText() string {
+	return "Execution time: " + m.executionDuration.String()
+}
+
 func (m queryModel) view(layout appLayout, focused, connected bool, spinner string) string {
 	headingText := "RAW QUERY"
 	if m.resultsFocused {
@@ -114,13 +122,17 @@ func (m queryModel) resultView(layout appLayout, connected bool, spinner string)
 	case m.loading:
 		return spinner + " Query executing…"
 	case m.err != nil:
-		return "Query failed:\n" + sanitizeText(m.err.Error())
+		return "Query failed  •  " + m.executionTimeText() +
+			":\n" + sanitizeText(m.err.Error())
 	case len(m.result.Columns) == 0 && m.result.CommandTag != "":
-		return "Command completed: " + sanitizeText(m.result.CommandTag)
+		return "Command completed: " + sanitizeText(m.result.CommandTag) +
+			"  •  " + m.executionTimeText()
 	case len(m.result.Columns) == 0:
 		return "Write SQL above, then press Ctrl+P to execute it."
 	case len(m.result.Rows) == 0:
-		return "Query returned no rows.  •  " + sanitizeText(m.result.CommandTag)
+		return "Query returned no rows.  •  " +
+			sanitizeText(m.result.CommandTag) +
+			"  •  " + m.executionTimeText()
 	}
 
 	contentWidth := queryContentWidth(layout)
@@ -133,7 +145,15 @@ func (m queryModel) resultView(layout appLayout, connected bool, spinner string)
 	resultHeight := m.resultHeight(layout)
 	lastRow := gridModel.visibleDataEnd(contentWidth, resultHeight, firstColumn, lastColumn, m.viewport)
 	grid := gridModel.dataGrid(contentWidth, firstColumn, lastColumn, m.viewport, lastRow)
-	title := fmt.Sprintf("Results  •  rows %d–%d/%d  •  %s", m.viewport+1, lastRow, len(m.result.Rows), sanitizeText(m.result.CommandTag))
+	title := fmt.Sprintf(
+		"Results  •  rows %d–%d/%d  •  %s  •  %s",
+		m.viewport+1,
+		lastRow,
+		len(m.result.Rows),
+		sanitizeText(m.result.CommandTag),
+		m.executionTimeText(),
+	)
+	title = truncateLabel(title, contentWidth)
 	return strings.Join([]string{
 		lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(title),
 		grid.String(),

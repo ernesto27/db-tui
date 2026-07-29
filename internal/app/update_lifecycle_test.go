@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
@@ -192,6 +193,7 @@ func TestUpdateIgnoresStaleQueryResult(t *testing.T) {
 	model.session = 5
 	model.query.request = 11
 	model.query.loading = true
+	model.query.executionDuration = 100 * time.Millisecond
 
 	tests := []struct {
 		name    string
@@ -213,6 +215,7 @@ func TestUpdateIgnoresStaleQueryResult(t *testing.T) {
 			assert.Nil(t, command)
 			assert.True(t, updated.query.loading)
 			assert.Empty(t, updated.query.result.CommandTag)
+			assert.Equal(t, 100*time.Millisecond, updated.query.executionDuration)
 		})
 	}
 }
@@ -232,11 +235,13 @@ func TestUpdateAppliesMatchingQueryResult(t *testing.T) {
 		result:  result,
 		session: 5,
 		request: 11,
+		elapsed: time.Second,
 	})
 
 	assert.Nil(t, command)
 	assert.False(t, updated.query.loading)
 	assert.Equal(t, result, updated.query.result)
+	assert.Equal(t, time.Second, updated.query.executionDuration)
 	assert.True(t, updated.query.resultsFocused)
 }
 
@@ -250,12 +255,14 @@ func TestUpdateAppliesMatchingQueryError(t *testing.T) {
 	updated, command := updateModel(t, model, queryFinishedMsg{
 		session: 5,
 		request: 11,
+		elapsed: time.Second,
 		err:     wantErr,
 	})
 
 	assert.Nil(t, command)
 	assert.False(t, updated.query.loading)
 	assert.ErrorIs(t, updated.query.err, wantErr)
+	assert.Equal(t, time.Second, updated.query.executionDuration)
 }
 
 func TestUpdateClosesDatabaseFromStaleConnectionAttempt(t *testing.T) {
