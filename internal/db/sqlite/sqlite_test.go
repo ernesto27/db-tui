@@ -43,6 +43,8 @@ func TestConnect(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, test.wantName, database.Name())
+			assert.Equal(t, db.EngineSQLite, database.Engine())
+			assert.Empty(t, database.Host())
 			database.Close()
 		})
 	}

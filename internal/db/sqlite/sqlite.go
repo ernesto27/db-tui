@@ -73,6 +73,16 @@ func (s *sqliteDatabase) Name() string {
 	return filepath.Base(s.path)
 }
 
+// Engine returns the SQLite database engine identifier.
+func (s *sqliteDatabase) Engine() string {
+	return db.EngineSQLite
+}
+
+// Host returns an empty string because SQLite databases are local files.
+func (s *sqliteDatabase) Host() string {
+	return ""
+}
+
 // ListTables returns non-internal SQLite tables in alphabetical order.
 func (s *sqliteDatabase) ListTables(ctx context.Context) ([]db.Table, error) {
 	s.logger.Log(listTablesSQL)

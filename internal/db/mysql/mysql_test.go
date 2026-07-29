@@ -282,6 +282,8 @@ func connectWorld(t *testing.T) db.Database {
 
 	database, err := Connect(ctx, worldDSN)
 	require.NoError(t, err)
+	assert.Equal(t, db.EngineMySQL, database.Engine())
+	assert.Equal(t, "127.0.0.1", database.Host())
 	t.Cleanup(func() {
 		database.Close()
 	})

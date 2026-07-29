@@ -100,6 +100,10 @@ type QueryResult struct {
 type Database interface {
 	// Name returns the connected database name for display.
 	Name() string
+	// Engine returns the connected database engine identifier.
+	Engine() string
+	// Host returns the configured network host, or an empty string for local databases.
+	Host() string
 	ListTables(ctx context.Context) ([]Table, error)
 	// GetRows returns an unordered page of rows from table.
 	GetRows(ctx context.Context, table Table, page PageRequest) (RowPage, error)

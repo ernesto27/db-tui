@@ -127,6 +127,20 @@ func (m *mysqlDatabase) Name() string {
 	return m.config.DBName
 }
 
+// Engine returns the MySQL database engine identifier.
+func (m *mysqlDatabase) Engine() string {
+	return db.EngineMySQL
+}
+
+// Host returns the configured MySQL network host.
+func (m *mysqlDatabase) Host() string {
+	host, _, err := net.SplitHostPort(m.config.Addr)
+	if err != nil {
+		return ""
+	}
+	return host
+}
+
 // ListTables returns the base tables in the connected MySQL database.
 func (m *mysqlDatabase) ListTables(ctx context.Context) ([]db.Table, error) {
 	m.logger.Log(listTablesSQL)

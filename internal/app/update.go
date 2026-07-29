@@ -246,8 +246,6 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.database.Close()
 		}
 		m.database = msg.database
-		m.databaseName = msg.database.Name()
-		m.databaseEngine = msg.settings.Engine
 		m.savedConnection = msg.settings
 		m.tableLoadErr = nil
 		m.navigator.reset()
@@ -305,8 +303,6 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.database.Close()
 				m.database = nil
 			}
-			m.databaseName = ""
-			m.databaseEngine = ""
 			m.savedConnection = ConnectionSettings{}
 			m.activeConnectionIndex = -1
 			m.loading = false

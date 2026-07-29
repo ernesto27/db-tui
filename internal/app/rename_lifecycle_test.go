@@ -130,11 +130,9 @@ func TestRenameDoesNotCloseOrReplaceDatabase(t *testing.T) {
 			{Name: "MyDB", Engine: "postgres"},
 		},
 	}
-	fakeDB := &fakeDatabase{name: "chinook"}
+	fakeDB := &fakeDatabase{name: "chinook", engine: db.EnginePostgreSQL}
 	model := New(cfg, ConnectionSettings{}, nil)
 	model.database = fakeDB
-	model.databaseName = "chinook"
-	model.databaseEngine = "postgres"
 	model.activeConnectionIndex = 0
 	model.session = 5
 	model.navigator.tables = []db.Table{{Name: "Album"}}
@@ -160,8 +158,8 @@ func TestRenameDoesNotCloseOrReplaceDatabase(t *testing.T) {
 	// Database session unchanged.
 	assert.Equal(t, 0, fakeDB.closeCalls)
 	assert.NotNil(t, model.database)
-	assert.Equal(t, "chinook", model.databaseName)
-	assert.Equal(t, "postgres", model.databaseEngine)
+	assert.Equal(t, "chinook", model.database.Name())
+	assert.Equal(t, db.EnginePostgreSQL, model.database.Engine())
 	assert.Equal(t, uint64(5), model.session)
 	assert.Equal(t, []db.Table{{Name: "Album"}}, model.navigator.tables)
 }
@@ -181,11 +179,9 @@ func TestRenameUpdatedNameVisibleInConnectionsModal(t *testing.T) {
 			},
 		},
 	}
-	fakeDB := &fakeDatabase{name: "chinook"}
+	fakeDB := &fakeDatabase{name: "chinook", engine: db.EnginePostgreSQL}
 	model := New(cfg, ConnectionSettings{}, nil)
 	model.database = fakeDB
-	model.databaseName = "chinook"
-	model.databaseEngine = "postgres"
 	model.activeConnectionIndex = 0
 	model.session = 5
 	model.navigator.tables = []db.Table{{Name: "Album"}}
@@ -227,7 +223,7 @@ func TestRenameUpdatedNameVisibleInConnectionsModal(t *testing.T) {
 
 	// Database session unchanged.
 	assert.NotNil(t, model.database)
-	assert.Equal(t, "chinook", model.databaseName)
+	assert.Equal(t, "chinook", model.database.Name())
 	assert.Equal(t, uint64(5), model.session)
 }
 

@@ -23,13 +23,16 @@ func (m Model) View() tea.View {
 func (m Model) baseView() tea.View {
 	appVersion := version.Version()
 	headerTitle := fmt.Sprintf("db-tui v%s", appVersion)
-	if m.databaseName != "" {
-		headerTitle = fmt.Sprintf(
-			"db-tui v%s  /  %s  /  %s",
-			appVersion,
-			sanitizeText(m.databaseName),
-			engineDisplayName(m.databaseEngine),
-		)
+	if databaseName := m.connectedDatabaseName(); databaseName != "" {
+		segments := []string{
+			headerTitle,
+			sanitizeText(databaseName),
+			engineDisplayName(m.database.Engine()),
+		}
+		if host := m.database.Host(); host != "" {
+			segments = append(segments, host)
+		}
+		headerTitle = strings.Join(segments, "  /  ")
 	}
 	header := lipgloss.NewStyle().Width(m.layout.width).Padding(0, 1).Bold(true).
 		Foreground(lipgloss.Color("230")).Background(lipgloss.Color("62")).
@@ -67,10 +70,17 @@ func engineDisplayName(engine string) string {
 
 func (m Model) navigatorStatus() navigatorStatus {
 	return navigatorStatus{
-		databaseName: m.databaseName,
+		databaseName: m.connectedDatabaseName(),
 		loading:      m.loading,
 		tableLoadErr: m.tableLoadErr,
 	}
+}
+
+func (m Model) connectedDatabaseName() string {
+	if m.database == nil {
+		return ""
+	}
+	return m.database.Name()
 }
 
 func (m Model) dataStatus() dataStatus {

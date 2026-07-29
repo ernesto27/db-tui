@@ -33,8 +33,6 @@ const (
 // Model is the root Bubble Tea application model.
 type Model struct {
 	database               db.Database
-	databaseName           string
-	databaseEngine         string
 	savedConnection        ConnectionSettings
 	activeConnectionIndex  int
 	pendingConnectionIndex int

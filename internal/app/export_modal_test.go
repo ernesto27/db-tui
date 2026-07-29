@@ -15,9 +15,8 @@ func TestTableExportFormatPickerFlow(t *testing.T) {
 	for _, engine := range []string{db.EnginePostgreSQL, db.EngineMySQL} {
 		t.Run(engine, func(t *testing.T) {
 			model := New(config.Config{}, ConnectionSettings{}, nil)
-			database := &fakeDatabase{name: "chinook"}
+			database := &fakeDatabase{name: "chinook", engine: engine}
 			model.database = database
-			model.databaseEngine = engine
 			model.navigator.tables = []db.Table{{Name: "Album"}}
 
 			updated, command := updateModel(t, model, keyPress('e', "", tea.ModCtrl))

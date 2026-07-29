@@ -284,11 +284,10 @@ func TestUpdateClosesDatabaseFromStaleConnectionAttempt(t *testing.T) {
 }
 
 func TestUpdateReplacesActiveDatabaseAfterCurrentConnectionAttempt(t *testing.T) {
-	oldDatabase := &fakeDatabase{name: "old"}
-	newDatabase := &fakeDatabase{name: "chinook"}
+	oldDatabase := &fakeDatabase{name: "old", engine: db.EnginePostgreSQL}
+	newDatabase := &fakeDatabase{name: "chinook", engine: db.EnginePostgreSQL}
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.database = oldDatabase
-	model.databaseName = "old"
 	model.session = 10
 	model.navigator.tables = []db.Table{{Name: "Old"}}
 	model.data.page = db.RowPage{Rows: [][]any{{"old"}}}
@@ -309,8 +308,8 @@ func TestUpdateReplacesActiveDatabaseAfterCurrentConnectionAttempt(t *testing.T)
 	assert.Equal(t, 1, oldDatabase.closeCalls)
 	assert.Zero(t, newDatabase.closeCalls)
 	assert.Same(t, newDatabase, updated.database)
-	assert.Equal(t, "chinook", updated.databaseName)
-	assert.Equal(t, settings.Engine, updated.databaseEngine)
+	assert.Equal(t, "chinook", updated.database.Name())
+	assert.Equal(t, db.EnginePostgreSQL, updated.database.Engine())
 	assert.Equal(t, settings, updated.savedConnection)
 	assert.Equal(t, uint64(11), updated.session)
 	assert.Nil(t, updated.modal)

@@ -43,7 +43,9 @@ func TestMain(m *testing.M) {
 }
 
 type fakeDatabase struct {
-	name string
+	name   string
+	engine string
+	host   string
 
 	tables    []db.Table
 	tablesErr error
@@ -86,6 +88,14 @@ type fakeDatabase struct {
 
 func (f *fakeDatabase) Name() string {
 	return f.name
+}
+
+func (f *fakeDatabase) Engine() string {
+	return f.engine
+}
+
+func (f *fakeDatabase) Host() string {
+	return f.host
 }
 
 func (f *fakeDatabase) ListTables(ctx context.Context) ([]db.Table, error) {

@@ -20,12 +20,21 @@ func TestBaseViewShowsVersion(t *testing.T) {
 
 func TestBaseViewShowsConnectedEngine(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
-	model.databaseName = "chinook"
-	model.databaseEngine = db.EngineMySQL
+	model.database = &fakeDatabase{name: "chinook", engine: db.EngineMySQL}
 
 	view := model.baseView()
 
 	assert.Contains(t, view.Content, "chinook  /  MySQL")
+}
+
+func TestBaseViewOmitsHostSeparatorWhenHostIsEmpty(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook.db", engine: db.EngineSQLite}
+
+	view := model.baseView()
+
+	assert.Contains(t, view.Content, "chinook.db  /  SQLite")
+	assert.NotContains(t, view.Content, "SQLite  /  ")
 }
 
 func TestFooterTextDescribesTabNavigation(t *testing.T) {

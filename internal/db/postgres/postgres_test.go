@@ -25,6 +25,8 @@ func TestListTables(t *testing.T) {
 	}
 	t.Cleanup(database.Close)
 	assert.Equal(t, "chinook", database.Name(), "Database.Name()")
+	assert.Equal(t, db.EnginePostgreSQL, database.Engine(), "Database.Engine()")
+	assert.Equal(t, "127.0.0.1", database.Host(), "Database.Host()")
 
 	tables, err := database.ListTables(ctx)
 	if !assert.NoError(t, err, "list tables") {

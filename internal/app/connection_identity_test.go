@@ -283,12 +283,11 @@ func TestDeleteActiveConnectionClearsIndexAndSession(t *testing.T) {
 			{Name: "One", Engine: "postgres"},
 		},
 	}
-	db := &fakeDatabase{name: "active"}
+	db := &fakeDatabase{name: "active", engine: "postgres"}
 	model := New(cfg, ConnectionSettings{}, nil)
 	model.session = 10
 	model.activeConnectionIndex = 0
 	model.database = db
-	model.databaseName = "active"
 
 	// Open connections modal for message routing.
 	connModal := newConnectionsModal(cfg)

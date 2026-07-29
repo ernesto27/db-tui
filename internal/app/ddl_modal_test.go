@@ -31,6 +31,7 @@ func TestDDLModalCopiesOriginalSQL(t *testing.T) {
 			offset: 1,
 		},
 	}
+	assert.Contains(t, model.ddlModal.view(model.layout, "⠋"), "c copy")
 
 	updated, command := updateModel(t, model, keyPress('c', "c", 0))
 
@@ -38,7 +39,6 @@ func TestDDLModalCopiesOriginalSQL(t *testing.T) {
 	assert.Equal(t, model.ddlModal.sql, fmt.Sprint(command()))
 	assert.True(t, updated.ddlModal.copied)
 	assert.Equal(t, 1, updated.ddlModal.offset)
-	assert.Contains(t, updated.ddlModal.view(updated.layout, "⠋"), "c copy")
 	assert.Contains(t, updated.ddlModal.view(updated.layout, "⠋"), "Copied DDL")
 }
 

@@ -65,6 +65,16 @@ func (p *postgresql) Name() string {
 	return p.name
 }
 
+// Engine returns the PostgreSQL database engine identifier.
+func (p *postgresql) Engine() string {
+	return db.EnginePostgreSQL
+}
+
+// Host returns the configured PostgreSQL network host.
+func (p *postgresql) Host() string {
+	return p.pool.Config().ConnConfig.Host
+}
+
 // ListTables returns the base tables in the connected database's public schema.
 func (p *postgresql) ListTables(ctx context.Context) ([]db.Table, error) {
 	p.logger.Log(listTablesSQL)
