@@ -1,6 +1,8 @@
 package app
 
 import (
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,4 +21,42 @@ func TestDDLModalWrapsAndScrollsSQL(t *testing.T) {
 	assert.GreaterOrEqual(t, modal.offset, 0)
 	modal.scroll(-100, layout)
 	assert.Zero(t, modal.offset)
+}
+
+func TestDDLModalCopiesOriginalSQL(t *testing.T) {
+	model := Model{
+		layout: newAppLayout(80, 24),
+		ddlModal: &ddlModal{
+			sql:    "CREATE TABLE public.\"Album\" (\n    \"Title\" varchar(160)\n);",
+			offset: 1,
+		},
+	}
+
+	updated, command := updateModel(t, model, keyPress('c', "c", 0))
+
+	assert.NotNil(t, command)
+	assert.Equal(t, model.ddlModal.sql, fmt.Sprint(command()))
+	assert.True(t, updated.ddlModal.copied)
+	assert.Equal(t, 1, updated.ddlModal.offset)
+	assert.Contains(t, updated.ddlModal.view(updated.layout, "⠋"), "c copy")
+	assert.Contains(t, updated.ddlModal.view(updated.layout, "⠋"), "Copied DDL")
+}
+
+func TestDDLModalDoesNotCopyIneligibleDDL(t *testing.T) {
+	tests := map[string]ddlModal{
+		"loading": {loading: true, sql: "CREATE TABLE example ();"},
+		"error":   {sql: "CREATE TABLE example ();", err: errors.New("load failed")},
+		"empty":   {},
+	}
+
+	for name, modal := range tests {
+		t.Run(name, func(t *testing.T) {
+			model := Model{layout: newAppLayout(80, 24), ddlModal: &modal}
+
+			updated, command := updateModel(t, model, keyPress('c', "c", 0))
+
+			assert.Nil(t, command)
+			assert.False(t, updated.ddlModal.copied)
+		})
+	}
 }

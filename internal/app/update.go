@@ -737,6 +737,9 @@ func (m *Model) updateDDLModal(msg tea.Msg) tea.Cmd {
 	switch {
 	case keyMsg.String() == "esc":
 		m.ddlModal = nil
+	case keyMsg.String() == "c" && !m.ddlModal.loading && m.ddlModal.err == nil && m.ddlModal.sql != "":
+		m.ddlModal.copied = true
+		return tea.SetClipboard(m.ddlModal.sql)
 	case key.Matches(keyMsg, m.keys.up):
 		m.ddlModal.scroll(-1, m.layout)
 	case key.Matches(keyMsg, m.keys.down):

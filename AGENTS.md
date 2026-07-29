@@ -35,7 +35,7 @@ Every new feature must include automated tests that verify its expected behavior
 Recent commits use concise imperative subjects (for example, `add basic view of tables`). Keep each commit scoped to one task. Pull requests should state intent, link relevant work, list verification commands, and include terminal screenshots for visible UI changes. Never commit passwords, credential-bearing DSNs, local config, logs, or generated binaries.
 
 
-IMPORTANT do not use superpowers plugin as default
+IMPORTANT do not use superpowers plugin as default, do not use git worktree or commit
 
 <!-- CODEGRAPH_START -->
 ## CodeGraph

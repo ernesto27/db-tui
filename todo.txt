@@ -10,6 +10,7 @@
 [] - when remove a table in raw query do a refresh table[
 [] - in raw query show execution time, rows affected
 [] - when show ddl i want to be able to copy
+[] - show host connection in some place of TUI
 
 
 

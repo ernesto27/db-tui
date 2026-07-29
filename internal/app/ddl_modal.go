@@ -12,6 +12,7 @@ type ddlModal struct {
 	sql       string
 	err       error
 	offset    int
+	copied    bool
 }
 
 func newDDLModal(tableName string) ddlModal {
@@ -23,6 +24,7 @@ func (m *ddlModal) finish(sql string, err error, layout appLayout) {
 	m.sql = sql
 	m.err = err
 	m.offset = 0
+	m.copied = false
 	m.clamp(layout)
 }
 
@@ -49,7 +51,11 @@ func (m ddlModal) view(layout appLayout, spinner string) string {
 		last := min(m.offset+m.visibleRows(layout), len(ddlLines))
 		lines = append(lines, ddlLines[m.offset:last]...)
 	}
-	lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("↑/↓ scroll  •  PgUp/PgDown page  •  Home/End  •  Esc close"))
+	footer := "↑/↓ scroll  •  PgUp/PgDn  •  Home/End  •  c copy  •  Esc close"
+	if m.copied {
+		footer = "↑/↓ scroll  •  PgUp/PgDn  •  Home/End  •  Copied DDL  •  Esc close"
+	}
+	lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(footer))
 	return lipgloss.NewStyle().Width(modalWidth).Height(modalHeight).Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("62")).Background(lipgloss.Color("235")).Render(strings.Join(lines, "\n"))
 }
 
