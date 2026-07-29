@@ -22,6 +22,7 @@ type connectionsModal struct {
 
 type cancelConnectionsMsg struct{}
 type selectConnectionMsg struct {
+	index      int
 	connection config.Connection
 }
 type editConnectionMsg struct {
@@ -131,7 +132,7 @@ func (m connectionsModal) update(msg tea.Msg) (connectionsModal, tea.Cmd) {
 				return m, nil
 			}
 			connection := m.connections[m.selected]
-			return m, func() tea.Msg { return selectConnectionMsg{connection: connection} }
+			return m, func() tea.Msg { return selectConnectionMsg{index: m.selected, connection: connection} }
 		case "ctrl+e":
 			if len(m.connections) == 0 {
 				return m, nil

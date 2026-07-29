@@ -81,18 +81,23 @@ func TestUpdateKeyRouting(t *testing.T) {
 			},
 		},
 		{
-			name: "opens table DDL from raw query mode",
+			name: "opens actions modal from raw query mode",
 			setup: func(model *Model) {
 				model.database = &fakeDatabase{name: "chinook", ddl: "CREATE TABLE public.\"Album\" ();"}
 				model.navigator.tables = []db.Table{{Name: "Album"}}
 				model.panel = panelQuery
+				model.activeConnectionIndex = 0
+				model.config = config.Config{
+					Connections: []config.Connection{
+						{Name: "Test", Engine: "postgres"},
+					},
+				}
 			},
 			message: keyPress('g', "", tea.ModCtrl),
 			assert: func(t *testing.T, got Model, command tea.Cmd) {
-				require.NotNil(t, got.ddlModal)
-				assert.True(t, got.ddlModal.loading)
-				assert.Equal(t, "Album", got.ddlModal.tableName)
-				require.NotNil(t, command)
+				require.NotNil(t, got.actionsModal)
+				assert.Equal(t, "Album", got.actionsModal.tableName)
+				assert.Nil(t, command)
 			},
 		},
 		{

@@ -11,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/ernestoponce27/db-tui/internal/config"
 	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
@@ -112,5 +113,26 @@ func connectConnection(connect ConnectFunc, settings ConnectionSettings, attempt
 			return connectionFinishedMsg{attempt: attempt, err: err}
 		}
 		return connectionFinishedMsg{database: database, settings: settings, attempt: attempt}
+	}
+}
+
+// renameRequestMsg carries a rename completion.
+type renameRequestMsg struct {
+	request uint64
+	index   int
+	config  config.Config
+	err     error
+}
+
+// saveConnectionName persists the renamed connection via Config.Save.
+func saveConnectionName(cfg config.Config, renameRequest uint64, index int) tea.Cmd {
+	return func() tea.Msg {
+		err := cfg.Save()
+		return renameRequestMsg{
+			request: renameRequest,
+			index:   index,
+			config:  cfg,
+			err:     err,
+		}
 	}
 }

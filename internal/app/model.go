@@ -32,17 +32,19 @@ const (
 
 // Model is the root Bubble Tea application model.
 type Model struct {
-	database           db.Database
-	databaseName       string
-	databaseEngine     string
-	savedConnection    ConnectionSettings
-	connect            ConnectFunc
-	modal              *connectionModal
-	connectionsModal   *connectionsModal
-	editingConnection  int
-	creatingConnection bool
-	connectionAttempt  uint64
-	session            uint64
+	database               db.Database
+	databaseName           string
+	databaseEngine         string
+	savedConnection        ConnectionSettings
+	activeConnectionIndex  int
+	pendingConnectionIndex int
+	connect                ConnectFunc
+	modal                  *connectionModal
+	connectionsModal       *connectionsModal
+	editingConnection      int
+	creatingConnection     bool
+	connectionAttempt      uint64
+	session                uint64
 
 	loading      bool
 	tableLoadErr error
@@ -61,10 +63,12 @@ type Model struct {
 
 	config config.Config
 
-	dumpModal   *dumpModal
-	exportModal *exportModal
-	ddlModal    *ddlModal
-	ddlRequest  uint64
+	dumpModal     *dumpModal
+	exportModal   *exportModal
+	ddlModal      *ddlModal
+	ddlRequest    uint64
+	actionsModal  *actionsModal
+	renameRequest uint64
 }
 
 // New creates the root Bubble Tea application model.
@@ -73,15 +77,17 @@ func New(config config.Config, savedConnection ConnectionSettings, connect Conne
 	navigator := newNavigatorModel()
 	navigator.resize(layout)
 	return Model{
-		savedConnection:   savedConnection,
-		connect:           connect,
-		config:            config,
-		editingConnection: -1,
-		session:           1,
-		layout:            layout,
-		keys:              defaultKeyMap(),
-		navigator:         navigator,
-		query:             newQueryModel(layout),
+		savedConnection:        savedConnection,
+		activeConnectionIndex:  -1,
+		pendingConnectionIndex: -1,
+		connect:                connect,
+		config:                 config,
+		editingConnection:      -1,
+		session:                1,
+		layout:                 layout,
+		keys:                   defaultKeyMap(),
+		navigator:              navigator,
+		query:                  newQueryModel(layout),
 	}
 }
 

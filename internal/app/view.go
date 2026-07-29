@@ -14,7 +14,7 @@ import (
 // View implements tea.Model.
 func (m Model) View() tea.View {
 	view := m.baseView()
-	if m.modal != nil || m.connectionsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil {
+	if m.modal != nil || m.connectionsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.actionsModal != nil {
 		view.Content = m.renderModalOverlay(view.Content)
 	}
 	return view
@@ -95,8 +95,12 @@ func (m Model) renderModalOverlay(base string) string {
 		modal = m.dumpModal.view(m.layout.width, m.spinner())
 	case m.exportModal != nil:
 		modal = m.exportModal.view(m.layout.width, m.spinner())
-	default:
+	case m.actionsModal != nil:
+		modal = m.actionsModal.view(m.layout.width)
+	case m.ddlModal != nil:
 		modal = m.ddlModal.view(m.layout, m.spinner())
+	default:
+		return base
 	}
 
 	return lipgloss.NewCompositor(
@@ -121,8 +125,8 @@ func (m Model) footerText() string {
 			exportHelp = "  •  Ctrl+E export results"
 		}
 		ddlHelp := ""
-		if _, ok := m.navigator.selectedTable(); ok {
-			ddlHelp = "  •  Ctrl+G table DDL"
+		if _, ok := m.navigator.selectedTable(); ok || (m.activeConnectionIndex >= 0 && m.activeConnectionIndex < len(m.config.Connections)) {
+			ddlHelp = "  •  Ctrl+G actions"
 		}
 		return "raw query  •  Ctrl+P execute" + exportHelp + ddlHelp + "  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+T table data  •  Ctrl+L connections  •  q quit"
 	}
@@ -159,7 +163,7 @@ func (m Model) footerText() string {
 	}
 
 	exportHelp := "  •  Ctrl+E export"
-	return fmt.Sprintf("focus: %s%s  •  Ctrl+F search tables%s  •  Ctrl+G table DDL  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab table/search/data  •  q quit",
+	return fmt.Sprintf("focus: %s%s  •  Ctrl+F search tables%s  •  Ctrl+G actions  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab table/search/data  •  q quit",
 		focusLabel, rowStatus, exportHelp)
 }
 

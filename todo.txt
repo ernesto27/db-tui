@@ -5,8 +5,8 @@
 [x] - section to run raw queries
 [x] - search tables
 [x] - option to dump all database file
-[] - add sqlite support
-[] - export to json data
+[x] - add sqlite support
+[x] - export to json data
 
 
 

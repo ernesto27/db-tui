@@ -30,7 +30,7 @@ func defaultKeyMap() keyMap {
 		newConnection: key.NewBinding(key.WithKeys("ctrl+n"), key.WithHelp("ctrl+n", "new connection")),
 		query:         key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("ctrl+r", "raw query")),
 		tableData:     key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "table data")),
-		tableDDL:      key.NewBinding(key.WithKeys("ctrl+g"), key.WithHelp("ctrl+g", "table DDL")),
+		tableDDL:      key.NewBinding(key.WithKeys("ctrl+g"), key.WithHelp("ctrl+g", "actions")),
 		tableSearch:   key.NewBinding(key.WithKeys("ctrl+f"), key.WithHelp("ctrl+f", "search tables")),
 		executeQuery:  key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "execute query")),
 		queryFocus:    key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "switch editor/results")),

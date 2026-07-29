@@ -43,6 +43,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.ddlModal != nil {
 		return m, m.updateDDLModal(msg)
 	}
+	if m.actionsModal != nil {
+		return m.updateActionsModal(msg)
+	}
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -123,6 +126,22 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 			m.ddlModal.clamp(m.layout)
 		}
 		return nil, true
+	case renameRequestMsg:
+		if msg.request != m.renameRequest || msg.index != m.activeConnectionIndex {
+			return nil, true
+		}
+		if m.actionsModal == nil || m.actionsModal.state != actionsRenameSaving {
+			return nil, true
+		}
+		if msg.err != nil {
+			m.actionsModal.state = actionsRenameFailed
+			m.actionsModal.renameError = "save connection name: " + msg.err.Error()
+			return nil, true
+		}
+		m.config = msg.config
+		m.actionsModal.connName = msg.config.Connections[msg.index].Name
+		m.actionsModal.state = actionsRenameSuccess
+		return nil, true
 	case dumpFinishedMsg:
 		if msg.session != m.session || m.dumpModal == nil {
 			return nil, true
@@ -170,6 +189,10 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.modal = nil
 		m.editingConnection = -1
 		m.creatingConnection = false
+		m.pendingConnectionIndex = -1
+		if m.database == nil {
+			m.activeConnectionIndex = -1
+		}
 		return m, nil
 	case connectionFinishedMsg:
 		if msg.attempt != m.connectionAttempt {
@@ -191,13 +214,16 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.modal.errorText = "selected connection no longer exists"
 				return m, nil
 			}
+			var nextActiveIndex int
 			if m.editingConnection >= 0 {
 				updatedConnection := updatedConfig.Connections[m.editingConnection]
 				updatedConnection.Engine = msg.settings.Engine
 				updatedConnection.Settings = configSettingsFromConnectionSettings(msg.settings)
 				updatedConfig.Connections[m.editingConnection] = updatedConnection
+				nextActiveIndex = m.editingConnection
 			} else {
 				updatedConfig.Connections = append(updatedConfig.Connections, newConfigConnection(msg.settings))
+				nextActiveIndex = len(updatedConfig.Connections) - 1
 			}
 			if err := updatedConfig.Save(); err != nil {
 				msg.database.Close()
@@ -205,8 +231,15 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.config = updatedConfig
+			m.activeConnectionIndex = nextActiveIndex
 			m.editingConnection = -1
 			m.creatingConnection = false
+		}
+
+		// Commit the pending index for a plain select (non-edit, non-create).
+		if m.pendingConnectionIndex >= 0 {
+			m.activeConnectionIndex = m.pendingConnectionIndex
+			m.pendingConnectionIndex = -1
 		}
 
 		if m.database != nil {
@@ -243,6 +276,7 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.connectionsModal = nil
 		m.editingConnection = -1
 		m.creatingConnection = false
+		m.pendingConnectionIndex = msg.index
 		return m, func() tea.Msg { return submitConnectionMsg{} }
 	case editConnectionMsg:
 		modal := newConnectionModal(connectionSettingsFromConfig(msg.connection))
@@ -266,12 +300,15 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.config = updatedConfig
 		m.connectionsModal = nil
-		if m.database != nil && connectionSettingsFromConfig(msg.connection) == m.savedConnection {
-			m.database.Close()
-			m.database = nil
+		if msg.index == m.activeConnectionIndex {
+			if m.database != nil {
+				m.database.Close()
+				m.database = nil
+			}
 			m.databaseName = ""
 			m.databaseEngine = ""
 			m.savedConnection = ConnectionSettings{}
+			m.activeConnectionIndex = -1
 			m.loading = false
 			m.tableLoadErr = nil
 			m.navigator.reset()
@@ -279,6 +316,8 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.query.reset(m.layout)
 			m.ddlModal = nil
 			m.session++
+		} else if msg.index < m.activeConnectionIndex {
+			m.activeConnectionIndex--
 		}
 		return m, nil
 	default:
@@ -310,14 +349,20 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.focus = focusData
 		return nil
 	case key.Matches(msg, m.keys.tableDDL):
-		table, ok := m.navigator.selectedTable()
-		if m.database == nil || !ok {
+		tableName := ""
+		if table, ok := m.navigator.selectedTable(); ok {
+			tableName = table.Name
+		}
+		connName := ""
+		if m.activeConnectionIndex >= 0 && m.activeConnectionIndex < len(m.config.Connections) {
+			connName = m.config.Connections[m.activeConnectionIndex].Name
+		}
+		if tableName == "" && connName == "" {
 			return nil
 		}
-		m.ddlRequest++
-		modal := newDDLModal(table.Name)
-		m.ddlModal = &modal
-		return tea.Batch(loadTableDDL(m.database, table, m.session, m.ddlRequest), m.startSpinner())
+		modal := newActionsModal(tableName, connName)
+		m.actionsModal = &modal
+		return nil
 	case key.Matches(msg, m.keys.tableSearch):
 		m.focus = focusNavigator
 		return m.navigator.startSearch()
@@ -638,6 +683,49 @@ func (m *Model) updateExportModal(msg tea.Msg) tea.Cmd {
 	}
 
 	return nil
+}
+
+func (m *Model) updateActionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case submitRenameMsg:
+		if m.activeConnectionIndex < 0 || m.activeConnectionIndex >= len(m.config.Connections) {
+			m.actionsModal = nil
+			return *m, nil
+		}
+		m.renameRequest++
+		cloned := m.config
+		cloned.Connections = slices.Clone(m.config.Connections)
+		cloned.Connections[m.activeConnectionIndex].Name = msg.newName
+		m.actionsModal.state = actionsRenameSaving
+		return *m, saveConnectionName(cloned, m.renameRequest, m.activeConnectionIndex)
+	case cancelActionsMsg:
+		m.actionsModal = nil
+		return *m, nil
+	case selectDDLActionMsg:
+		table, ok := m.navigator.selectedTable()
+		if m.database == nil || !ok {
+			m.actionsModal = nil
+			return *m, nil
+		}
+		m.actionsModal = nil
+		m.ddlRequest++
+		modal := newDDLModal(table.Name)
+		m.ddlModal = &modal
+		return *m, tea.Batch(loadTableDDL(m.database, table, m.session, m.ddlRequest), m.startSpinner())
+	case selectRenameActionMsg:
+		if m.activeConnectionIndex < 0 || m.activeConnectionIndex >= len(m.config.Connections) {
+			m.actionsModal = nil
+			return *m, nil
+		}
+		m.actionsModal.state = actionsRenameEditing
+		m.actionsModal.renameInput.SetValue(m.config.Connections[m.activeConnectionIndex].Name)
+		m.actionsModal.renameInput.CursorEnd()
+		return *m, m.actionsModal.renameInput.Focus()
+	default:
+		modal, command := m.actionsModal.update(msg)
+		m.actionsModal = &modal
+		return *m, command
+	}
 }
 
 func (m *Model) updateDDLModal(msg tea.Msg) tea.Cmd {

@@ -2,6 +2,9 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -9,6 +12,35 @@ import (
 
 	"github.com/ernestoponce27/db-tui/internal/db"
 )
+
+var appTestHome string
+
+// TestMain keeps app tests from reading or writing the user's real db-tui config.
+func TestMain(m *testing.M) {
+	var err error
+	appTestHome, err = os.MkdirTemp("", "db-tui-app-test-home-")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "create app test home:", err)
+		os.Exit(1)
+	}
+	if err := os.Setenv("HOME", appTestHome); err != nil {
+		_ = os.RemoveAll(appTestHome)
+		fmt.Fprintln(os.Stderr, "set app test home:", err)
+		os.Exit(1)
+	}
+	if err := os.MkdirAll(filepath.Join(appTestHome, ".config", "db-tui"), 0o700); err != nil {
+		_ = os.RemoveAll(appTestHome)
+		fmt.Fprintln(os.Stderr, "create app test config directory:", err)
+		os.Exit(1)
+	}
+
+	code := m.Run()
+	if err := os.RemoveAll(appTestHome); err != nil && code == 0 {
+		fmt.Fprintln(os.Stderr, "remove app test home:", err)
+		code = 1
+	}
+	os.Exit(code)
+}
 
 type fakeDatabase struct {
 	name string
