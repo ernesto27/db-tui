@@ -27,6 +27,61 @@ const listTablesSQL = `
 		AND table_type = 'BASE TABLE'
 	ORDER BY table_name`
 
+const listColumnsSQL = `SELECT
+	      attribute.attname AS column_name,
+	      row_number() OVER (ORDER BY attribute.attnum) AS ordinal_position,
+	      regexp_replace(
+	          regexp_replace(
+	              CASE type_catalog.typname
+	                  WHEN 'int2' THEN 'int2'
+	                  WHEN 'int4' THEN 'int4'
+	                  WHEN 'int8' THEN 'int8'
+	                  WHEN 'float4' THEN 'float4'
+	                  WHEN 'float8' THEN 'float8'
+	                  WHEN 'bool' THEN 'bool'
+	                  ELSE pg_catalog.format_type(attribute.atttypid, attribute.atttypmod)
+	              END,
+	              '^character varying',
+	              'varchar'
+	          ),
+	          '^character',
+	          'char'
+	      ) AS data_type,
+	      CASE attribute.attidentity
+	          WHEN 'a' THEN 'ALWAYS'
+	          WHEN 'd' THEN 'BY DEFAULT'
+	          ELSE NULL
+	      END AS identity,
+	      CASE
+	          WHEN attribute.attcollation = 0 THEN NULL
+	          WHEN attribute.attcollation = type_catalog.typcollation THEN 'default'
+	          ELSE quote_ident(collation_schema.nspname)
+	               || '.'
+	               || quote_ident(collation_catalog.collname)
+	      END AS collation_name,
+	      attribute.attnotnull AS not_null,
+	      pg_catalog.pg_get_expr(default_value.adbin, default_value.adrelid) AS default_expression,
+	      pg_catalog.col_description(attribute.attrelid, attribute.attnum) AS comment
+	  FROM pg_catalog.pg_attribute AS attribute
+	  JOIN pg_catalog.pg_class AS relation
+	      ON relation.oid = attribute.attrelid
+	  JOIN pg_catalog.pg_namespace AS relation_schema
+	      ON relation_schema.oid = relation.relnamespace
+	  JOIN pg_catalog.pg_type AS type_catalog
+	      ON type_catalog.oid = attribute.atttypid
+	  LEFT JOIN pg_catalog.pg_attrdef AS default_value
+	      ON default_value.adrelid = attribute.attrelid
+	     AND default_value.adnum = attribute.attnum
+	  LEFT JOIN pg_catalog.pg_collation AS collation_catalog
+	      ON collation_catalog.oid = attribute.attcollation
+	  LEFT JOIN pg_catalog.pg_namespace AS collation_schema
+	      ON collation_schema.oid = collation_catalog.collnamespace
+	  WHERE relation_schema.nspname = 'public'
+	    AND relation.relname = $1
+	    AND attribute.attnum > 0
+	    AND NOT attribute.attisdropped
+	  ORDER BY attribute.attnum`
+
 type postgresql struct {
 	pool   *pgxpool.Pool
 	logger *logger.Logger
@@ -97,6 +152,54 @@ func (p *postgresql) ListTables(ctx context.Context) ([]db.Table, error) {
 	}
 
 	return tables, nil
+}
+
+// ListColumns returns the columns defined by a public PostgreSQL table.
+func (p *postgresql) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {
+	p.logger.Log(listColumnsSQL)
+	rows, err := p.pool.Query(ctx, listColumnsSQL, table.Name)
+	if err != nil {
+		return nil, fmt.Errorf("query PostgreSQL columns: %w", err)
+	}
+	defer rows.Close()
+
+	columns := make([]db.Column, 0)
+	for rows.Next() {
+		var (
+			column                            db.Column
+			ordinalPosition                   int64
+			identity, collation, defaultValue pgtype.Text
+			comment                           pgtype.Text
+		)
+
+		err := rows.Scan(
+			&column.Name,
+			&ordinalPosition,
+			&column.DataType,
+			&identity,
+			&collation,
+			&column.NotNull,
+			&defaultValue,
+			&comment,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan PostgreSQL column: %w", err)
+		}
+
+		column.OrdinalPosition = int(ordinalPosition)
+		column.Identity = identity.String
+		column.Collation = collation.String
+		column.Default = defaultValue.String
+		column.Comment = comment.String
+
+		columns = append(columns, column)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate PostgreSQL columns: %w", err)
+	}
+
+	return columns, nil
 }
 
 // GetRows returns an unordered page of rows from a public PostgreSQL table.

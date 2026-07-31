@@ -14,7 +14,7 @@ import (
 // View implements tea.Model.
 func (m Model) View() tea.View {
 	view := m.baseView()
-	if m.modal != nil || m.connectionsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.actionsModal != nil {
+	if m.modal != nil || m.connectionsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.columnsModal != nil || m.actionsModal != nil {
 		view.Content = m.renderModalOverlay(view.Content)
 	}
 	return view
@@ -109,6 +109,8 @@ func (m Model) renderModalOverlay(base string) string {
 		modal = m.actionsModal.view(m.layout.width)
 	case m.ddlModal != nil:
 		modal = m.ddlModal.view(m.layout, m.spinner())
+	case m.columnsModal != nil:
+		modal = m.columnsModal.view(m.layout, m.spinner())
 	default:
 		return base
 	}

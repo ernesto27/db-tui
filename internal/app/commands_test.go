@@ -125,6 +125,23 @@ func TestLoadTableDDL(t *testing.T) {
 	}
 }
 
+func TestLoadColumns(t *testing.T) {
+	wantColumns := []db.Column{{Name: "AlbumId", OrdinalPosition: 1, DataType: "int4", NotNull: true}}
+	database := &fakeDatabase{columns: wantColumns}
+	table := db.Table{Name: "Album"}
+
+	message, ok := loadColumns(database, table, 7, 3)().(columnsLoadedMsg)
+	require.True(t, ok)
+
+	assert.Equal(t, 1, database.listColumnsCalls)
+	assert.Equal(t, table, database.listColumnsTable)
+	assert.True(t, database.listColumnsDeadline)
+	assert.Equal(t, wantColumns, message.columns)
+	assert.Equal(t, "Album", message.tableName)
+	assert.Equal(t, uint64(7), message.session)
+	assert.Equal(t, uint64(3), message.request)
+}
+
 func TestExecuteQuery(t *testing.T) {
 	wantErr := errors.New("query failed")
 	tests := []struct {

@@ -188,6 +188,39 @@ func TestUpdateAppliesOnlyCurrentTableDDLResult(t *testing.T) {
 	assert.Equal(t, "CREATE TABLE public.\"Album\" ();", stale.ddlModal.sql)
 }
 
+func TestUpdateAppliesOnlyCurrentColumnsResult(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.session = 8
+	model.navigator.tables = []db.Table{{Name: "Album"}}
+	modal := newColumnsModal("Album")
+	model.columnsModal = &modal
+	model.columnsRequest = 4
+	columns := []db.Column{{Name: "AlbumId", OrdinalPosition: 1, DataType: "int4", NotNull: true}}
+
+	updated, command := updateModel(t, model, columnsLoadedMsg{
+		tableName: "Album",
+		columns:   columns,
+		session:   8,
+		request:   4,
+	})
+
+	assert.Nil(t, command)
+	require.NotNil(t, updated.columnsModal)
+	assert.False(t, updated.columnsModal.loading)
+	assert.Equal(t, columns, updated.columnsModal.columns)
+
+	stale, command := updateModel(t, updated, columnsLoadedMsg{
+		tableName: "Album",
+		columns:   []db.Column{{Name: "stale"}},
+		session:   8,
+		request:   3,
+	})
+
+	assert.Nil(t, command)
+	require.NotNil(t, stale.columnsModal)
+	assert.Equal(t, columns, stale.columnsModal.columns)
+}
+
 func TestUpdateIgnoresStaleQueryResult(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.session = 5

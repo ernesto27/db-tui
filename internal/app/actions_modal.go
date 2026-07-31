@@ -26,11 +26,13 @@ type actionsModal struct {
 	renameInput textinput.Model
 	renameError string
 	// action availability
-	ddlAvailable    bool
-	renameAvailable bool
+	ddlAvailable     bool
+	columnsAvailable bool
+	renameAvailable  bool
 }
 
 type selectDDLActionMsg struct{}
+type selectColumnsActionMsg struct{}
 type selectRenameActionMsg struct{}
 type cancelActionsMsg struct{}
 type submitRenameMsg struct {
@@ -43,12 +45,13 @@ func newActionsModal(tableName, connName string) actionsModal {
 	input.SetWidth(40)
 
 	m := actionsModal{
-		state:           actionsSelecting,
-		tableName:       tableName,
-		connName:        connName,
-		renameInput:     input,
-		ddlAvailable:    tableName != "",
-		renameAvailable: connName != "",
+		state:            actionsSelecting,
+		tableName:        tableName,
+		connName:         connName,
+		renameInput:      input,
+		ddlAvailable:     tableName != "",
+		columnsAvailable: tableName != "",
+		renameAvailable:  connName != "",
 	}
 	return m
 }
@@ -99,6 +102,9 @@ func (m actionsModal) actionCount() int {
 	if m.ddlAvailable {
 		count++
 	}
+	if m.columnsAvailable {
+		count++
+	}
 	if m.renameAvailable {
 		count++
 	}
@@ -110,6 +116,12 @@ func (m actionsModal) selectAction() (actionsModal, tea.Cmd) {
 	if m.ddlAvailable {
 		if m.selected == idx {
 			return m, func() tea.Msg { return selectDDLActionMsg{} }
+		}
+		idx++
+	}
+	if m.columnsAvailable {
+		if m.selected == idx {
+			return m, func() tea.Msg { return selectColumnsActionMsg{} }
 		}
 		idx++
 	}
@@ -189,6 +201,16 @@ func (m actionsModal) viewSelecting(width int) string {
 			style = selectedStyle
 		}
 		lines = append(lines, prefix+style.Render("View DDL for "+sanitizeText(m.tableName)))
+		idx++
+	}
+	if m.columnsAvailable {
+		prefix := "  "
+		style := normalStyle
+		if m.selected == idx {
+			prefix = "> "
+			style = selectedStyle
+		}
+		lines = append(lines, prefix+style.Render("Inspect columns for "+sanitizeText(m.tableName)))
 		idx++
 	}
 	if m.renameAvailable {

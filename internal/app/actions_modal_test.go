@@ -16,6 +16,7 @@ func TestActionsModalShowsDDLAndRenameActions(t *testing.T) {
 	view := modal.view(80)
 
 	assert.Contains(t, view, "View DDL for Album")
+	assert.Contains(t, view, "Inspect columns for Album")
 	assert.Contains(t, view, "Rename connection \"Local\"")
 }
 
@@ -24,6 +25,7 @@ func TestActionsModalRenameOnlyWhenNoTableSelected(t *testing.T) {
 	view := modal.view(80)
 
 	assert.NotContains(t, view, "View DDL")
+	assert.NotContains(t, view, "Inspect columns")
 	assert.Contains(t, view, "Rename connection \"Local\"")
 }
 
@@ -80,7 +82,7 @@ func TestActionsModalEnterSelectsRenameWhenDDLNotAvailable(t *testing.T) {
 	assert.True(t, ok)
 }
 
-func TestActionsModalEnterSelectsSecondAction(t *testing.T) {
+func TestActionsModalEnterSelectsColumnsAction(t *testing.T) {
 	modal := newActionsModal("Album", "Local")
 	modal.selected = 1
 
@@ -88,7 +90,18 @@ func TestActionsModalEnterSelectsSecondAction(t *testing.T) {
 	require.NotNil(t, command)
 
 	msg := command()
-	_, ok := msg.(selectRenameActionMsg)
+	_, ok := msg.(selectColumnsActionMsg)
+	assert.True(t, ok)
+}
+
+func TestActionsModalEnterSelectsRenameAfterColumnsAction(t *testing.T) {
+	modal := newActionsModal("Album", "Local")
+	modal.selected = 2
+
+	_, command := modal.update(keyPress(tea.KeyEnter, "", 0))
+	require.NotNil(t, command)
+
+	_, ok := command().(selectRenameActionMsg)
 	assert.True(t, ok)
 }
 
@@ -162,6 +175,7 @@ func TestCtrlGDDLOnlyWithoutActiveConnection(t *testing.T) {
 	// DDL is available even without active connection.
 	assert.NotNil(t, updated.actionsModal)
 	assert.True(t, updated.actionsModal.ddlAvailable)
+	assert.True(t, updated.actionsModal.columnsAvailable)
 	assert.False(t, updated.actionsModal.renameAvailable)
 }
 
@@ -181,6 +195,24 @@ func TestSelectDDLClosesActionsAndOpensDDLModal(t *testing.T) {
 	assert.NotNil(t, updated.ddlModal)
 	assert.Equal(t, "Album", updated.ddlModal.tableName)
 	assert.True(t, updated.ddlModal.loading)
+}
+
+func TestSelectColumnsClosesActionsAndOpensColumnsModal(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook", columns: []db.Column{{Name: "AlbumId"}}}
+	model.navigator.tables = []db.Table{{Name: "Album"}}
+	model.session = 5
+
+	modal := newActionsModal("Album", "Local")
+	model.actionsModal = &modal
+
+	updated, command := updateModel(t, model, selectColumnsActionMsg{})
+	require.NotNil(t, command)
+
+	assert.Nil(t, updated.actionsModal)
+	require.NotNil(t, updated.columnsModal)
+	assert.Equal(t, "Album", updated.columnsModal.tableName)
+	assert.True(t, updated.columnsModal.loading)
 }
 
 func TestActionsModalRendersOverlay(t *testing.T) {

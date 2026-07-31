@@ -43,6 +43,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.ddlModal != nil {
 		return m, m.updateDDLModal(msg)
 	}
+	if m.columnsModal != nil {
+		return m, m.updateColumnsModal(msg)
+	}
 	if m.actionsModal != nil {
 		return m.updateActionsModal(msg)
 	}
@@ -74,6 +77,7 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 	case spinnerTickMsg:
 		if m.loading || m.data.loading || m.query.loading ||
 			(m.ddlModal != nil && m.ddlModal.loading) ||
+			(m.columnsModal != nil && m.columnsModal.loading) ||
 			(m.dumpModal != nil && m.dumpModal.isRunning()) ||
 			(m.exportModal != nil && m.exportModal.isRunning()) {
 			m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
@@ -109,6 +113,13 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		m.ddlModal.finish(msg.sql, msg.err, m.layout)
 		return nil, true
+	case columnsLoadedMsg:
+		table, ok := m.navigator.selectedTable()
+		if msg.session != m.session || m.columnsModal == nil || msg.request != m.columnsRequest || !ok || table.Name != msg.tableName || m.columnsModal.tableName != msg.tableName {
+			return nil, true
+		}
+		m.columnsModal.finish(msg.columns, msg.err, m.layout)
+		return nil, true
 	case queryFinishedMsg:
 		if msg.session != m.session || msg.request != m.query.request {
 			return nil, true
@@ -124,6 +135,9 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		m.query.resize(m.layout)
 		if m.ddlModal != nil {
 			m.ddlModal.clamp(m.layout)
+		}
+		if m.columnsModal != nil {
+			m.columnsModal.clamp(m.layout)
 		}
 		return nil, true
 	case renameRequestMsg:
@@ -252,6 +266,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.data.reset()
 		m.query.reset(m.layout)
 		m.ddlModal = nil
+		m.columnsModal = nil
 		m.loading = true
 		m.session++
 		m.modal = nil
@@ -311,6 +326,7 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.data.reset()
 			m.query.reset(m.layout)
 			m.ddlModal = nil
+			m.columnsModal = nil
 			m.session++
 		} else if msg.index < m.activeConnectionIndex {
 			m.activeConnectionIndex--
@@ -708,6 +724,17 @@ func (m *Model) updateActionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		modal := newDDLModal(table.Name)
 		m.ddlModal = &modal
 		return *m, tea.Batch(loadTableDDL(m.database, table, m.session, m.ddlRequest), m.startSpinner())
+	case selectColumnsActionMsg:
+		table, ok := m.navigator.selectedTable()
+		if m.database == nil || !ok {
+			m.actionsModal = nil
+			return *m, nil
+		}
+		m.actionsModal = nil
+		m.columnsRequest++
+		modal := newColumnsModal(table.Name)
+		m.columnsModal = &modal
+		return *m, tea.Batch(loadColumns(m.database, table, m.session, m.columnsRequest), m.startSpinner())
 	case selectRenameActionMsg:
 		if m.activeConnectionIndex < 0 || m.activeConnectionIndex >= len(m.config.Connections) {
 			m.actionsModal = nil
@@ -749,6 +776,36 @@ func (m *Model) updateDDLModal(msg tea.Msg) tea.Cmd {
 	case key.Matches(keyMsg, m.keys.end):
 		m.ddlModal.offset = len(m.ddlModal.lines(m.layout))
 		m.ddlModal.clamp(m.layout)
+	}
+	return nil
+}
+
+func (m *Model) updateColumnsModal(msg tea.Msg) tea.Cmd {
+	keyMsg, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return nil
+	}
+
+	switch {
+	case keyMsg.String() == "esc":
+		m.columnsModal = nil
+	case key.Matches(keyMsg, m.keys.focusLeft):
+		m.columnsModal.scrollFields(-1)
+	case key.Matches(keyMsg, m.keys.focusRight):
+		m.columnsModal.scrollFields(1)
+	case key.Matches(keyMsg, m.keys.up):
+		m.columnsModal.scrollRows(-1, m.layout)
+	case key.Matches(keyMsg, m.keys.down):
+		m.columnsModal.scrollRows(1, m.layout)
+	case key.Matches(keyMsg, m.keys.pageUp):
+		m.columnsModal.scrollRows(-m.columnsModal.visibleRows(m.layout), m.layout)
+	case key.Matches(keyMsg, m.keys.pageDown):
+		m.columnsModal.scrollRows(m.columnsModal.visibleRows(m.layout), m.layout)
+	case key.Matches(keyMsg, m.keys.home):
+		m.columnsModal.rowOffset = 0
+	case key.Matches(keyMsg, m.keys.end):
+		m.columnsModal.rowOffset = len(m.columnsModal.columns)
+		m.columnsModal.clamp(m.layout)
 	}
 	return nil
 }

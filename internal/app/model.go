@@ -61,12 +61,14 @@ type Model struct {
 
 	config config.Config
 
-	dumpModal     *dumpModal
-	exportModal   *exportModal
-	ddlModal      *ddlModal
-	ddlRequest    uint64
-	actionsModal  *actionsModal
-	renameRequest uint64
+	dumpModal      *dumpModal
+	exportModal    *exportModal
+	ddlModal       *ddlModal
+	ddlRequest     uint64
+	columnsModal   *columnsModal
+	columnsRequest uint64
+	actionsModal   *actionsModal
+	renameRequest  uint64
 }
 
 // New creates the root Bubble Tea application model.

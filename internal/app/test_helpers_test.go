@@ -47,8 +47,10 @@ type fakeDatabase struct {
 	engine string
 	host   string
 
-	tables    []db.Table
-	tablesErr error
+	tables     []db.Table
+	tablesErr  error
+	columns    []db.Column
+	columnsErr error
 
 	page    db.RowPage
 	pageErr error
@@ -64,6 +66,9 @@ type fakeDatabase struct {
 
 	listTablesCalls     int
 	listTablesDeadline  bool
+	listColumnsCalls    int
+	listColumnsTable    db.Table
+	listColumnsDeadline bool
 	getRowsCalls        int
 	getRowsTable        db.Table
 	getRowsRequest      db.PageRequest
@@ -102,6 +107,13 @@ func (f *fakeDatabase) ListTables(ctx context.Context) ([]db.Table, error) {
 	f.listTablesCalls++
 	_, f.listTablesDeadline = ctx.Deadline()
 	return f.tables, f.tablesErr
+}
+
+func (f *fakeDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {
+	f.listColumnsCalls++
+	f.listColumnsTable = table
+	_, f.listColumnsDeadline = ctx.Deadline()
+	return f.columns, f.columnsErr
 }
 
 func (f *fakeDatabase) GetRows(

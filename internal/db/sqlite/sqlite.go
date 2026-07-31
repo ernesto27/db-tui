@@ -26,6 +26,22 @@ const listTablesSQL = `
 		AND name NOT LIKE 'sqlite_%'
 	ORDER BY name`
 
+const listColumnSQL = `SELECT
+    column_info.name AS column_name,
+    column_info.cid + 1 AS ordinal_position,
+    column_info.type AS data_type,
+    NULL AS identity,
+    NULL AS collation_name,
+    CASE
+        WHEN column_info."notnull" <> 0 THEN 1
+        ELSE 0
+    END AS not_null,
+    column_info.dflt_value AS default_expression,
+    NULL AS comment
+FROM pragma_table_xinfo(?) AS column_info
+WHERE column_info."hidden" <> 1
+ORDER BY column_info.cid`
+
 type sqliteDatabase struct {
 	database *sql.DB
 	logger   *logger.Logger
@@ -104,6 +120,47 @@ func (s *sqliteDatabase) ListTables(ctx context.Context) ([]db.Table, error) {
 		return nil, fmt.Errorf("iterate SQLite tables: %w", err)
 	}
 	return tables, nil
+}
+
+// ListColumns returns the columns defined by a SQLite table.
+func (s *sqliteDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {
+	s.logger.Log(listColumnSQL)
+	rows, err := s.database.QueryContext(ctx, listColumnSQL, table.Name)
+	if err != nil {
+		return nil, fmt.Errorf("query SQLite columns: %w", err)
+	}
+	defer rows.Close()
+
+	columns := make([]db.Column, 0)
+	for rows.Next() {
+		var (
+			column                                     db.Column
+			identity, collation, defaultValue, comment sql.NullString
+		)
+		if err := rows.Scan(
+			&column.Name,
+			&column.OrdinalPosition,
+			&column.DataType,
+			&identity,
+			&collation,
+			&column.NotNull,
+			&defaultValue,
+			&comment,
+		); err != nil {
+			return nil, fmt.Errorf("scan SQLite column: %w", err)
+		}
+
+		column.Identity = identity.String
+		column.Collation = collation.String
+		column.Default = defaultValue.String
+		column.Comment = comment.String
+		columns = append(columns, column)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate SQLite columns: %w", err)
+	}
+
+	return columns, nil
 }
 
 // GetRows returns an unordered, bounded page of rows from a table.

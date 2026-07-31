@@ -117,6 +117,21 @@ func TestListTables(t *testing.T) {
 	assert.Equal(t, []db.Table{{Name: "city"}, {Name: "country"}, {Name: "countrylanguage"}}, tables)
 }
 
+func TestListColumns(t *testing.T) {
+	database := connectWorld(t)
+
+	columns, err := database.ListColumns(context.Background(), db.Table{Name: "city"})
+
+	require.NoError(t, err)
+	assert.Equal(t, []db.Column{
+		{Name: "ID", OrdinalPosition: 1, DataType: "int", Identity: "AUTO_INCREMENT", NotNull: true},
+		{Name: "Name", OrdinalPosition: 2, DataType: "char(35)", Collation: "default", NotNull: true},
+		{Name: "CountryCode", OrdinalPosition: 3, DataType: "char(3)", Collation: "default", NotNull: true},
+		{Name: "District", OrdinalPosition: 4, DataType: "char(20)", Collation: "default", NotNull: true},
+		{Name: "Population", OrdinalPosition: 5, DataType: "int", NotNull: true, Default: "0"},
+	}, columns)
+}
+
 func TestTableDDL(t *testing.T) {
 	database := connectWorld(t)
 

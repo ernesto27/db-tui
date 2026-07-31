@@ -49,6 +49,90 @@ func TestListTables(t *testing.T) {
 	assert.Equal(t, want, tables, "ListTables()")
 }
 
+func TestListColumns(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	columns, err := database.ListColumns(ctx, db.Table{Name: "Album"})
+	if !assert.NoError(t, err, "list Album columns") {
+		return
+	}
+
+	assert.Equal(t, []db.Column{
+		{Name: "AlbumId", OrdinalPosition: 1, DataType: "int4", NotNull: true},
+		{Name: "Title", OrdinalPosition: 2, DataType: "varchar(160)", Collation: "default", NotNull: true},
+		{Name: "ArtistId", OrdinalPosition: 3, DataType: "int4", NotNull: true},
+	}, columns)
+}
+
+func TestListColumnsCompactsDroppedColumnPositions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	_, err = database.Execute(ctx, "CREATE TABLE public.list_columns_gap_demo (first int, middle int, last int)")
+	if !assert.NoError(t, err, "create ListColumns test table") {
+		return
+	}
+	t.Cleanup(func() {
+		_, _ = database.Execute(context.Background(), "DROP TABLE IF EXISTS public.list_columns_gap_demo")
+	})
+	_, err = database.Execute(ctx, "ALTER TABLE public.list_columns_gap_demo DROP COLUMN middle")
+	if !assert.NoError(t, err, "drop middle column") {
+		return
+	}
+
+	columns, err := database.ListColumns(ctx, db.Table{Name: "list_columns_gap_demo"})
+	if !assert.NoError(t, err, "list columns after dropping a column") {
+		return
+	}
+
+	assert.Equal(t, []db.Column{
+		{Name: "first", OrdinalPosition: 1, DataType: "int4"},
+		{Name: "last", OrdinalPosition: 2, DataType: "int4"},
+	}, columns)
+}
+
+func TestListColumnsNormalizesArrayTypeNames(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	_, err = database.Execute(ctx, "CREATE TABLE public.list_columns_array_demo (tags varchar(10)[], codes char(3)[])")
+	if !assert.NoError(t, err, "create ListColumns array test table") {
+		return
+	}
+	t.Cleanup(func() {
+		_, _ = database.Execute(context.Background(), "DROP TABLE IF EXISTS public.list_columns_array_demo")
+	})
+
+	columns, err := database.ListColumns(ctx, db.Table{Name: "list_columns_array_demo"})
+	if !assert.NoError(t, err, "list array columns") {
+		return
+	}
+
+	assert.Equal(t, []db.Column{
+		{Name: "tags", OrdinalPosition: 1, DataType: "varchar(10)[]", Collation: "default"},
+		{Name: "codes", OrdinalPosition: 2, DataType: "char(3)[]", Collation: "default"},
+	}, columns)
+}
+
 func TestTableDDL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

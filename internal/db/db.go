@@ -96,6 +96,17 @@ type QueryResult struct {
 	CommandTag string
 }
 
+type Column struct {
+	Name            string
+	OrdinalPosition int
+	DataType        string
+	Identity        string
+	Collation       string
+	NotNull         bool
+	Default         string
+	Comment         string
+}
+
 // Database provides operations supported by a connected database.
 type Database interface {
 	// Name returns the connected database name for display.
@@ -115,5 +126,6 @@ type Database interface {
 	// Export writes all table rows using typeVal as the export format.
 	Export(ctx context.Context, table Table, typeVal string) error
 	ExportQuery(ctx context.Context, sql string) error
+	ListColumns(ctx context.Context, table Table) ([]Column, error)
 	Close()
 }

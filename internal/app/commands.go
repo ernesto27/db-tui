@@ -39,6 +39,14 @@ type tableDDLLoadedMsg struct {
 	err       error
 }
 
+type columnsLoadedMsg struct {
+	tableName string
+	columns   []db.Column
+	session   uint64
+	request   uint64
+	err       error
+}
+
 type queryFinishedMsg struct {
 	result  db.QueryResult
 	session uint64
@@ -86,6 +94,22 @@ func loadTableDDL(database db.Database, table db.Table, session, request uint64)
 		return tableDDLLoadedMsg{
 			tableName: table.Name,
 			sql:       sql,
+			session:   session,
+			request:   request,
+			err:       err,
+		}
+	}
+}
+
+func loadColumns(database db.Database, table db.Table, session, request uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		defer cancel()
+
+		columns, err := database.ListColumns(ctx, table)
+		return columnsLoadedMsg{
+			tableName: table.Name,
+			columns:   columns,
 			session:   session,
 			request:   request,
 			err:       err,

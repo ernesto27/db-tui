@@ -28,10 +28,79 @@ const listTablesSQL = `
 		AND table_type = 'BASE TABLE'
 	ORDER BY table_name`
 
+const listColumnsSQL = `
+	SELECT
+		column_info.COLUMN_NAME AS column_name,
+		column_info.ORDINAL_POSITION AS ordinal_position,
+		column_info.COLUMN_TYPE AS data_type,
+		CASE
+			WHEN column_info.EXTRA LIKE '%auto_increment%' THEN 'AUTO_INCREMENT'
+			ELSE NULL
+		END AS identity,
+		CASE
+			WHEN column_info.COLLATION_NAME IS NULL THEN NULL
+			WHEN column_info.COLLATION_NAME = table_info.TABLE_COLLATION THEN 'default'
+			ELSE column_info.COLLATION_NAME
+		END AS collation_name,
+		CASE column_info.IS_NULLABLE
+			WHEN 'NO' THEN TRUE
+			ELSE FALSE
+		END AS not_null,
+		column_info.COLUMN_DEFAULT AS default_expression,
+		column_info.COLUMN_COMMENT AS comment
+	FROM information_schema.columns AS column_info
+	JOIN information_schema.tables AS table_info
+		ON table_info.TABLE_SCHEMA = column_info.TABLE_SCHEMA
+		AND table_info.TABLE_NAME = column_info.TABLE_NAME
+	WHERE column_info.TABLE_SCHEMA = DATABASE()
+		AND column_info.TABLE_NAME = ?
+	ORDER BY column_info.ORDINAL_POSITION`
+
 type mysqlDatabase struct {
 	database *sql.DB
 	logger   *logger.Logger
 	config   *mysqldriver.Config
+}
+
+// ListColumns returns the columns defined by a table in the active MySQL database.
+func (m *mysqlDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {
+	m.logger.Log(listColumnsSQL)
+	rows, err := m.database.QueryContext(ctx, listColumnsSQL, table.Name)
+	if err != nil {
+		return nil, fmt.Errorf("query MySQL columns: %w", err)
+	}
+	defer rows.Close()
+
+	columns := make([]db.Column, 0)
+	for rows.Next() {
+		var (
+			column                                     db.Column
+			identity, collation, defaultValue, comment sql.NullString
+		)
+		if err := rows.Scan(
+			&column.Name,
+			&column.OrdinalPosition,
+			&column.DataType,
+			&identity,
+			&collation,
+			&column.NotNull,
+			&defaultValue,
+			&comment,
+		); err != nil {
+			return nil, fmt.Errorf("scan MySQL column: %w", err)
+		}
+
+		column.Identity = identity.String
+		column.Collation = collation.String
+		column.Default = defaultValue.String
+		column.Comment = comment.String
+		columns = append(columns, column)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate MySQL columns: %w", err)
+	}
+
+	return columns, nil
 }
 
 // Connect opens a MySQL database using dsn and verifies that it is reachable.
