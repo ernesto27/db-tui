@@ -56,6 +56,17 @@ const listColumnsSQL = `
 		AND column_info.TABLE_NAME = ?
 	ORDER BY column_info.ORDINAL_POSITION`
 
+const listIndexesSQL = `
+	SELECT
+		index_info.INDEX_NAME AS index_name,
+		COALESCE(index_info.COLUMN_NAME, '') AS column_name,
+		index_info.TABLE_NAME AS table_name,
+		index_info.INDEX_TYPE AS access_method
+	FROM information_schema.statistics AS index_info
+	WHERE index_info.TABLE_SCHEMA = DATABASE()
+		AND index_info.TABLE_NAME = ?
+	ORDER BY index_info.INDEX_NAME, index_info.SEQ_IN_INDEX`
+
 type mysqlDatabase struct {
 	database *sql.DB
 	logger   *logger.Logger
@@ -101,6 +112,30 @@ func (m *mysqlDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.C
 	}
 
 	return columns, nil
+}
+
+// ListIndexes returns every indexed column of a table in the active MySQL database.
+func (m *mysqlDatabase) ListIndexes(ctx context.Context, table db.Table) ([]db.IndexColumns, error) {
+	m.logger.Log(listIndexesSQL)
+	rows, err := m.database.QueryContext(ctx, listIndexesSQL, table.Name)
+	if err != nil {
+		return nil, fmt.Errorf("query MySQL indexes: %w", err)
+	}
+	defer rows.Close()
+
+	indexes := make([]db.IndexColumns, 0)
+	for rows.Next() {
+		var index db.IndexColumns
+		if err := rows.Scan(&index.Name, &index.Column, &index.Table, &index.AccessMethod); err != nil {
+			return nil, fmt.Errorf("scan MySQL index: %w", err)
+		}
+		indexes = append(indexes, index)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate MySQL indexes: %w", err)
+	}
+
+	return indexes, nil
 }
 
 // Connect opens a MySQL database using dsn and verifies that it is reachable.

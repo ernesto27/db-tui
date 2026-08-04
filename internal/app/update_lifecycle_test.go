@@ -221,6 +221,39 @@ func TestUpdateAppliesOnlyCurrentColumnsResult(t *testing.T) {
 	assert.Equal(t, columns, stale.columnsModal.columns)
 }
 
+func TestUpdateAppliesOnlyCurrentIndexesResult(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.session = 8
+	model.navigator.tables = []db.Table{{Name: "Album"}}
+	modal := newIndexesModal("Album")
+	model.indexesModal = &modal
+	model.indexesRequest = 4
+	indexes := []db.IndexColumns{{Name: "album_pkey", Column: "AlbumId", Table: "Album", AccessMethod: "btree"}}
+
+	updated, command := updateModel(t, model, indexesLoadedMsg{
+		tableName: "Album",
+		indexes:   indexes,
+		session:   8,
+		request:   4,
+	})
+
+	assert.Nil(t, command)
+	require.NotNil(t, updated.indexesModal)
+	assert.False(t, updated.indexesModal.loading)
+	assert.Equal(t, indexes, updated.indexesModal.indexes)
+
+	stale, command := updateModel(t, updated, indexesLoadedMsg{
+		tableName: "Album",
+		indexes:   []db.IndexColumns{{Name: "stale"}},
+		session:   8,
+		request:   3,
+	})
+
+	assert.Nil(t, command)
+	require.NotNil(t, stale.indexesModal)
+	assert.Equal(t, indexes, stale.indexesModal.indexes)
+}
+
 func TestUpdateIgnoresStaleQueryResult(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.session = 5

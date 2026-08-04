@@ -44,6 +44,7 @@ func TestListTables(t *testing.T) {
 		{Name: "MediaType"},
 		{Name: "Playlist"},
 		{Name: "PlaylistTrack"},
+		{Name: "PostgresIndexExample"},
 		{Name: "Track"},
 	}
 	assert.Equal(t, want, tables, "ListTables()")
@@ -69,6 +70,29 @@ func TestListColumns(t *testing.T) {
 		{Name: "Title", OrdinalPosition: 2, DataType: "varchar(160)", Collation: "default", NotNull: true},
 		{Name: "ArtistId", OrdinalPosition: 3, DataType: "int4", NotNull: true},
 	}, columns)
+}
+
+func TestListIndexes(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	indexes, err := database.ListIndexes(ctx, db.Table{Name: "PostgresIndexExample"})
+	if !assert.NoError(t, err, "list PostgresIndexExample indexes") {
+		return
+	}
+
+	assert.Equal(t, []db.IndexColumns{
+		{Name: "IX_PostgresIndexExample_Category", Column: "\"Category\"", Table: "PostgresIndexExample", AccessMethod: "btree"},
+		{Name: "IX_PostgresIndexExample_CreatedAt", Column: "\"CreatedAt\"", Table: "PostgresIndexExample", AccessMethod: "btree"},
+		{Name: "IX_PostgresIndexExample_SearchTerm", Column: "\"SearchTerm\"", Table: "PostgresIndexExample", AccessMethod: "btree"},
+		{Name: "PostgresIndexExample_pkey", Column: "\"Id\"", Table: "PostgresIndexExample", AccessMethod: "btree"},
+	}, indexes)
 }
 
 func TestListColumnsCompactsDroppedColumnPositions(t *testing.T) {

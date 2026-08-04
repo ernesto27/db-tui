@@ -28,11 +28,13 @@ type actionsModal struct {
 	// action availability
 	ddlAvailable     bool
 	columnsAvailable bool
+	indexesAvailable bool
 	renameAvailable  bool
 }
 
 type selectDDLActionMsg struct{}
 type selectColumnsActionMsg struct{}
+type selectIndexesActionMsg struct{}
 type selectRenameActionMsg struct{}
 type cancelActionsMsg struct{}
 type submitRenameMsg struct {
@@ -105,6 +107,9 @@ func (m actionsModal) actionCount() int {
 	if m.columnsAvailable {
 		count++
 	}
+	if m.indexesAvailable {
+		count++
+	}
 	if m.renameAvailable {
 		count++
 	}
@@ -122,6 +127,12 @@ func (m actionsModal) selectAction() (actionsModal, tea.Cmd) {
 	if m.columnsAvailable {
 		if m.selected == idx {
 			return m, func() tea.Msg { return selectColumnsActionMsg{} }
+		}
+		idx++
+	}
+	if m.indexesAvailable {
+		if m.selected == idx {
+			return m, func() tea.Msg { return selectIndexesActionMsg{} }
 		}
 		idx++
 	}
@@ -211,6 +222,16 @@ func (m actionsModal) viewSelecting(width int) string {
 			style = selectedStyle
 		}
 		lines = append(lines, prefix+style.Render("Inspect columns for "+sanitizeText(m.tableName)))
+		idx++
+	}
+	if m.indexesAvailable {
+		prefix := "  "
+		style := normalStyle
+		if m.selected == idx {
+			prefix = "> "
+			style = selectedStyle
+		}
+		lines = append(lines, prefix+style.Render("Inspect indexes for "+sanitizeText(m.tableName)))
 		idx++
 	}
 	if m.renameAvailable {

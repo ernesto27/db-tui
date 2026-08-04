@@ -7,10 +7,11 @@
 [x] - option to dump all database file
 [x] - add sqlite support
 [x] - export to json data
+[] - when press scape in modal of ctrl+g go back modal list
 [] - when remove a table in raw query do a refresh table[
 [] - in raw query show execution time, rows affected
 [] - when show ddl i want to be able to copy
-[] - show host connection in some place of TUI
+[x] - show host connection in some place of TUI
 
 
 

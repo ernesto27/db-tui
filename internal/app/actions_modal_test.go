@@ -20,6 +20,13 @@ func TestActionsModalShowsDDLAndRenameActions(t *testing.T) {
 	assert.Contains(t, view, "Rename connection \"Local\"")
 }
 
+func TestActionsModalShowsIndexesWhenAvailable(t *testing.T) {
+	modal := newActionsModal("Album", "Local")
+	modal.indexesAvailable = true
+
+	assert.Contains(t, modal.view(80), "Inspect indexes for Album")
+}
+
 func TestActionsModalRenameOnlyWhenNoTableSelected(t *testing.T) {
 	modal := newActionsModal("", "Local")
 	view := modal.view(80)
@@ -94,6 +101,18 @@ func TestActionsModalEnterSelectsColumnsAction(t *testing.T) {
 	assert.True(t, ok)
 }
 
+func TestActionsModalEnterSelectsIndexesAction(t *testing.T) {
+	modal := newActionsModal("Album", "Local")
+	modal.indexesAvailable = true
+	modal.selected = 2
+
+	_, command := modal.update(keyPress(tea.KeyEnter, "", 0))
+	require.NotNil(t, command)
+
+	_, ok := command().(selectIndexesActionMsg)
+	assert.True(t, ok)
+}
+
 func TestActionsModalEnterSelectsRenameAfterColumnsAction(t *testing.T) {
 	modal := newActionsModal("Album", "Local")
 	modal.selected = 2
@@ -138,6 +157,17 @@ func TestCtrlGOpensActionsModalWithSelectedTable(t *testing.T) {
 
 	assert.NotNil(t, updated.actionsModal)
 	assert.NotEmpty(t, updated.actionsModal.tableName)
+}
+
+func TestCtrlGShowsIndexesForMySQLConnection(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "world", engine: db.EngineMySQL}
+	model.navigator.tables = []db.Table{{Name: "city"}}
+
+	updated, _ := updateModel(t, model, keyPress('g', "", tea.ModCtrl))
+
+	require.NotNil(t, updated.actionsModal)
+	assert.True(t, updated.actionsModal.indexesAvailable)
 }
 
 func TestCtrlGOpensActionsModalWithoutTable(t *testing.T) {
@@ -213,6 +243,25 @@ func TestSelectColumnsClosesActionsAndOpensColumnsModal(t *testing.T) {
 	require.NotNil(t, updated.columnsModal)
 	assert.Equal(t, "Album", updated.columnsModal.tableName)
 	assert.True(t, updated.columnsModal.loading)
+}
+
+func TestSelectIndexesClosesActionsAndOpensIndexesModal(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook", engine: db.EnginePostgreSQL}
+	model.navigator.tables = []db.Table{{Name: "Album"}}
+	model.session = 5
+
+	modal := newActionsModal("Album", "Local")
+	modal.indexesAvailable = true
+	model.actionsModal = &modal
+
+	updated, command := updateModel(t, model, selectIndexesActionMsg{})
+	require.NotNil(t, command)
+
+	assert.Nil(t, updated.actionsModal)
+	require.NotNil(t, updated.indexesModal)
+	assert.Equal(t, "Album", updated.indexesModal.tableName)
+	assert.True(t, updated.indexesModal.loading)
 }
 
 func TestActionsModalRendersOverlay(t *testing.T) {

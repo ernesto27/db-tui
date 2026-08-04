@@ -132,6 +132,18 @@ func TestListColumns(t *testing.T) {
 	}, columns)
 }
 
+func TestListIndexes(t *testing.T) {
+	database := connectWorld(t)
+
+	indexes, err := database.ListIndexes(context.Background(), db.Table{Name: "city"})
+
+	require.NoError(t, err)
+	assert.Equal(t, []db.IndexColumns{
+		{Name: "CountryCode", Column: "CountryCode", Table: "city", AccessMethod: "BTREE"},
+		{Name: "PRIMARY", Column: "ID", Table: "city", AccessMethod: "BTREE"},
+	}, indexes)
+}
+
 func TestTableDDL(t *testing.T) {
 	database := connectWorld(t)
 

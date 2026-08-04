@@ -47,6 +47,14 @@ type columnsLoadedMsg struct {
 	err       error
 }
 
+type indexesLoadedMsg struct {
+	tableName string
+	indexes   []db.IndexColumns
+	session   uint64
+	request   uint64
+	err       error
+}
+
 type queryFinishedMsg struct {
 	result  db.QueryResult
 	session uint64
@@ -110,6 +118,22 @@ func loadColumns(database db.Database, table db.Table, session, request uint64) 
 		return columnsLoadedMsg{
 			tableName: table.Name,
 			columns:   columns,
+			session:   session,
+			request:   request,
+			err:       err,
+		}
+	}
+}
+
+func loadIndexes(database db.Database, table db.Table, session, request uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		defer cancel()
+
+		indexes, err := database.ListIndexes(ctx, table)
+		return indexesLoadedMsg{
+			tableName: table.Name,
+			indexes:   indexes,
 			session:   session,
 			request:   request,
 			err:       err,

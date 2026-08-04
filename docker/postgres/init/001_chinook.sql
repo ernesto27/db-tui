@@ -16112,6 +16112,41 @@ ALTER TABLE ONLY public."Track"
 
 
 --
--- PostgreSQL database dump complete
+-- Name: PostgresIndexExample; Type: TABLE; Schema: public; Owner: -
 --
 
+CREATE TABLE public."PostgresIndexExample" (
+    "Id" bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "SearchTerm" text NOT NULL,
+    "Category" text NOT NULL,
+    "CreatedAt" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+--
+-- Name: IX_PostgresIndexExample_SearchTerm; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_PostgresIndexExample_SearchTerm"
+    ON public."PostgresIndexExample" USING btree ("SearchTerm");
+
+
+--
+-- Name: IX_PostgresIndexExample_Category; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_PostgresIndexExample_Category"
+    ON public."PostgresIndexExample" USING btree ("Category");
+
+
+--
+-- Name: IX_PostgresIndexExample_CreatedAt; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_PostgresIndexExample_CreatedAt"
+    ON public."PostgresIndexExample" USING btree ("CreatedAt" DESC);
+
+
+--
+-- PostgreSQL database dump complete
+--

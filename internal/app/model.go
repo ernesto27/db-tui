@@ -69,6 +69,8 @@ type Model struct {
 	columnsRequest uint64
 	actionsModal   *actionsModal
 	renameRequest  uint64
+	indexesModal   *indexesModal
+	indexesRequest uint64
 }
 
 // New creates the root Bubble Tea application model.

@@ -10,7 +10,6 @@ services:
     ports:
       - "127.0.0.1:5433:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U db_tui -d chinook"]
@@ -28,7 +27,6 @@ services:
     ports:
       - "127.0.0.1:5434:5432"
     volumes:
-      - pagila-postgres-data:/var/lib/postgresql/data
       - ./docker/postgres/pagila.sql:/docker-entrypoint-initdb.d/001_pagila.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U db_tui -d pagila"]
@@ -47,7 +45,6 @@ services:
     ports:
       - "127.0.0.1:3307:3306"
     volumes:
-      - mysql-data:/var/lib/mysql
       - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping --protocol=tcp -h 127.0.0.1 -u db_tui -pdb_tui"]
@@ -55,8 +52,3 @@ services:
       timeout: 3s
       retries: 15
       start_period: 10s
-
-volumes:
-  postgres-data:
-  pagila-postgres-data:
-  mysql-data:

@@ -107,6 +107,13 @@ type Column struct {
 	Comment         string
 }
 
+type IndexColumns struct {
+	Name         string
+	Column       string
+	Table        string
+	AccessMethod string
+}
+
 // Database provides operations supported by a connected database.
 type Database interface {
 	// Name returns the connected database name for display.
@@ -127,5 +134,6 @@ type Database interface {
 	Export(ctx context.Context, table Table, typeVal string) error
 	ExportQuery(ctx context.Context, sql string) error
 	ListColumns(ctx context.Context, table Table) ([]Column, error)
+	ListIndexes(context.Context, Table) ([]IndexColumns, error)
 	Close()
 }

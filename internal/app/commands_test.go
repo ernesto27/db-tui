@@ -142,6 +142,23 @@ func TestLoadColumns(t *testing.T) {
 	assert.Equal(t, uint64(3), message.request)
 }
 
+func TestLoadIndexes(t *testing.T) {
+	wantIndexes := []db.IndexColumns{{Name: "album_pkey", Column: "AlbumId", Table: "Album", AccessMethod: "btree"}}
+	database := &fakeDatabase{indexes: wantIndexes}
+	table := db.Table{Name: "Album"}
+
+	message, ok := loadIndexes(database, table, 7, 3)().(indexesLoadedMsg)
+	require.True(t, ok)
+
+	assert.Equal(t, 1, database.listIndexesCalls)
+	assert.Equal(t, table, database.listIndexesTable)
+	assert.True(t, database.listIndexesDeadline)
+	assert.Equal(t, wantIndexes, message.indexes)
+	assert.Equal(t, "Album", message.tableName)
+	assert.Equal(t, uint64(7), message.session)
+	assert.Equal(t, uint64(3), message.request)
+}
+
 func TestExecuteQuery(t *testing.T) {
 	wantErr := errors.New("query failed")
 	tests := []struct {

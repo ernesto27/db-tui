@@ -42,6 +42,15 @@ FROM pragma_table_xinfo(?) AS column_info
 WHERE column_info."hidden" <> 1
 ORDER BY column_info.cid`
 
+const listIndexesSQL = `SELECT
+    index_list.name AS index_name,
+    COALESCE(index_column.name, '') AS column_name,
+    ? AS table_name,
+    'BTREE' AS access_method
+FROM pragma_index_list(?) AS index_list
+JOIN pragma_index_info(index_list.name) AS index_column
+ORDER BY index_list.name, index_column.seqno`
+
 type sqliteDatabase struct {
 	database *sql.DB
 	logger   *logger.Logger
@@ -161,6 +170,30 @@ func (s *sqliteDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.
 	}
 
 	return columns, nil
+}
+
+// ListIndexes returns every indexed column of a SQLite table.
+func (s *sqliteDatabase) ListIndexes(ctx context.Context, table db.Table) ([]db.IndexColumns, error) {
+	s.logger.Log(listIndexesSQL)
+	rows, err := s.database.QueryContext(ctx, listIndexesSQL, table.Name, table.Name)
+	if err != nil {
+		return nil, fmt.Errorf("query SQLite indexes: %w", err)
+	}
+	defer rows.Close()
+
+	indexes := make([]db.IndexColumns, 0)
+	for rows.Next() {
+		var index db.IndexColumns
+		if err := rows.Scan(&index.Name, &index.Column, &index.Table, &index.AccessMethod); err != nil {
+			return nil, fmt.Errorf("scan SQLite index: %w", err)
+		}
+		indexes = append(indexes, index)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate SQLite indexes: %w", err)
+	}
+
+	return indexes, nil
 }
 
 // GetRows returns an unordered, bounded page of rows from a table.

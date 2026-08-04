@@ -46,6 +46,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.columnsModal != nil {
 		return m, m.updateColumnsModal(msg)
 	}
+	if m.indexesModal != nil {
+		return m, m.updateIndexesModal(msg)
+	}
 	if m.actionsModal != nil {
 		return m.updateActionsModal(msg)
 	}
@@ -79,7 +82,8 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 			(m.ddlModal != nil && m.ddlModal.loading) ||
 			(m.columnsModal != nil && m.columnsModal.loading) ||
 			(m.dumpModal != nil && m.dumpModal.isRunning()) ||
-			(m.exportModal != nil && m.exportModal.isRunning()) {
+			(m.exportModal != nil && m.exportModal.isRunning()) ||
+			(m.indexesModal != nil && m.indexesModal.loading) {
 			m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
 			return spinnerTick(), true
 		}
@@ -120,6 +124,20 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		m.columnsModal.finish(msg.columns, msg.err, m.layout)
 		return nil, true
+	case indexesLoadedMsg:
+		table, ok := m.navigator.selectedTable()
+		if msg.session != m.session ||
+			m.indexesModal == nil ||
+			msg.request != m.indexesRequest ||
+			!ok ||
+			table.Name != msg.tableName ||
+			m.indexesModal.tableName != msg.tableName {
+			return nil, true
+		}
+
+		m.indexesModal.finish(msg.indexes, msg.err, m.layout)
+		return nil, true
+
 	case queryFinishedMsg:
 		if msg.session != m.session || msg.request != m.query.request {
 			return nil, true
@@ -138,6 +156,9 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		if m.columnsModal != nil {
 			m.columnsModal.clamp(m.layout)
+		}
+		if m.indexesModal != nil {
+			m.indexesModal.clamp(m.layout)
 		}
 		return nil, true
 	case renameRequestMsg:
@@ -267,6 +288,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.query.reset(m.layout)
 		m.ddlModal = nil
 		m.columnsModal = nil
+		m.indexesModal = nil
 		m.loading = true
 		m.session++
 		m.modal = nil
@@ -327,6 +349,7 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.query.reset(m.layout)
 			m.ddlModal = nil
 			m.columnsModal = nil
+			m.indexesModal = nil
 			m.session++
 		} else if msg.index < m.activeConnectionIndex {
 			m.activeConnectionIndex--
@@ -373,6 +396,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		modal := newActionsModal(tableName, connName)
+		modal.indexesAvailable = tableName != ""
 		m.actionsModal = &modal
 		return nil
 	case key.Matches(msg, m.keys.tableSearch):
@@ -735,6 +759,17 @@ func (m *Model) updateActionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		modal := newColumnsModal(table.Name)
 		m.columnsModal = &modal
 		return *m, tea.Batch(loadColumns(m.database, table, m.session, m.columnsRequest), m.startSpinner())
+	case selectIndexesActionMsg:
+		table, ok := m.navigator.selectedTable()
+		if m.database == nil || !ok {
+			m.actionsModal = nil
+			return *m, nil
+		}
+		m.actionsModal = nil
+		m.indexesRequest++
+		modal := newIndexesModal(table.Name)
+		m.indexesModal = &modal
+		return *m, tea.Batch(loadIndexes(m.database, table, m.session, m.indexesRequest), m.startSpinner())
 	case selectRenameActionMsg:
 		if m.activeConnectionIndex < 0 || m.activeConnectionIndex >= len(m.config.Connections) {
 			m.actionsModal = nil
@@ -807,5 +842,36 @@ func (m *Model) updateColumnsModal(msg tea.Msg) tea.Cmd {
 		m.columnsModal.rowOffset = len(m.columnsModal.columns)
 		m.columnsModal.clamp(m.layout)
 	}
+	return nil
+}
+
+func (m *Model) updateIndexesModal(msg tea.Msg) tea.Cmd {
+	keyMsg, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return nil
+	}
+
+	switch {
+	case keyMsg.String() == "esc":
+		m.indexesModal = nil
+	case key.Matches(keyMsg, m.keys.focusLeft):
+		m.indexesModal.scrollFields(-1)
+	case key.Matches(keyMsg, m.keys.focusRight):
+		m.indexesModal.scrollFields(1)
+	case key.Matches(keyMsg, m.keys.up):
+		m.indexesModal.scrollRows(-1, m.layout)
+	case key.Matches(keyMsg, m.keys.down):
+		m.indexesModal.scrollRows(1, m.layout)
+	case key.Matches(keyMsg, m.keys.pageUp):
+		m.indexesModal.scrollRows(-m.indexesModal.visibleRows(m.layout), m.layout)
+	case key.Matches(keyMsg, m.keys.pageDown):
+		m.indexesModal.scrollRows(m.indexesModal.visibleRows(m.layout), m.layout)
+	case key.Matches(keyMsg, m.keys.home):
+		m.indexesModal.rowOffset = 0
+	case key.Matches(keyMsg, m.keys.end):
+		m.indexesModal.rowOffset = len(m.indexesModal.indexes)
+		m.indexesModal.clamp(m.layout)
+	}
+
 	return nil
 }

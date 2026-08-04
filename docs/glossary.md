@@ -20,6 +20,10 @@ A centered, read-only db-tui overlay that displays the selected table's fresh st
 
 A cross-engine, read-only table screen for the currently selected table. It displays each column's name, ordinal position, data type, identity status, collation, nullability, default expression, and comment. Fields that an engine does not expose, such as SQLite collation and comments, render blank.
 
+## Index inspection
+
+A cross-engine, read-only table screen for the currently selected table. It displays the index name, indexed column, table name, and access method. It includes standalone indexes plus indexes created for primary-key and unique constraints. A multi-column index is represented by one row for each indexed column. PostgreSQL reports its access method, MySQL reports its index type, and SQLite reports `BTREE` for ordinary indexes.
+
 ## Structural DDL
 
 The executable SQL needed to define a supported table's columns, defaults, identity/generated clauses, collations, inline constraints, and non-constraint indexes. PostgreSQL structural DDL intentionally excludes comments, ownership, grants, triggers, and separate sequence declarations.

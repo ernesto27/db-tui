@@ -63,6 +63,18 @@ func TestListTables(t *testing.T) {
 	}, tables)
 }
 
+func TestListIndexes(t *testing.T) {
+	database := connectEmployee(t)
+
+	indexes, err := database.ListIndexes(context.Background(), db.Table{Name: "department"})
+
+	require.NoError(t, err)
+	assert.Equal(t, []db.IndexColumns{
+		{Name: "sqlite_autoindex_department_1", Column: "dept_no", Table: "department", AccessMethod: "BTREE"},
+		{Name: "sqlite_autoindex_department_2", Column: "dept_name", Table: "department", AccessMethod: "BTREE"},
+	}, indexes)
+}
+
 func TestGetRows(t *testing.T) {
 	database := connectEmployee(t)
 

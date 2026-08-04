@@ -82,6 +82,25 @@ const listColumnsSQL = `SELECT
 	    AND NOT attribute.attisdropped
 	  ORDER BY attribute.attnum`
 
+const listIndexColumnsSQL = `SELECT
+		index_class.relname AS index_name,
+		pg_get_indexdef(index_class.oid, key.position, true) AS column,
+		table_class.relname AS table_name,
+		access_method.amname AS access_method
+	FROM pg_index AS index_info
+	JOIN pg_class AS table_class
+		ON table_class.oid = index_info.indrelid
+	JOIN pg_class AS index_class
+		ON index_class.oid = index_info.indexrelid
+	JOIN pg_namespace AS schema
+		ON schema.oid = table_class.relnamespace
+	JOIN pg_am AS access_method
+		ON access_method.oid = index_class.relam
+	CROSS JOIN LATERAL generate_series(1, index_info.indnkeyatts) AS key(position)
+	WHERE schema.nspname = 'public'
+		AND table_class.relname = $1
+	ORDER BY index_name, key.position`
+
 type postgresql struct {
 	pool   *pgxpool.Pool
 	logger *logger.Logger
@@ -200,6 +219,42 @@ func (p *postgresql) ListColumns(ctx context.Context, table db.Table) ([]db.Colu
 	}
 
 	return columns, nil
+}
+
+// ListIndexes returns every indexed column of a public PostgreSQL table.
+func (p *postgresql) ListIndexes(ctx context.Context, table db.Table) ([]db.IndexColumns, error) {
+	p.logger.Log(listIndexColumnsSQL)
+	rows, err := p.pool.Query(ctx, listIndexColumnsSQL, table.Name)
+	if err != nil {
+		return nil, fmt.Errorf("query PostgreSQL Index columns: %w", err)
+	}
+	defer rows.Close()
+
+	indexColumns := make([]db.IndexColumns, 0)
+
+	for rows.Next() {
+		var index db.IndexColumns
+
+		err := rows.Scan(
+			&index.Name,
+			&index.Column,
+			&index.Table,
+			&index.AccessMethod,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan PostgreSQL index column: %w", err)
+		}
+
+		indexColumns = append(indexColumns, index)
+
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate PostgreSQL index columns: %w", err)
+	}
+
+	return indexColumns, nil
+
 }
 
 // GetRows returns an unordered page of rows from a public PostgreSQL table.

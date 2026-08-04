@@ -51,6 +51,8 @@ type fakeDatabase struct {
 	tablesErr  error
 	columns    []db.Column
 	columnsErr error
+	indexes    []db.IndexColumns
+	indexesErr error
 
 	page    db.RowPage
 	pageErr error
@@ -69,6 +71,9 @@ type fakeDatabase struct {
 	listColumnsCalls    int
 	listColumnsTable    db.Table
 	listColumnsDeadline bool
+	listIndexesCalls    int
+	listIndexesTable    db.Table
+	listIndexesDeadline bool
 	getRowsCalls        int
 	getRowsTable        db.Table
 	getRowsRequest      db.PageRequest
@@ -114,6 +119,13 @@ func (f *fakeDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.Co
 	f.listColumnsTable = table
 	_, f.listColumnsDeadline = ctx.Deadline()
 	return f.columns, f.columnsErr
+}
+
+func (f *fakeDatabase) ListIndexes(ctx context.Context, table db.Table) ([]db.IndexColumns, error) {
+	f.listIndexesCalls++
+	f.listIndexesTable = table
+	_, f.listIndexesDeadline = ctx.Deadline()
+	return f.indexes, f.indexesErr
 }
 
 func (f *fakeDatabase) GetRows(
