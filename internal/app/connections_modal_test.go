@@ -80,6 +80,15 @@ func TestConnectionModalSelectsDatabaseEngine(t *testing.T) {
 	updated, command = updated.update(keyPress(tea.KeyRight, "", 0))
 
 	assert.Nil(t, command)
+	assert.Equal(t, db.EngineOracle, updated.engine())
+	assert.Equal(t, "1521", updated.inputs[portInput].Value())
+	assert.Contains(t, updated.view(80), "Oracle")
+	assert.Contains(t, updated.view(80), "Database name")
+	assert.Equal(t, "oracle://user:password@host:1521/service", updated.inputs[dsnInput].Placeholder)
+
+	updated, command = updated.update(keyPress(tea.KeyRight, "", 0))
+
+	assert.Nil(t, command)
 	assert.Equal(t, "sqlite", updated.engine())
 	view := updated.view(80)
 	assert.Contains(t, view, "SQLite")

@@ -133,6 +133,18 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 			want: "postgres://db_tui@[2001:db8::1]:5432/chinook",
 		},
 		{
+			name: "Oracle service name",
+			settings: ConnectionSettings{
+				Engine:       db.EngineOracle,
+				Host:         "127.0.0.1",
+				Port:         1522,
+				DatabaseName: "FREEPDB1",
+				Username:     "db_tui",
+				Password:     "p@ss",
+			},
+			want: "oracle://db_tui:p%40ss@127.0.0.1:1522/FREEPDB1",
+		},
+		{
 			name:     "SQLite database file",
 			settings: ConnectionSettings{Engine: "sqlite", DSN: " ./database.db "},
 			want:     "./database.db",

@@ -13,6 +13,7 @@ import (
 	"github.com/ernestoponce27/db-tui/internal/config"
 	"github.com/ernestoponce27/db-tui/internal/db"
 	"github.com/ernestoponce27/db-tui/internal/db/mysql"
+	"github.com/ernestoponce27/db-tui/internal/db/oracle"
 	"github.com/ernestoponce27/db-tui/internal/db/postgres"
 	"github.com/ernestoponce27/db-tui/internal/db/sqlite"
 )
@@ -40,6 +41,8 @@ func connectDatabase(ctx context.Context, engine, dsn string) (db.Database, erro
 		return postgres.Connect(ctx, dsn)
 	case db.EngineMySQL:
 		return mysql.Connect(ctx, dsn)
+	case db.EngineOracle:
+		return oracle.Connect(ctx, dsn)
 	case db.EngineSQLite:
 		return sqlite.Connect(ctx, dsn)
 	default:

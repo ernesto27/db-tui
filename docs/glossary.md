@@ -50,4 +50,11 @@ A named, query-backed relation. The view browser lists ordinary PostgreSQL views
 
 ## Materialized view
 
-A PostgreSQL relation that stores the result of a defining query until it is refreshed. db-tui lists public-schema materialized views in a PostgreSQL-only navigator section. They support pageable row browsing only; refresh and all table-specific actions are intentionally excluded.
+A stored query result in PostgreSQL or Oracle that persists until it is refreshed. db-tui lists materialized views in their own navigator section. They support pageable row browsing only; refresh and all table-specific actions are intentionally excluded.
+
+## Oracle dump placeholder
+
+The initial Oracle engine's implementation of the `db.Database` dump operation.
+It returns an explicit unsupported-operation error because Oracle Data Pump
+requires external tooling and database-specific privileges that db-tui does not
+provision.

@@ -27,6 +27,15 @@ func TestBaseViewShowsConnectedEngine(t *testing.T) {
 	assert.Contains(t, view.Content, "chinook  /  MySQL")
 }
 
+func TestBaseViewShowsOracleEngine(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "FREEPDB1", engine: db.EngineOracle}
+
+	view := model.baseView()
+
+	assert.Contains(t, view.Content, "FREEPDB1  /  Oracle")
+}
+
 func TestBaseViewOmitsHostSeparatorWhenHostIsEmpty(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.database = &fakeDatabase{name: "chinook.db", engine: db.EngineSQLite}

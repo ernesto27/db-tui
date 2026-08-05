@@ -72,6 +72,9 @@ func (s ConnectionSettings) connectionDSN() (string, error) {
 	if engine == db.EngineMySQL {
 		scheme = "mysql"
 	}
+	if engine == db.EngineOracle {
+		scheme = "oracle"
+	}
 	return (&url.URL{
 		Scheme: scheme,
 		User:   user,
@@ -86,6 +89,8 @@ func (s ConnectionSettings) normalizedEngine() (string, error) {
 		return db.EnginePostgreSQL, nil
 	case db.EngineMySQL:
 		return db.EngineMySQL, nil
+	case db.EngineOracle:
+		return db.EngineOracle, nil
 	case db.EngineSQLite:
 		return db.EngineSQLite, nil
 	default:

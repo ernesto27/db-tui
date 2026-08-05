@@ -59,6 +59,8 @@ func engineDisplayName(engine string) string {
 	switch engine {
 	case db.EngineMySQL:
 		return "MySQL"
+	case db.EngineOracle:
+		return "Oracle"
 	case db.EnginePostgreSQL, "":
 		return "PostgreSQL"
 	case db.EngineSQLite:

@@ -505,6 +505,22 @@ func TestUpdateReplacesActiveDatabaseAfterCurrentConnectionAttempt(t *testing.T)
 	assert.True(t, updated.spinnerRunning)
 }
 
+func TestUpdateEnablesMaterializedViewsForOracleConnection(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	modal := newConnectionModal(ConnectionSettings{})
+	modal.connecting = true
+	model.modal = &modal
+	model.connectionAttempt = 1
+
+	updated, command := updateModel(t, model, connectionFinishedMsg{
+		database: &fakeDatabase{name: "FREEPDB1", engine: db.EngineOracle},
+		attempt:  1,
+	})
+
+	require.NotNil(t, command)
+	assert.True(t, updated.navigator.materializedViewsAvailable)
+}
+
 func TestUpdateIgnoresDumpResultFromOldSession(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.session = 6

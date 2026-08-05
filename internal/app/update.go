@@ -321,7 +321,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewLoadErr = nil
 		m.materializedViewLoadErr = nil
 		m.navigator.reset()
-		m.navigator.setMaterializedViewsAvailable(msg.database.Engine() == db.EnginePostgreSQL)
+		m.navigator.setMaterializedViewsAvailable(supportsMaterializedViews(msg.database.Engine()))
 		m.data.reset()
 		m.query.reset(m.layout)
 		m.ddlModal = nil
@@ -338,6 +338,10 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.modal = &modal
 		return m, command
 	}
+}
+
+func supportsMaterializedViews(engine string) bool {
+	return engine == db.EnginePostgreSQL || engine == db.EngineOracle
 }
 
 func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
