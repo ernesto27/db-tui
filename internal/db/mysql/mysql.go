@@ -28,6 +28,12 @@ const listTablesSQL = `
 		AND table_type = 'BASE TABLE'
 	ORDER BY table_name`
 
+const listViewsSQL = `
+	SELECT table_name
+	FROM information_schema.views
+	WHERE table_schema = DATABASE()
+	ORDER BY table_name`
+
 const listColumnsSQL = `
 	SELECT
 		column_info.COLUMN_NAME AS column_name,
@@ -266,6 +272,30 @@ func (m *mysqlDatabase) ListTables(ctx context.Context) ([]db.Table, error) {
 		return nil, fmt.Errorf("iterate MySQL tables: %w", err)
 	}
 	return tables, nil
+}
+
+// ListViews returns views in the connected MySQL database in alphabetical order.
+func (m *mysqlDatabase) ListViews(ctx context.Context) ([]db.View, error) {
+	m.logger.Log(listViewsSQL)
+	rows, err := m.database.QueryContext(ctx, listViewsSQL)
+	if err != nil {
+		return nil, fmt.Errorf("query MySQL views: %w", err)
+	}
+	defer rows.Close()
+
+	views := make([]db.View, 0)
+	for rows.Next() {
+		var view db.View
+		if err := rows.Scan(&view.Name); err != nil {
+			return nil, fmt.Errorf("scan MySQL view: %w", err)
+		}
+		views = append(views, view)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate MySQL views: %w", err)
+	}
+
+	return views, nil
 }
 
 // GetRows returns an unordered page of rows from a MySQL table.

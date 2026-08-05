@@ -20,30 +20,29 @@ func TestNavigatorSelectIndexClampsAndKeepsSelectionVisible(t *testing.T) {
 	}
 
 	assert.True(t, navigator.selectIndex(12, 5))
-	assert.Equal(t, 12, navigator.selected)
-	assert.Equal(t, 8, navigator.offset)
+	assert.Equal(t, 12, navigator.cursor().selected)
+	assert.Equal(t, 8, navigator.cursor().offset)
 
 	assert.True(t, navigator.selectIndex(-10, 5))
-	assert.Equal(t, 0, navigator.selected)
-	assert.Equal(t, 0, navigator.offset)
+	assert.Equal(t, 0, navigator.cursor().selected)
+	assert.Equal(t, 0, navigator.cursor().offset)
 
 	assert.True(t, navigator.selectIndex(100, 5))
-	assert.Equal(t, 19, navigator.selected)
-	assert.Equal(t, 15, navigator.offset)
+	assert.Equal(t, 19, navigator.cursor().selected)
+	assert.Equal(t, 15, navigator.cursor().offset)
 
 	assert.False(t, navigator.selectIndex(19, 5))
 }
 
 func TestNavigatorSelectIndexResetsEmptyList(t *testing.T) {
 	navigator := newNavigatorModel()
-	navigator.selected = 4
-	navigator.offset = 3
+	navigator.cursors[navigatorTables] = navigatorCursor{selected: 4, offset: 3}
 
 	changed := navigator.selectIndex(10, 5)
 
 	assert.False(t, changed)
-	assert.Zero(t, navigator.selected)
-	assert.Zero(t, navigator.offset)
+	assert.Zero(t, navigator.cursor().selected)
+	assert.Zero(t, navigator.cursor().offset)
 }
 
 func TestNavigatorVisibleTablesFiltersCaseInsensitiveSubstring(t *testing.T) {
@@ -72,15 +71,15 @@ func TestNavigatorNormalizeSelectionPreservesVisibleTable(t *testing.T) {
 		{Name: "Artist"},
 		{Name: "Track"},
 	}
-	navigator.selected = 1
-	selected, ok := navigator.selectedTable()
+	navigator.cursors[navigatorTables].selected = 1
+	selected, ok := navigator.selectedItem()
 	require.True(t, ok)
 
 	navigator.filter.SetValue("art")
-	changed := navigator.normalizeSelection(selected, true, 5)
+	changed := navigator.normalizeSelectionWithPrevious(selected, true, 5)
 
 	assert.False(t, changed)
-	assert.Zero(t, navigator.selected)
+	assert.Zero(t, navigator.cursor().selected)
 	table, ok := navigator.selectedTable()
 	require.True(t, ok)
 	assert.Equal(t, "Artist", table.Name)
@@ -93,15 +92,15 @@ func TestNavigatorNormalizeSelectionSelectsFirstWhenCurrentDisappears(t *testing
 		{Name: "Artist"},
 		{Name: "Track"},
 	}
-	navigator.selected = 1
-	selected, ok := navigator.selectedTable()
+	navigator.cursors[navigatorTables].selected = 1
+	selected, ok := navigator.selectedItem()
 	require.True(t, ok)
 
 	navigator.filter.SetValue("track")
-	changed := navigator.normalizeSelection(selected, true, 5)
+	changed := navigator.normalizeSelectionWithPrevious(selected, true, 5)
 
 	assert.True(t, changed)
-	assert.Zero(t, navigator.selected)
+	assert.Zero(t, navigator.cursor().selected)
 	table, ok := navigator.selectedTable()
 	require.True(t, ok)
 	assert.Equal(t, "Track", table.Name)
@@ -110,15 +109,16 @@ func TestNavigatorNormalizeSelectionSelectsFirstWhenCurrentDisappears(t *testing
 func TestNavigatorNormalizeSelectionResetsWhenNothingMatches(t *testing.T) {
 	navigator := newNavigatorModel()
 	navigator.tables = []db.Table{{Name: "Album"}}
-	navigator.selected = 0
-	navigator.offset = 1
+	navigator.cursors[navigatorTables] = navigatorCursor{offset: 1}
+	selected, ok := navigator.selectedItem()
+	require.True(t, ok)
 
 	navigator.filter.SetValue("missing")
-	changed := navigator.normalizeSelection(db.Table{Name: "Album"}, true, 5)
+	changed := navigator.normalizeSelectionWithPrevious(selected, true, 5)
 
 	assert.True(t, changed)
-	assert.Zero(t, navigator.selected)
-	assert.Zero(t, navigator.offset)
+	assert.Zero(t, navigator.cursor().selected)
+	assert.Zero(t, navigator.cursor().offset)
 }
 
 func TestNavigatorCancelSearchClearsFilterAndPreservesTable(t *testing.T) {
@@ -130,14 +130,14 @@ func TestNavigatorCancelSearchClearsFilterAndPreservesTable(t *testing.T) {
 	}
 	navigator.filter.SetValue("art")
 	navigator.searching = true
-	navigator.selected = 0
+	navigator.cursors[navigatorTables].selected = 0
 
 	changed := navigator.cancelSearch(5)
 
 	assert.False(t, changed)
 	assert.Empty(t, navigator.filter.Value())
 	assert.False(t, navigator.searching)
-	assert.Equal(t, 1, navigator.selected)
+	assert.Equal(t, 1, navigator.cursor().selected)
 	table, ok := navigator.selectedTable()
 	require.True(t, ok)
 	assert.Equal(t, "Artist", table.Name)
@@ -151,7 +151,7 @@ func TestNavigatorTableAtMouse(t *testing.T) {
 			Name: fmt.Sprintf("table_%02d", index),
 		})
 	}
-	navigator.offset = 3
+	navigator.cursors[navigatorTables].offset = 3
 
 	tests := []struct {
 		name      string
@@ -215,7 +215,7 @@ func TestNavigatorTableAtMouse(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			index, ok := navigator.tableAtMouse(test.message, layout)
+			index, ok := navigator.itemAtMouse(test.message, layout)
 			assert.Equal(t, test.wantOK, ok)
 			if test.wantOK {
 				assert.Equal(t, test.wantIndex, index)
@@ -233,7 +233,7 @@ func TestNavigatorTableAtMouseRejectsIndexPastFilteredList(t *testing.T) {
 	}
 	navigator.filter.SetValue("album")
 
-	_, ok := navigator.tableAtMouse(tea.MouseClickMsg{
+	_, ok := navigator.itemAtMouse(tea.MouseClickMsg{
 		X:      1,
 		Y:      layout.navigatorListY + 1,
 		Button: tea.MouseLeft,

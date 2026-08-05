@@ -43,3 +43,7 @@ An asynchronous DDL command result whose connection session, request ID, selecte
 ## Supported PostgreSQL table
 
 For the first DDL-modal release, an ordinary table in the `public` schema that is neither partitioned nor inherited. Other relation structures return an explicit unsupported-structure error.
+
+## Database view
+
+A named, query-backed relation. The view browser lists ordinary PostgreSQL views in the `public` schema, views in the active MySQL database, and non-internal SQLite views. Views appear separately from tables and support row browsing only; materialized views and view-specific actions are not included.

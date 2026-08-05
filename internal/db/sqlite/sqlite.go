@@ -26,6 +26,13 @@ const listTablesSQL = `
 		AND name NOT LIKE 'sqlite_%'
 	ORDER BY name`
 
+const listViewsSQL = `
+	SELECT name
+	FROM sqlite_master
+	WHERE type = 'view'
+		AND name NOT LIKE 'sqlite_%'
+	ORDER BY name`
+
 const listColumnSQL = `SELECT
     column_info.name AS column_name,
     column_info.cid + 1 AS ordinal_position,
@@ -129,6 +136,30 @@ func (s *sqliteDatabase) ListTables(ctx context.Context) ([]db.Table, error) {
 		return nil, fmt.Errorf("iterate SQLite tables: %w", err)
 	}
 	return tables, nil
+}
+
+// ListViews returns non-internal SQLite views in alphabetical order.
+func (s *sqliteDatabase) ListViews(ctx context.Context) ([]db.View, error) {
+	s.logger.Log(listViewsSQL)
+	rows, err := s.database.QueryContext(ctx, listViewsSQL)
+	if err != nil {
+		return nil, fmt.Errorf("query SQLite views: %w", err)
+	}
+	defer rows.Close()
+
+	views := make([]db.View, 0)
+	for rows.Next() {
+		var view db.View
+		if err := rows.Scan(&view.Name); err != nil {
+			return nil, fmt.Errorf("scan SQLite view: %w", err)
+		}
+		views = append(views, view)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate SQLite views: %w", err)
+	}
+
+	return views, nil
 }
 
 // ListColumns returns the columns defined by a SQLite table.

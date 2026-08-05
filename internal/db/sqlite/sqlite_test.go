@@ -63,6 +63,27 @@ func TestListTables(t *testing.T) {
 	}, tables)
 }
 
+func TestListViews(t *testing.T) {
+	database := connectEmployee(t)
+
+	views, err := database.ListViews(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, []db.View{
+		{Name: "current_department_employees"}, {Name: "current_department_managers"},
+		{Name: "current_dept_emp"}, {Name: "current_employee_salaries"},
+		{Name: "current_employee_titles"}, {Name: "department_directory"},
+		{Name: "department_employee_count"}, {Name: "department_employee_history"},
+		{Name: "department_manager_count"}, {Name: "department_manager_history"},
+		{Name: "dept_emp_latest_date"}, {Name: "employee_department_history"},
+		{Name: "employee_department_salaries"}, {Name: "employee_department_titles"},
+		{Name: "employee_directory"}, {Name: "employee_gender_summary"},
+		{Name: "employee_hire_dates"}, {Name: "employee_salary_history"},
+		{Name: "employee_title_history"}, {Name: "salary_by_department"},
+		{Name: "salary_summary"}, {Name: "title_summary"},
+	}, views)
+}
+
 func TestListIndexes(t *testing.T) {
 	database := connectEmployee(t)
 

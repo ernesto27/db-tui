@@ -49,6 +49,8 @@ type fakeDatabase struct {
 
 	tables     []db.Table
 	tablesErr  error
+	views      []db.View
+	viewsErr   error
 	columns    []db.Column
 	columnsErr error
 	indexes    []db.IndexColumns
@@ -68,6 +70,8 @@ type fakeDatabase struct {
 
 	listTablesCalls     int
 	listTablesDeadline  bool
+	listViewsCalls      int
+	listViewsDeadline   bool
 	listColumnsCalls    int
 	listColumnsTable    db.Table
 	listColumnsDeadline bool
@@ -112,6 +116,12 @@ func (f *fakeDatabase) ListTables(ctx context.Context) ([]db.Table, error) {
 	f.listTablesCalls++
 	_, f.listTablesDeadline = ctx.Deadline()
 	return f.tables, f.tablesErr
+}
+
+func (f *fakeDatabase) ListViews(ctx context.Context) ([]db.View, error) {
+	f.listViewsCalls++
+	_, f.listViewsDeadline = ctx.Deadline()
+	return f.views, f.viewsErr
 }
 
 func (f *fakeDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {

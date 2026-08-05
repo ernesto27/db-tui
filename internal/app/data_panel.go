@@ -121,11 +121,11 @@ func (m dataModel) view(status dataStatus, layout appLayout, focused bool) strin
 	case status.disconnected:
 		return panelStyle(layout.data.width, layout.data.height, focused).Render("Welcome to db-tui\n\nPress Ctrl+N to create a connection.\nPress Ctrl+L to open saved connections.")
 	case status.tablesLoading:
-		return panelStyle(layout.data.width, layout.data.height, focused).Render("Loading database tables…")
+		return panelStyle(layout.data.width, layout.data.height, focused).Render("Loading database objects…")
 	case status.tableLoadErr != nil:
-		return panelStyle(layout.data.width, layout.data.height, focused).Render("Unable to load database tables:\n" + sanitizeText(status.tableLoadErr.Error()))
+		return panelStyle(layout.data.width, layout.data.height, focused).Render("Unable to load database objects:\n" + sanitizeText(status.tableLoadErr.Error()))
 	case status.noTables:
-		return panelStyle(layout.data.width, layout.data.height, focused).Render("No tables found.")
+		return panelStyle(layout.data.width, layout.data.height, focused).Render("No tables or views found.")
 	case m.loading:
 		return panelStyle(layout.data.width, layout.data.height, focused).Render(status.tableName + "\n\n" + status.spinner + " Query executing…")
 	case m.err != nil:

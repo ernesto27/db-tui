@@ -5417,6 +5417,193 @@ INSERT INTO `countrylanguage` VALUES ('ZWE','Shona','F',72.1);
 commit;
 
 --
+-- View examples for browsing database views.
+--
+
+CREATE VIEW `CityDirectory` AS
+SELECT
+  city.`ID` AS `CityId`,
+  city.`Name` AS `CityName`,
+  city.`District`,
+  city.`Population`,
+  city.`CountryCode`
+FROM `city` AS city;
+
+CREATE VIEW `CityCountryDirectory` AS
+SELECT
+  city.`ID` AS `CityId`,
+  city.`Name` AS `CityName`,
+  city.`District`,
+  city.`Population` AS `CityPopulation`,
+  country.`Code` AS `CountryCode`,
+  country.`Name` AS `CountryName`,
+  country.`Continent`
+FROM `city` AS city
+JOIN `country` AS country ON country.`Code` = city.`CountryCode`;
+
+CREATE VIEW `CityDistrictSummary` AS
+SELECT
+  city.`CountryCode`,
+  city.`District`,
+  COUNT(*) AS `CityCount`,
+  SUM(city.`Population`) AS `Population`
+FROM `city` AS city
+GROUP BY city.`CountryCode`, city.`District`;
+
+CREATE VIEW `CityPopulationSummary` AS
+SELECT
+  city.`CountryCode`,
+  COUNT(*) AS `CityCount`,
+  SUM(city.`Population`) AS `UrbanPopulation`,
+  MAX(city.`Population`) AS `LargestCityPopulation`
+FROM `city` AS city
+GROUP BY city.`CountryCode`;
+
+CREATE VIEW `CountryCapitalDirectory` AS
+SELECT
+  country.`Code` AS `CountryCode`,
+  country.`Name` AS `CountryName`,
+  capital.`ID` AS `CapitalId`,
+  capital.`Name` AS `CapitalName`,
+  capital.`Population` AS `CapitalPopulation`
+FROM `country` AS country
+LEFT JOIN `city` AS capital ON capital.`ID` = country.`Capital`;
+
+CREATE VIEW `CountryDirectory` AS
+SELECT
+  country.`Code`,
+  country.`Name`,
+  country.`Continent`,
+  country.`Region`,
+  country.`Population`,
+  country.`SurfaceArea`,
+  country.`LifeExpectancy`
+FROM `country` AS country;
+
+CREATE VIEW `CountryLanguageDetail` AS
+SELECT
+  country.`Code` AS `CountryCode`,
+  country.`Name` AS `CountryName`,
+  language.`Language`,
+  language.`IsOfficial`,
+  language.`Percentage`
+FROM `countrylanguage` AS language
+JOIN `country` AS country ON country.`Code` = language.`CountryCode`;
+
+CREATE VIEW `CountryLanguageSummary` AS
+SELECT
+  language.`CountryCode`,
+  COUNT(*) AS `LanguageCount`,
+  SUM(language.`IsOfficial` = 'T') AS `OfficialLanguageCount`
+FROM `countrylanguage` AS language
+GROUP BY language.`CountryCode`;
+
+CREATE VIEW `CountryPopulationByContinent` AS
+SELECT
+  country.`Continent`,
+  COUNT(*) AS `CountryCount`,
+  SUM(country.`Population`) AS `Population`,
+  AVG(country.`Population`) AS `AverageCountryPopulation`
+FROM `country` AS country
+GROUP BY country.`Continent`;
+
+CREATE VIEW `CountryPopulationByRegion` AS
+SELECT
+  country.`Continent`,
+  country.`Region`,
+  COUNT(*) AS `CountryCount`,
+  SUM(country.`Population`) AS `Population`
+FROM `country` AS country
+GROUP BY country.`Continent`, country.`Region`;
+
+CREATE VIEW `CountryPopulationDensity` AS
+SELECT
+  country.`Code`,
+  country.`Name`,
+  country.`Population`,
+  country.`SurfaceArea`,
+  country.`Population` / NULLIF(country.`SurfaceArea`, 0) AS `PopulationDensity`
+FROM `country` AS country;
+
+CREATE VIEW `CountrySurfaceAreaByContinent` AS
+SELECT
+  country.`Continent`,
+  SUM(country.`SurfaceArea`) AS `SurfaceArea`,
+  AVG(country.`SurfaceArea`) AS `AverageCountrySurfaceArea`
+FROM `country` AS country
+GROUP BY country.`Continent`;
+
+CREATE VIEW `GNPByContinent` AS
+SELECT
+  country.`Continent`,
+  SUM(country.`GNP`) AS `GNP`,
+  AVG(country.`GNP`) AS `AverageGNP`
+FROM `country` AS country
+GROUP BY country.`Continent`;
+
+CREATE VIEW `GovernmentFormSummary` AS
+SELECT
+  country.`GovernmentForm`,
+  COUNT(*) AS `CountryCount`,
+  SUM(country.`Population`) AS `Population`
+FROM `country` AS country
+GROUP BY country.`GovernmentForm`;
+
+CREATE VIEW `IndependentCountrySummary` AS
+SELECT
+  country.`Continent`,
+  COUNT(*) AS `CountryCount`,
+  MIN(country.`IndepYear`) AS `EarliestIndependenceYear`,
+  MAX(country.`IndepYear`) AS `LatestIndependenceYear`
+FROM `country` AS country
+WHERE country.`IndepYear` IS NOT NULL
+GROUP BY country.`Continent`;
+
+CREATE VIEW `LargestCities` AS
+SELECT
+  city.`ID` AS `CityId`,
+  city.`Name` AS `CityName`,
+  city.`CountryCode`,
+  city.`Population`
+FROM `city` AS city;
+
+CREATE VIEW `LargestCountries` AS
+SELECT
+  country.`Code`,
+  country.`Name`,
+  country.`Continent`,
+  country.`Population`,
+  country.`GNP`
+FROM `country` AS country;
+
+CREATE VIEW `LifeExpectancySummary` AS
+SELECT
+  country.`Continent`,
+  COUNT(country.`LifeExpectancy`) AS `CountryCount`,
+  AVG(country.`LifeExpectancy`) AS `AverageLifeExpectancy`,
+  MIN(country.`LifeExpectancy`) AS `MinimumLifeExpectancy`,
+  MAX(country.`LifeExpectancy`) AS `MaximumLifeExpectancy`
+FROM `country` AS country
+GROUP BY country.`Continent`;
+
+CREATE VIEW `OfficialLanguageDetail` AS
+SELECT
+  language.`CountryCode`,
+  language.`Language`,
+  language.`Percentage`
+FROM `countrylanguage` AS language
+WHERE language.`IsOfficial` = 'T';
+
+CREATE VIEW `OfficialLanguageSummary` AS
+SELECT
+  language.`Language`,
+  COUNT(*) AS `CountryCount`,
+  AVG(language.`Percentage`) AS `AveragePercentage`
+FROM `countrylanguage` AS language
+WHERE language.`IsOfficial` = 'T'
+GROUP BY language.`Language`;
+
+--
 -- Dumping events for database 'world'
 --
 

@@ -117,6 +117,36 @@ func TestListTables(t *testing.T) {
 	assert.Equal(t, []db.Table{{Name: "city"}, {Name: "country"}, {Name: "countrylanguage"}}, tables)
 }
 
+func TestListViews(t *testing.T) {
+	database := connectWorld(t)
+
+	views, err := database.ListViews(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, []db.View{
+		{Name: "CityCountryDirectory"},
+		{Name: "CityDirectory"},
+		{Name: "CityDistrictSummary"},
+		{Name: "CityPopulationSummary"},
+		{Name: "CountryCapitalDirectory"},
+		{Name: "CountryDirectory"},
+		{Name: "CountryLanguageDetail"},
+		{Name: "CountryLanguageSummary"},
+		{Name: "CountryPopulationByContinent"},
+		{Name: "CountryPopulationByRegion"},
+		{Name: "CountryPopulationDensity"},
+		{Name: "CountrySurfaceAreaByContinent"},
+		{Name: "GNPByContinent"},
+		{Name: "GovernmentFormSummary"},
+		{Name: "IndependentCountrySummary"},
+		{Name: "LargestCities"},
+		{Name: "LargestCountries"},
+		{Name: "LifeExpectancySummary"},
+		{Name: "OfficialLanguageDetail"},
+		{Name: "OfficialLanguageSummary"},
+	}, views)
+}
+
 func TestListColumns(t *testing.T) {
 	database := connectWorld(t)
 

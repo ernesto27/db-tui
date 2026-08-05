@@ -101,6 +101,11 @@ const listIndexColumnsSQL = `SELECT
 		AND table_class.relname = $1
 	ORDER BY index_name, key.position`
 
+const listViewsSQL = `SELECT viewname AS view_name
+	FROM pg_catalog.pg_views
+	WHERE schemaname = 'public'
+	ORDER BY viewname`
+
 type postgresql struct {
 	pool   *pgxpool.Pool
 	logger *logger.Logger
@@ -171,6 +176,30 @@ func (p *postgresql) ListTables(ctx context.Context) ([]db.Table, error) {
 	}
 
 	return tables, nil
+}
+
+// ListViews returns ordinary public-schema PostgreSQL views in alphabetical order.
+func (p *postgresql) ListViews(ctx context.Context) ([]db.View, error) {
+	p.logger.Log(listViewsSQL)
+	rows, err := p.pool.Query(ctx, listViewsSQL)
+	if err != nil {
+		return nil, fmt.Errorf("query PostgreSQL views: %w", err)
+	}
+	defer rows.Close()
+
+	views := make([]db.View, 0)
+	for rows.Next() {
+		var view db.View
+		if err := rows.Scan(&view.Name); err != nil {
+			return nil, fmt.Errorf("scan PostgreSQL view: %w", err)
+		}
+		views = append(views, view)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate PostgreSQL view: %w", err)
+	}
+
+	return views, nil
 }
 
 // ListColumns returns the columns defined by a public PostgreSQL table.

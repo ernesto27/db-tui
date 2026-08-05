@@ -22,6 +22,12 @@ type tablesLoadedMsg struct {
 	err     error
 }
 
+type viewsLoadedMsg struct {
+	views   []db.View
+	session uint64
+	err     error
+}
+
 type rowsLoadedMsg struct {
 	tableName   string
 	offset      int
@@ -70,6 +76,16 @@ func loadTables(database db.Database, session uint64) tea.Cmd {
 
 		tables, err := database.ListTables(ctx)
 		return tablesLoadedMsg{tables: tables, session: session, err: err}
+	}
+}
+
+func loadViews(database db.Database, session uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		defer cancel()
+
+		views, err := database.ListViews(ctx)
+		return viewsLoadedMsg{views: views, session: session, err: err}
 	}
 }
 

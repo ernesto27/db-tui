@@ -16148,5 +16148,342 @@ CREATE INDEX "IX_PostgresIndexExample_CreatedAt"
 
 
 --
+-- Name: CustomerInvoiceSummary; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."CustomerInvoiceSummary" AS
+SELECT
+    customer."CustomerId",
+    customer."FirstName",
+    customer."LastName",
+    count(invoice."InvoiceId") AS "InvoiceCount",
+    coalesce(sum(invoice."Total"), 0)::numeric(10,2) AS "LifetimeSpend"
+FROM public."Customer" AS customer
+LEFT JOIN public."Invoice" AS invoice ON invoice."CustomerId" = customer."CustomerId"
+GROUP BY customer."CustomerId", customer."FirstName", customer."LastName";
+
+
+--
+-- Name: AlbumTrackSummary; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."AlbumTrackSummary" AS
+SELECT
+    album."AlbumId",
+    album."Title" AS "AlbumTitle",
+    artist."Name" AS "ArtistName",
+    count(track."TrackId") AS "TrackCount",
+    coalesce(sum(track."Milliseconds"), 0) AS "TotalMilliseconds"
+FROM public."Album" AS album
+JOIN public."Artist" AS artist ON artist."ArtistId" = album."ArtistId"
+LEFT JOIN public."Track" AS track ON track."AlbumId" = album."AlbumId"
+GROUP BY album."AlbumId", album."Title", artist."Name";
+
+
+--
+-- Name: ArtistAlbumSummary; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."ArtistAlbumSummary" AS
+SELECT
+    artist."ArtistId",
+    artist."Name" AS "ArtistName",
+    count(album."AlbumId") AS "AlbumCount"
+FROM public."Artist" AS artist
+LEFT JOIN public."Album" AS album ON album."ArtistId" = artist."ArtistId"
+GROUP BY artist."ArtistId", artist."Name";
+
+
+--
+-- Name: CustomerDirectory; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."CustomerDirectory" AS
+SELECT
+    customer."CustomerId",
+    customer."FirstName",
+    customer."LastName",
+    customer."Email",
+    customer."City",
+    customer."Country"
+FROM public."Customer" AS customer;
+
+
+--
+-- Name: CustomerCountrySummary; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."CustomerCountrySummary" AS
+SELECT
+    customer."Country",
+    count(*) AS "CustomerCount"
+FROM public."Customer" AS customer
+GROUP BY customer."Country";
+
+
+--
+-- Name: CustomerInvoiceDetail; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."CustomerInvoiceDetail" AS
+SELECT
+    invoice."InvoiceId",
+    invoice."InvoiceDate",
+    customer."CustomerId",
+    customer."FirstName",
+    customer."LastName",
+    invoice."BillingCountry",
+    invoice."Total"
+FROM public."Invoice" AS invoice
+JOIN public."Customer" AS customer ON customer."CustomerId" = invoice."CustomerId";
+
+
+--
+-- Name: EmployeeDirectory; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."EmployeeDirectory" AS
+SELECT
+    employee."EmployeeId",
+    employee."FirstName",
+    employee."LastName",
+    employee."Title",
+    manager."FirstName" || ' ' || manager."LastName" AS "ManagerName",
+    employee."City",
+    employee."Country"
+FROM public."Employee" AS employee
+LEFT JOIN public."Employee" AS manager ON manager."EmployeeId" = employee."ReportsTo";
+
+
+--
+-- Name: GenreTrackSummary; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."GenreTrackSummary" AS
+SELECT
+    genre."GenreId",
+    genre."Name" AS "GenreName",
+    count(track."TrackId") AS "TrackCount",
+    coalesce(sum(track."Milliseconds"), 0) AS "TotalMilliseconds"
+FROM public."Genre" AS genre
+LEFT JOIN public."Track" AS track ON track."GenreId" = genre."GenreId"
+GROUP BY genre."GenreId", genre."Name";
+
+
+--
+-- Name: InvoiceLineDetail; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."InvoiceLineDetail" AS
+SELECT
+    invoice_line."InvoiceLineId",
+    invoice_line."InvoiceId",
+    track."TrackId",
+    track."Name" AS "TrackName",
+    invoice_line."UnitPrice",
+    invoice_line."Quantity",
+    invoice_line."UnitPrice" * invoice_line."Quantity" AS "LineTotal"
+FROM public."InvoiceLine" AS invoice_line
+JOIN public."Track" AS track ON track."TrackId" = invoice_line."TrackId";
+
+
+--
+-- Name: InvoiceMonthlySales; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."InvoiceMonthlySales" AS
+SELECT
+    date_trunc('month', invoice."InvoiceDate")::date AS "Month",
+    count(*) AS "InvoiceCount",
+    sum(invoice."Total")::numeric(10,2) AS "Revenue"
+FROM public."Invoice" AS invoice
+GROUP BY date_trunc('month', invoice."InvoiceDate")::date;
+
+
+--
+-- Name: InvoiceSummary; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."InvoiceSummary" AS
+SELECT
+    invoice."InvoiceId",
+    invoice."InvoiceDate",
+    invoice."CustomerId",
+    count(invoice_line."InvoiceLineId") AS "LineCount",
+    coalesce(sum(invoice_line."Quantity"), 0) AS "ItemCount",
+    invoice."Total"
+FROM public."Invoice" AS invoice
+LEFT JOIN public."InvoiceLine" AS invoice_line ON invoice_line."InvoiceId" = invoice."InvoiceId"
+GROUP BY invoice."InvoiceId", invoice."InvoiceDate", invoice."CustomerId", invoice."Total";
+
+
+--
+-- Name: MediaTypeTrackSummary; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."MediaTypeTrackSummary" AS
+SELECT
+    media_type."MediaTypeId",
+    media_type."Name" AS "MediaTypeName",
+    count(track."TrackId") AS "TrackCount"
+FROM public."MediaType" AS media_type
+LEFT JOIN public."Track" AS track ON track."MediaTypeId" = media_type."MediaTypeId"
+GROUP BY media_type."MediaTypeId", media_type."Name";
+
+
+--
+-- Name: PlaylistSummary; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."PlaylistSummary" AS
+SELECT
+    playlist."PlaylistId",
+    playlist."Name" AS "PlaylistName",
+    count(playlist_track."TrackId") AS "TrackCount"
+FROM public."Playlist" AS playlist
+LEFT JOIN public."PlaylistTrack" AS playlist_track ON playlist_track."PlaylistId" = playlist."PlaylistId"
+GROUP BY playlist."PlaylistId", playlist."Name";
+
+
+--
+-- Name: PlaylistTrackDetail; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."PlaylistTrackDetail" AS
+SELECT
+    playlist."PlaylistId",
+    playlist."Name" AS "PlaylistName",
+    track."TrackId",
+    track."Name" AS "TrackName",
+    track."Milliseconds"
+FROM public."PlaylistTrack" AS playlist_track
+JOIN public."Playlist" AS playlist ON playlist."PlaylistId" = playlist_track."PlaylistId"
+JOIN public."Track" AS track ON track."TrackId" = playlist_track."TrackId";
+
+
+--
+-- Name: PlaylistTrackSummary; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."PlaylistTrackSummary" AS
+SELECT
+    playlist."PlaylistId",
+    playlist."Name" AS "PlaylistName",
+    count(playlist_track."TrackId") AS "TrackCount",
+    coalesce(sum(track."Milliseconds"), 0) AS "TotalMilliseconds"
+FROM public."Playlist" AS playlist
+LEFT JOIN public."PlaylistTrack" AS playlist_track ON playlist_track."PlaylistId" = playlist."PlaylistId"
+LEFT JOIN public."Track" AS track ON track."TrackId" = playlist_track."TrackId"
+GROUP BY playlist."PlaylistId", playlist."Name";
+
+
+--
+-- Name: SalesByCity; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."SalesByCity" AS
+SELECT
+    invoice."BillingCountry",
+    invoice."BillingCity",
+    count(*) AS "InvoiceCount",
+    sum(invoice."Total")::numeric(10,2) AS "Revenue"
+FROM public."Invoice" AS invoice
+GROUP BY invoice."BillingCountry", invoice."BillingCity";
+
+
+--
+-- Name: SupportRepCustomerSummary; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."SupportRepCustomerSummary" AS
+SELECT
+    employee."EmployeeId" AS "SupportRepId",
+    employee."FirstName",
+    employee."LastName",
+    count(customer."CustomerId") AS "CustomerCount"
+FROM public."Employee" AS employee
+LEFT JOIN public."Customer" AS customer ON customer."SupportRepId" = employee."EmployeeId"
+GROUP BY employee."EmployeeId", employee."FirstName", employee."LastName";
+
+
+--
+-- Name: TrackCatalog; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."TrackCatalog" AS
+SELECT
+    track."TrackId",
+    track."Name" AS "TrackName",
+    album."Title" AS "AlbumTitle",
+    artist."Name" AS "ArtistName",
+    genre."Name" AS "GenreName",
+    media_type."Name" AS "MediaTypeName",
+    track."Milliseconds",
+    track."UnitPrice"
+FROM public."Track" AS track
+JOIN public."Album" AS album ON album."AlbumId" = track."AlbumId"
+JOIN public."Artist" AS artist ON artist."ArtistId" = album."ArtistId"
+JOIN public."Genre" AS genre ON genre."GenreId" = track."GenreId"
+JOIN public."MediaType" AS media_type ON media_type."MediaTypeId" = track."MediaTypeId";
+
+
+--
+-- Name: TrackSalesSummary; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."TrackSalesSummary" AS
+SELECT
+    track."TrackId",
+    track."Name" AS "TrackName",
+    coalesce(sum(invoice_line."Quantity"), 0) AS "UnitsSold",
+    coalesce(sum(invoice_line."UnitPrice" * invoice_line."Quantity"), 0)::numeric(10,2) AS "Revenue"
+FROM public."Track" AS track
+LEFT JOIN public."InvoiceLine" AS invoice_line ON invoice_line."TrackId" = track."TrackId"
+GROUP BY track."TrackId", track."Name";
+
+
+--
+-- Name: AlbumSalesSummary; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public."AlbumSalesSummary" AS
+SELECT
+    album."AlbumId",
+    album."Title" AS "AlbumTitle",
+    artist."Name" AS "ArtistName",
+    coalesce(sum(invoice_line."Quantity"), 0) AS "UnitsSold",
+    coalesce(sum(invoice_line."UnitPrice" * invoice_line."Quantity"), 0)::numeric(10,2) AS "Revenue"
+FROM public."Album" AS album
+JOIN public."Artist" AS artist ON artist."ArtistId" = album."ArtistId"
+LEFT JOIN public."Track" AS track ON track."AlbumId" = album."AlbumId"
+LEFT JOIN public."InvoiceLine" AS invoice_line ON invoice_line."TrackId" = track."TrackId"
+GROUP BY album."AlbumId", album."Title", artist."Name";
+
+
+--
+-- Name: SalesByCountry; Type: MATERIALIZED VIEW; Schema: public; Owner: -
+--
+-- This snapshot is refreshed explicitly with:
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY public."SalesByCountry";
+--
+
+CREATE MATERIALIZED VIEW public."SalesByCountry" AS
+SELECT
+    invoice."BillingCountry" AS "Country",
+    count(*) AS "InvoiceCount",
+    sum(invoice."Total")::numeric(10,2) AS "Revenue"
+FROM public."Invoice" AS invoice
+GROUP BY invoice."BillingCountry";
+
+
+--
+-- Name: UQ_SalesByCountry_Country; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX "UQ_SalesByCountry_Country"
+    ON public."SalesByCountry" USING btree ("Country");
+
+
+--
 -- PostgreSQL database dump complete
 --

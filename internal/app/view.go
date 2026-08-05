@@ -70,9 +70,11 @@ func engineDisplayName(engine string) string {
 
 func (m Model) navigatorStatus() navigatorStatus {
 	return navigatorStatus{
-		databaseName: m.connectedDatabaseName(),
-		loading:      m.loading,
-		tableLoadErr: m.tableLoadErr,
+		databaseName:  m.connectedDatabaseName(),
+		tablesLoading: m.loading,
+		tableLoadErr:  m.tableLoadErr,
+		viewsLoading:  m.viewsLoading,
+		viewLoadErr:   m.viewLoadErr,
 	}
 }
 
@@ -84,12 +86,16 @@ func (m Model) connectedDatabaseName() string {
 }
 
 func (m Model) dataStatus() dataStatus {
+	tableLoadErr := error(nil)
+	if !m.navigator.hasSelection() {
+		tableLoadErr = m.tableLoadErr
+	}
 	return dataStatus{
-		tableName:     m.navigator.selectedTableName(),
+		tableName:     m.navigator.selectedName(),
 		disconnected:  m.database == nil,
-		tablesLoading: m.loading,
-		tableLoadErr:  m.tableLoadErr,
-		noTables:      len(m.navigator.tables) == 0,
+		tablesLoading: (m.loading || m.viewsLoading) && !m.navigator.hasSelection(),
+		tableLoadErr:  tableLoadErr,
+		noTables:      !m.loading && !m.viewsLoading && !m.navigator.hasSelection(),
 		spinner:       m.spinner(),
 	}
 }
@@ -139,26 +145,26 @@ func (m Model) footerText() string {
 			exportHelp = "  •  Ctrl+E export results"
 		}
 		ddlHelp := ""
-		if _, ok := m.navigator.selectedTable(); ok || (m.activeConnectionIndex >= 0 && m.activeConnectionIndex < len(m.config.Connections)) {
+		_, tableSelected := m.navigator.selectedTable()
+		if !m.navigator.selectedIsView() && (tableSelected || (m.activeConnectionIndex >= 0 && m.activeConnectionIndex < len(m.config.Connections))) {
 			ddlHelp = "  •  Ctrl+G actions"
 		}
 		return "raw query  •  Ctrl+P execute" + exportHelp + ddlHelp + "  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+T table data  •  Ctrl+L connections  •  q quit"
 	}
-	if m.loading {
-		return "loading tables  •  q quit"
+	if (m.loading || m.viewsLoading) && !m.navigator.hasSelection() {
+		return "loading database objects  •  q quit"
 	}
-	if m.tableLoadErr != nil {
+	if m.tableLoadErr != nil && !m.navigator.hasSelection() {
 		return "unable to load tables  •  q quit"
 	}
-	if len(m.navigator.tables) == 0 {
-		return "no public tables  •  q quit"
+	if !m.navigator.hasSelection() {
+		return "no public tables or views  •  q quit"
 	}
-	visibleTables := m.navigator.visibleTables()
-	if len(visibleTables) == 0 {
-		return "no matching tables  •  Ctrl+F edit search  •  Esc clear search  •  q quit"
+	if len(m.navigator.visibleItems()) == 0 {
+		return "no matching database objects  •  Ctrl+F edit search  •  Esc clear search  •  q quit"
 	}
 
-	focusLabel := "tables"
+	focusLabel := "navigator"
 	if m.focus == focusData {
 		focusLabel = "data"
 	}
@@ -176,9 +182,20 @@ func (m Model) footerText() string {
 		}
 	}
 
-	exportHelp := "  •  Ctrl+E export"
-	return fmt.Sprintf("focus: %s%s  •  Ctrl+F search tables%s  •  Ctrl+G actions  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab table/search/data  •  q quit",
-		focusLabel, rowStatus, exportHelp)
+	tableSelected := false
+	if _, ok := m.navigator.selectedTable(); ok {
+		tableSelected = true
+	}
+	tableHelp := ""
+	if tableSelected {
+		tableHelp = "  •  Ctrl+E export  •  Ctrl+G actions"
+	}
+	sectionHelp := ""
+	if m.navigator.hasViewsSection() {
+		sectionHelp = "  •  ←/→ switch section"
+	}
+	return fmt.Sprintf("focus: %s%s  •  Ctrl+F search relations%s%s  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  q quit",
+		focusLabel, rowStatus, sectionHelp, tableHelp)
 }
 
 func panelStyle(width, height int, focused bool) lipgloss.Style {

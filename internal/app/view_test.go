@@ -42,7 +42,7 @@ func TestFooterTextDescribesTabNavigation(t *testing.T) {
 	model.database = &fakeDatabase{name: "chinook"}
 	model.navigator.tables = []db.Table{{Name: "Album"}}
 
-	assert.Contains(t, model.footerText(), "Tab table/search/data")
+	assert.Contains(t, model.footerText(), "Tab navigator/data")
 
 	model.panel = panelQuery
 	assert.Contains(t, model.footerText(), "Tab editor/results")

@@ -46,6 +46,8 @@ type Model struct {
 
 	loading      bool
 	tableLoadErr error
+	viewsLoading bool
+	viewLoadErr  error
 	navigator    navigatorModel
 	data         dataModel
 	panel        rightPanel
@@ -98,7 +100,14 @@ func (m Model) Init() tea.Cmd {
 	if m.database == nil {
 		return nil
 	}
-	return tea.Batch(loadTables(m.database, m.session), spinnerTick())
+	return tea.Batch(m.loadDatabaseObjects(), spinnerTick())
+}
+
+func (m Model) loadDatabaseObjects() tea.Cmd {
+	return tea.Batch(
+		loadTables(m.database, m.session),
+		loadViews(m.database, m.session),
+	)
 }
 
 // Close releases the current database session, if any.

@@ -50,6 +50,46 @@ func TestListTables(t *testing.T) {
 	assert.Equal(t, want, tables, "ListTables()")
 }
 
+func TestListViews(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	views, err := database.ListViews(ctx)
+
+	if !assert.NoError(t, err, "list views") {
+		return
+	}
+
+	assert.Equal(t, []db.View{
+		{Name: "AlbumSalesSummary"},
+		{Name: "AlbumTrackSummary"},
+		{Name: "ArtistAlbumSummary"},
+		{Name: "CustomerCountrySummary"},
+		{Name: "CustomerDirectory"},
+		{Name: "CustomerInvoiceDetail"},
+		{Name: "CustomerInvoiceSummary"},
+		{Name: "EmployeeDirectory"},
+		{Name: "GenreTrackSummary"},
+		{Name: "InvoiceLineDetail"},
+		{Name: "InvoiceMonthlySales"},
+		{Name: "InvoiceSummary"},
+		{Name: "MediaTypeTrackSummary"},
+		{Name: "PlaylistSummary"},
+		{Name: "PlaylistTrackDetail"},
+		{Name: "PlaylistTrackSummary"},
+		{Name: "SalesByCity"},
+		{Name: "SupportRepCustomerSummary"},
+		{Name: "TrackCatalog"},
+		{Name: "TrackSalesSummary"},
+	}, views, "ListViews()")
+}
+
 func TestListColumns(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

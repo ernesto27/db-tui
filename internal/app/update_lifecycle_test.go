@@ -51,6 +51,42 @@ func TestUpdateAppliesTablesFromCurrentSession(t *testing.T) {
 	assert.Zero(t, updated.data.offset)
 }
 
+func TestUpdateSelectsViewForViewsOnlyDatabaseRegardlessOfLoadOrder(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		first tea.Msg
+		last  tea.Msg
+	}{
+		{
+			name:  "views load first",
+			first: viewsLoadedMsg{views: []db.View{{Name: "ExampleView"}}, session: 8},
+			last:  tablesLoadedMsg{session: 8},
+		},
+		{
+			name:  "tables load first",
+			first: tablesLoadedMsg{session: 8},
+			last:  viewsLoadedMsg{views: []db.View{{Name: "ExampleView"}}, session: 8},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			model := New(config.Config{}, ConnectionSettings{}, nil)
+			model.database = &fakeDatabase{name: "views-only"}
+			model.session = 8
+			model.loading = true
+			model.viewsLoading = true
+
+			updated, command := updateModel(t, model, test.first)
+			assert.Nil(t, command)
+
+			updated, command = updateModel(t, updated, test.last)
+			require.NotNil(t, command)
+			assert.Equal(t, navigatorViews, updated.navigator.section)
+			assert.Equal(t, "ExampleView", updated.navigator.selectedName())
+			assert.True(t, updated.data.loading)
+		})
+	}
+}
+
 func TestUpdateIgnoresStaleRowResults(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.session = 8

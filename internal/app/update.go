@@ -78,7 +78,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case spinnerTickMsg:
-		if m.loading || m.data.loading || m.query.loading ||
+		if m.loading || m.viewsLoading || m.data.loading || m.query.loading ||
 			(m.ddlModal != nil && m.ddlModal.loading) ||
 			(m.columnsModal != nil && m.columnsModal.loading) ||
 			(m.dumpModal != nil && m.dumpModal.isRunning()) ||
@@ -97,15 +97,24 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		m.tableLoadErr = msg.err
 		m.navigator.setTables(msg.tables)
 		m.data.reset()
-		if msg.err == nil {
-			if _, ok := m.navigator.selectedTable(); ok {
-				return m.startRowLoad(0, 0), true
-			}
+		if _, ok := m.navigator.selectedRowSource(); ok {
+			return m.startRowLoad(0, 0), true
 		}
-		return nil, true
+		return m.startInitialViewLoad(), true
+	case viewsLoadedMsg:
+		if msg.session != m.session {
+			return nil, true
+		}
+		m.viewsLoading = false
+		m.viewLoadErr = msg.err
+		if msg.err != nil {
+			return nil, true
+		}
+		m.navigator.setViews(msg.views)
+		return m.startInitialViewLoad(), true
 	case rowsLoadedMsg:
-		table, ok := m.navigator.selectedTable()
-		if msg.session != m.session || !ok || msg.tableName != table.Name || msg.offset != m.data.offset {
+		source, ok := m.navigator.selectedRowSource()
+		if msg.session != m.session || !ok || msg.tableName != source.Name || msg.offset != m.data.offset {
 			return nil, true
 		}
 		m.data.finishLoad(msg.page, msg.selectedRow, msg.err, m.layout)
@@ -208,6 +217,17 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 	}
 }
 
+func (m *Model) startInitialViewLoad() tea.Cmd {
+	if m.loading || m.viewsLoading || m.navigator.hasSelection() || len(m.navigator.visibleViews()) == 0 {
+		return nil
+	}
+	if !m.navigator.switchSection(1, m.layout.navigatorListRows) {
+		return nil
+	}
+	m.data.reset()
+	return m.startRowLoad(0, 0)
+}
+
 func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case submitConnectionMsg:
@@ -283,6 +303,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.database = msg.database
 		m.savedConnection = msg.settings
 		m.tableLoadErr = nil
+		m.viewLoadErr = nil
 		m.navigator.reset()
 		m.data.reset()
 		m.query.reset(m.layout)
@@ -290,9 +311,10 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.columnsModal = nil
 		m.indexesModal = nil
 		m.loading = true
+		m.viewsLoading = true
 		m.session++
 		m.modal = nil
-		return m, tea.Batch(loadTables(m.database, m.session), m.startSpinner())
+		return m, tea.Batch(m.loadDatabaseObjects(), m.startSpinner())
 	default:
 		modal, command := m.modal.update(msg)
 		m.modal = &modal
@@ -344,6 +366,8 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeConnectionIndex = -1
 			m.loading = false
 			m.tableLoadErr = nil
+			m.viewsLoading = false
+			m.viewLoadErr = nil
 			m.navigator.reset()
 			m.data.reset()
 			m.query.reset(m.layout)
@@ -384,6 +408,9 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.focus = focusData
 		return nil
 	case key.Matches(msg, m.keys.tableDDL):
+		if m.navigator.selectedIsView() {
+			return nil
+		}
 		tableName := ""
 		if table, ok := m.navigator.selectedTable(); ok {
 			tableName = table.Name
@@ -412,8 +439,8 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 			m.focus = focusNavigator
 			return nil
 		default:
-			m.focus = focusNavigator
-			return m.navigator.startSearch()
+			m.focus = focusData
+			return nil
 		}
 	case m.navigator.searching:
 		return m.updateNavigatorSearch(msg)
@@ -449,6 +476,9 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.query.editor = editor
 		return command
 	case key.Matches(msg, m.keys.focusLeft):
+		if m.focus == focusNavigator && m.navigator.switchSection(-1, m.layout.navigatorListRows) {
+			return m.startRowLoad(0, 0)
+		}
 		if m.focus == focusData && m.data.columnOffset > 0 {
 			m.data.scrollColumns(-1, m.layout)
 			return nil
@@ -457,6 +487,12 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case key.Matches(msg, m.keys.focusRight):
 		if m.focus == focusNavigator {
+			if m.navigator.hasViewsSection() {
+				if m.navigator.switchSection(1, m.layout.navigatorListRows) {
+					return m.startRowLoad(0, 0)
+				}
+				return nil
+			}
 			m.focus = focusData
 		} else {
 			m.data.scrollColumns(1, m.layout)
@@ -514,7 +550,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	case key.Matches(msg, m.keys.end):
-		if m.focus == focusNavigator && m.navigator.selectIndex(len(m.navigator.visibleTables())-1, m.layout.navigatorListRows) {
+		if m.focus == focusNavigator && m.navigator.selectIndex(len(m.navigator.visibleItems())-1, m.layout.navigatorListRows) {
 			return m.startRowLoad(0, 0)
 		}
 		return nil
@@ -560,7 +596,7 @@ func (m *Model) updateNavigatorSearch(msg tea.Msg) tea.Cmd {
 }
 
 func (m *Model) updateMouseClick(msg tea.MouseClickMsg) tea.Cmd {
-	if index, ok := m.navigator.tableAtMouse(msg, m.layout); ok {
+	if index, ok := m.navigator.itemAtMouse(msg, m.layout); ok {
 		m.focus = focusNavigator
 		if m.navigator.selectIndex(index, m.layout.navigatorListRows) {
 			return m.startRowLoad(0, 0)
@@ -620,7 +656,7 @@ func (m *Model) updateMouseWheel(msg tea.MouseWheelMsg) tea.Cmd {
 }
 
 func (m *Model) startRowLoad(offset, selectedRow int) tea.Cmd {
-	table, ok := m.navigator.selectedTable()
+	table, ok := m.navigator.selectedRowSource()
 	if m.database == nil || !ok {
 		return nil
 	}

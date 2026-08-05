@@ -71,6 +71,11 @@ type Table struct {
 	Name string
 }
 
+// View identifies a view available in a database session.
+type View struct {
+	Name string
+}
+
 // PageRequest identifies a bounded range of rows to return.
 //
 // Offset must not be negative. Limit must be between 1 and MaxPageSize.
@@ -134,6 +139,7 @@ type Database interface {
 	Export(ctx context.Context, table Table, typeVal string) error
 	ExportQuery(ctx context.Context, sql string) error
 	ListColumns(ctx context.Context, table Table) ([]Column, error)
-	ListIndexes(context.Context, Table) ([]IndexColumns, error)
+	ListIndexes(ctx context.Context, table Table) ([]IndexColumns, error)
+	ListViews(ctx context.Context) ([]View, error)
 	Close()
 }

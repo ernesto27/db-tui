@@ -101,12 +101,12 @@ func TestUpdateKeyRouting(t *testing.T) {
 			},
 		},
 		{
-			name:    "tab starts table search from table list",
+			name:    "tab moves from table list to data list",
 			message: keyPress(tea.KeyTab, "", 0),
 			assert: func(t *testing.T, got Model, _ tea.Cmd) {
-				assert.Equal(t, focusNavigator, got.focus)
-				assert.True(t, got.navigator.searching)
-				assert.True(t, got.navigator.filter.Focused())
+				assert.Equal(t, focusData, got.focus)
+				assert.False(t, got.navigator.searching)
+				assert.False(t, got.navigator.filter.Focused())
 			},
 		},
 		{
