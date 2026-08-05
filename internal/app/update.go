@@ -107,10 +107,9 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		m.viewsLoading = false
 		m.viewLoadErr = msg.err
-		if msg.err != nil {
-			return nil, true
+		if msg.err == nil {
+			m.navigator.setViews(msg.views)
 		}
-		m.navigator.setViews(msg.views)
 		return m.startInitialViewLoad(), true
 	case materializedViewsLoadedMsg:
 		if msg.session != m.session {
@@ -118,11 +117,10 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		m.materializedViewsLoading = false
 		m.materializedViewLoadErr = msg.err
-		if msg.err != nil {
-			return nil, true
+		if msg.err == nil {
+			m.navigator.materializedViews = msg.materializedViews
+			m.navigator.normalizeSelection(1)
 		}
-		m.navigator.materializedViews = msg.materializedViews
-		m.navigator.normalizeSelection(1)
 		return m.startInitialViewLoad(), true
 	case rowsLoadedMsg:
 		source, ok := m.navigator.selectedRowSource()

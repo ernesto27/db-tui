@@ -113,6 +113,63 @@ func TestUpdateSelectsMaterializedViewForMaterializedViewsOnlyDatabase(t *testin
 	assert.True(t, updated.data.loading)
 }
 
+func TestUpdateSelectsAvailableRelationWhenOtherDiscoveryFailsLast(t *testing.T) {
+	discoveryErr := errors.New("materialized-view discovery failed")
+
+	tests := []struct {
+		name        string
+		messages    []tea.Msg
+		wantSection navigatorSection
+		wantName    string
+	}{
+		{
+			name: "materialized-view discovery fails after ordinary views load",
+			messages: []tea.Msg{
+				viewsLoadedMsg{views: []db.View{{Name: "ExampleView"}}, session: 8},
+				tablesLoadedMsg{session: 8},
+				materializedViewsLoadedMsg{session: 8, err: discoveryErr},
+			},
+			wantSection: navigatorViews,
+			wantName:    "ExampleView",
+		},
+		{
+			name: "ordinary-view discovery fails after materialized views load",
+			messages: []tea.Msg{
+				materializedViewsLoadedMsg{
+					materializedViews: []db.MaterializedView{{Name: "SalesByCountry"}},
+					session:           8,
+				},
+				tablesLoadedMsg{session: 8},
+				viewsLoadedMsg{session: 8, err: discoveryErr},
+			},
+			wantSection: navigatorMaterializedViews,
+			wantName:    "SalesByCountry",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			model := New(config.Config{}, ConnectionSettings{}, nil)
+			model.database = &fakeDatabase{name: "relations", engine: db.EnginePostgreSQL}
+			model.session = 8
+			model.loading = true
+			model.viewsLoading = true
+			model.materializedViewsLoading = true
+			model.navigator.setMaterializedViewsAvailable(true)
+
+			var command tea.Cmd
+			for _, message := range test.messages {
+				model, command = updateModel(t, model, message)
+			}
+
+			require.NotNil(t, command)
+			assert.Equal(t, test.wantSection, model.navigator.section)
+			assert.Equal(t, test.wantName, model.navigator.selectedName())
+			assert.True(t, model.data.loading)
+		})
+	}
+}
+
 func TestUpdateIgnoresStaleRowResults(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.session = 8

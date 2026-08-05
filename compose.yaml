@@ -52,3 +52,21 @@ services:
       timeout: 3s
       retries: 15
       start_period: 10s
+
+  oracle:
+    image: gvenzl/oracle-free:23-slim
+    profiles: ["oracle"]
+    environment:
+      ORACLE_RANDOM_PASSWORD: "true"
+      APP_USER: db_tui
+      APP_USER_PASSWORD: db_tui
+    ports:
+      - "127.0.0.1:1522:1521"
+    volumes:
+      - ./docker/oracle/init:/container-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 2m
