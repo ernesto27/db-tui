@@ -69,6 +69,12 @@ type queryFinishedMsg struct {
 	elapsed time.Duration
 }
 
+type materializedViewsLoadedMsg struct {
+	materializedViews []db.MaterializedView
+	session           uint64
+	err               error
+}
+
 func loadTables(database db.Database, session uint64) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
@@ -153,6 +159,21 @@ func loadIndexes(database db.Database, table db.Table, session, request uint64) 
 			session:   session,
 			request:   request,
 			err:       err,
+		}
+	}
+}
+
+func loadMaterializedViews(database db.Database, session uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		defer cancel()
+
+		materializedViews, err := database.ListMaterializedViews(ctx)
+
+		return materializedViewsLoadedMsg{
+			materializedViews: materializedViews,
+			session:           session,
+			err:               err,
 		}
 	}
 }

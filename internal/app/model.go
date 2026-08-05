@@ -44,14 +44,16 @@ type Model struct {
 	connectionAttempt      uint64
 	session                uint64
 
-	loading      bool
-	tableLoadErr error
-	viewsLoading bool
-	viewLoadErr  error
-	navigator    navigatorModel
-	data         dataModel
-	panel        rightPanel
-	query        queryModel
+	loading                  bool
+	tableLoadErr             error
+	viewsLoading             bool
+	viewLoadErr              error
+	materializedViewsLoading bool
+	materializedViewLoadErr  error
+	navigator                navigatorModel
+	data                     dataModel
+	panel                    rightPanel
+	query                    queryModel
 
 	spinnerFrame    int
 	spinnerRunning  bool
@@ -107,6 +109,7 @@ func (m Model) loadDatabaseObjects() tea.Cmd {
 	return tea.Batch(
 		loadTables(m.database, m.session),
 		loadViews(m.database, m.session),
+		loadMaterializedViews(m.database, m.session),
 	)
 }
 

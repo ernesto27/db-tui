@@ -87,6 +87,32 @@ func TestUpdateSelectsViewForViewsOnlyDatabaseRegardlessOfLoadOrder(t *testing.T
 	}
 }
 
+func TestUpdateSelectsMaterializedViewForMaterializedViewsOnlyDatabase(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "materialized-views-only", engine: db.EnginePostgreSQL}
+	model.session = 8
+	model.loading = true
+	model.viewsLoading = true
+	model.materializedViewsLoading = true
+	model.navigator.setMaterializedViewsAvailable(true)
+
+	updated, command := updateModel(t, model, tablesLoadedMsg{session: 8})
+	assert.Nil(t, command)
+
+	updated, command = updateModel(t, updated, viewsLoadedMsg{session: 8})
+	assert.Nil(t, command)
+
+	updated, command = updateModel(t, updated, materializedViewsLoadedMsg{
+		materializedViews: []db.MaterializedView{{Name: "SalesByCountry"}},
+		session:           8,
+	})
+
+	require.NotNil(t, command)
+	assert.Equal(t, navigatorMaterializedViews, updated.navigator.section)
+	assert.Equal(t, "SalesByCountry", updated.navigator.selectedName())
+	assert.True(t, updated.data.loading)
+}
+
 func TestUpdateIgnoresStaleRowResults(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.session = 8

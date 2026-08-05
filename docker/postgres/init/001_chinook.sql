@@ -16461,6 +16461,178 @@ GROUP BY album."AlbumId", album."Title", artist."Name";
 
 
 --
+-- Materialized-view examples. Refresh any snapshot after source data changes:
+-- REFRESH MATERIALIZED VIEW public."AlbumTrackMetrics";
+--
+
+CREATE MATERIALIZED VIEW public."AlbumTrackMetrics" AS
+SELECT album."AlbumId", album."Title" AS "AlbumTitle",
+    count(track."TrackId") AS "TrackCount",
+    coalesce(sum(track."Milliseconds"), 0) AS "TotalMilliseconds"
+FROM public."Album" AS album
+LEFT JOIN public."Track" AS track ON track."AlbumId" = album."AlbumId"
+GROUP BY album."AlbumId", album."Title";
+
+CREATE MATERIALIZED VIEW public."ArtistCatalogMetrics" AS
+SELECT artist."ArtistId", artist."Name" AS "ArtistName",
+    count(DISTINCT album."AlbumId") AS "AlbumCount",
+    count(track."TrackId") AS "TrackCount"
+FROM public."Artist" AS artist
+LEFT JOIN public."Album" AS album ON album."ArtistId" = artist."ArtistId"
+LEFT JOIN public."Track" AS track ON track."AlbumId" = album."AlbumId"
+GROUP BY artist."ArtistId", artist."Name";
+
+CREATE MATERIALIZED VIEW public."CustomerPurchaseMetrics" AS
+SELECT customer."CustomerId", customer."FirstName", customer."LastName",
+    count(invoice."InvoiceId") AS "InvoiceCount",
+    coalesce(sum(invoice."Total"), 0)::numeric(10,2) AS "LifetimeRevenue"
+FROM public."Customer" AS customer
+LEFT JOIN public."Invoice" AS invoice ON invoice."CustomerId" = customer."CustomerId"
+GROUP BY customer."CustomerId", customer."FirstName", customer."LastName";
+
+CREATE MATERIALIZED VIEW public."CustomerLocationMetrics" AS
+SELECT coalesce(customer."Country", 'Unknown') AS "Country",
+    coalesce(customer."State", 'Unknown') AS "State",
+    coalesce(customer."City", 'Unknown') AS "City",
+    count(*) AS "CustomerCount"
+FROM public."Customer" AS customer
+GROUP BY coalesce(customer."Country", 'Unknown'), coalesce(customer."State", 'Unknown'),
+    coalesce(customer."City", 'Unknown');
+
+CREATE MATERIALIZED VIEW public."EmployeeSupportMetrics" AS
+SELECT employee."EmployeeId" AS "SupportRepId", employee."FirstName", employee."LastName",
+    count(DISTINCT customer."CustomerId") AS "CustomerCount",
+    coalesce(sum(invoice."Total"), 0)::numeric(10,2) AS "CustomerRevenue"
+FROM public."Employee" AS employee
+LEFT JOIN public."Customer" AS customer ON customer."SupportRepId" = employee."EmployeeId"
+LEFT JOIN public."Invoice" AS invoice ON invoice."CustomerId" = customer."CustomerId"
+GROUP BY employee."EmployeeId", employee."FirstName", employee."LastName";
+
+CREATE MATERIALIZED VIEW public."GenreSalesMetrics" AS
+SELECT genre."GenreId", genre."Name" AS "GenreName",
+    count(DISTINCT track."TrackId") AS "TrackCount",
+    coalesce(sum(invoice_line."Quantity"), 0) AS "UnitsSold",
+    coalesce(sum(invoice_line."UnitPrice" * invoice_line."Quantity"), 0)::numeric(10,2) AS "Revenue"
+FROM public."Genre" AS genre
+LEFT JOIN public."Track" AS track ON track."GenreId" = genre."GenreId"
+LEFT JOIN public."InvoiceLine" AS invoice_line ON invoice_line."TrackId" = track."TrackId"
+GROUP BY genre."GenreId", genre."Name";
+
+CREATE MATERIALIZED VIEW public."InvoiceMonthlyRevenueSnapshot" AS
+SELECT date_trunc('month', invoice."InvoiceDate")::date AS "Month",
+    count(*) AS "InvoiceCount", sum(invoice."Total")::numeric(10,2) AS "Revenue"
+FROM public."Invoice" AS invoice
+GROUP BY date_trunc('month', invoice."InvoiceDate")::date;
+
+CREATE MATERIALIZED VIEW public."InvoiceDailyRevenueSnapshot" AS
+SELECT invoice."InvoiceDate"::date AS "InvoiceDate",
+    count(*) AS "InvoiceCount", sum(invoice."Total")::numeric(10,2) AS "Revenue"
+FROM public."Invoice" AS invoice
+GROUP BY invoice."InvoiceDate"::date;
+
+CREATE MATERIALIZED VIEW public."MediaTypeCatalogMetrics" AS
+SELECT media_type."MediaTypeId", media_type."Name" AS "MediaTypeName",
+    count(track."TrackId") AS "TrackCount",
+    coalesce(sum(track."Milliseconds"), 0) AS "TotalMilliseconds"
+FROM public."MediaType" AS media_type
+LEFT JOIN public."Track" AS track ON track."MediaTypeId" = media_type."MediaTypeId"
+GROUP BY media_type."MediaTypeId", media_type."Name";
+
+CREATE MATERIALIZED VIEW public."PlaylistCatalogMetrics" AS
+SELECT playlist."PlaylistId", playlist."Name" AS "PlaylistName",
+    count(playlist_track."TrackId") AS "TrackCount",
+    coalesce(sum(track."Milliseconds"), 0) AS "TotalMilliseconds"
+FROM public."Playlist" AS playlist
+LEFT JOIN public."PlaylistTrack" AS playlist_track ON playlist_track."PlaylistId" = playlist."PlaylistId"
+LEFT JOIN public."Track" AS track ON track."TrackId" = playlist_track."TrackId"
+GROUP BY playlist."PlaylistId", playlist."Name";
+
+CREATE MATERIALIZED VIEW public."PlaylistGenreMetrics" AS
+SELECT playlist."PlaylistId", playlist."Name" AS "PlaylistName",
+    genre."GenreId", genre."Name" AS "GenreName", count(*) AS "TrackCount"
+FROM public."PlaylistTrack" AS playlist_track
+JOIN public."Playlist" AS playlist ON playlist."PlaylistId" = playlist_track."PlaylistId"
+JOIN public."Track" AS track ON track."TrackId" = playlist_track."TrackId"
+JOIN public."Genre" AS genre ON genre."GenreId" = track."GenreId"
+GROUP BY playlist."PlaylistId", playlist."Name", genre."GenreId", genre."Name";
+
+CREATE MATERIALIZED VIEW public."TrackSalesMetrics" AS
+SELECT track."TrackId", track."Name" AS "TrackName",
+    coalesce(sum(invoice_line."Quantity"), 0) AS "UnitsSold",
+    coalesce(sum(invoice_line."UnitPrice" * invoice_line."Quantity"), 0)::numeric(10,2) AS "Revenue"
+FROM public."Track" AS track
+LEFT JOIN public."InvoiceLine" AS invoice_line ON invoice_line."TrackId" = track."TrackId"
+GROUP BY track."TrackId", track."Name";
+
+CREATE MATERIALIZED VIEW public."AlbumSalesMetrics" AS
+SELECT album."AlbumId", album."Title" AS "AlbumTitle", artist."Name" AS "ArtistName",
+    coalesce(sum(invoice_line."Quantity"), 0) AS "UnitsSold",
+    coalesce(sum(invoice_line."UnitPrice" * invoice_line."Quantity"), 0)::numeric(10,2) AS "Revenue"
+FROM public."Album" AS album
+JOIN public."Artist" AS artist ON artist."ArtistId" = album."ArtistId"
+LEFT JOIN public."Track" AS track ON track."AlbumId" = album."AlbumId"
+LEFT JOIN public."InvoiceLine" AS invoice_line ON invoice_line."TrackId" = track."TrackId"
+GROUP BY album."AlbumId", album."Title", artist."Name";
+
+CREATE MATERIALIZED VIEW public."ArtistSalesMetrics" AS
+SELECT artist."ArtistId", artist."Name" AS "ArtistName",
+    coalesce(sum(invoice_line."Quantity"), 0) AS "UnitsSold",
+    coalesce(sum(invoice_line."UnitPrice" * invoice_line."Quantity"), 0)::numeric(10,2) AS "Revenue"
+FROM public."Artist" AS artist
+LEFT JOIN public."Album" AS album ON album."ArtistId" = artist."ArtistId"
+LEFT JOIN public."Track" AS track ON track."AlbumId" = album."AlbumId"
+LEFT JOIN public."InvoiceLine" AS invoice_line ON invoice_line."TrackId" = track."TrackId"
+GROUP BY artist."ArtistId", artist."Name";
+
+CREATE MATERIALIZED VIEW public."CitySalesMetrics" AS
+SELECT coalesce(invoice."BillingCountry", 'Unknown') AS "Country",
+    coalesce(invoice."BillingCity", 'Unknown') AS "City",
+    count(*) AS "InvoiceCount", sum(invoice."Total")::numeric(10,2) AS "Revenue"
+FROM public."Invoice" AS invoice
+GROUP BY coalesce(invoice."BillingCountry", 'Unknown'), coalesce(invoice."BillingCity", 'Unknown');
+
+CREATE MATERIALIZED VIEW public."CustomerInvoiceTimeline" AS
+SELECT invoice."InvoiceId", invoice."InvoiceDate", customer."CustomerId",
+    customer."FirstName", customer."LastName", invoice."BillingCountry", invoice."Total"
+FROM public."Invoice" AS invoice
+JOIN public."Customer" AS customer ON customer."CustomerId" = invoice."CustomerId";
+
+CREATE MATERIALIZED VIEW public."CustomerGenrePurchaseMetrics" AS
+SELECT customer."CustomerId", customer."FirstName", customer."LastName",
+    genre."GenreId", genre."Name" AS "GenreName",
+    sum(invoice_line."Quantity") AS "UnitsSold",
+    sum(invoice_line."UnitPrice" * invoice_line."Quantity")::numeric(10,2) AS "Revenue"
+FROM public."Customer" AS customer
+JOIN public."Invoice" AS invoice ON invoice."CustomerId" = customer."CustomerId"
+JOIN public."InvoiceLine" AS invoice_line ON invoice_line."InvoiceId" = invoice."InvoiceId"
+JOIN public."Track" AS track ON track."TrackId" = invoice_line."TrackId"
+JOIN public."Genre" AS genre ON genre."GenreId" = track."GenreId"
+GROUP BY customer."CustomerId", customer."FirstName", customer."LastName", genre."GenreId", genre."Name";
+
+CREATE MATERIALIZED VIEW public."GenreCatalogMetrics" AS
+SELECT genre."GenreId", genre."Name" AS "GenreName",
+    count(track."TrackId") AS "TrackCount", coalesce(sum(track."Bytes"), 0) AS "TotalBytes"
+FROM public."Genre" AS genre
+LEFT JOIN public."Track" AS track ON track."GenreId" = genre."GenreId"
+GROUP BY genre."GenreId", genre."Name";
+
+CREATE MATERIALIZED VIEW public."YearlyRevenueSnapshot" AS
+SELECT extract(year FROM invoice."InvoiceDate")::integer AS "Year",
+    count(*) AS "InvoiceCount", count(DISTINCT invoice."CustomerId") AS "CustomerCount",
+    sum(invoice."Total")::numeric(10,2) AS "Revenue"
+FROM public."Invoice" AS invoice
+GROUP BY extract(year FROM invoice."InvoiceDate")::integer;
+
+CREATE MATERIALIZED VIEW public."InvoiceLineRevenueSnapshot" AS
+SELECT invoice_line."InvoiceLineId", invoice_line."InvoiceId", invoice."InvoiceDate",
+    invoice_line."TrackId", track."Name" AS "TrackName", invoice_line."Quantity",
+    invoice_line."UnitPrice", (invoice_line."UnitPrice" * invoice_line."Quantity")::numeric(10,2) AS "LineRevenue"
+FROM public."InvoiceLine" AS invoice_line
+JOIN public."Invoice" AS invoice ON invoice."InvoiceId" = invoice_line."InvoiceId"
+JOIN public."Track" AS track ON track."TrackId" = invoice_line."TrackId";
+
+
+--
 -- Name: SalesByCountry; Type: MATERIALIZED VIEW; Schema: public; Owner: -
 --
 -- This snapshot is refreshed explicitly with:

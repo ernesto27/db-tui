@@ -106,6 +106,11 @@ const listViewsSQL = `SELECT viewname AS view_name
 	WHERE schemaname = 'public'
 	ORDER BY viewname`
 
+const listMaterializedViewsSQL = `SELECT matviewname AS materialized_view_name
+  FROM pg_catalog.pg_matviews
+  WHERE schemaname = 'public'
+  ORDER BY matviewname`
+
 type postgresql struct {
 	pool   *pgxpool.Pool
 	logger *logger.Logger
@@ -200,6 +205,30 @@ func (p *postgresql) ListViews(ctx context.Context) ([]db.View, error) {
 	}
 
 	return views, nil
+}
+
+// ListMaterializedViews is a placeholder for PostgreSQL materialized-view discovery.
+func (p *postgresql) ListMaterializedViews(ctx context.Context) ([]db.MaterializedView, error) {
+	p.logger.Log(listMaterializedViewsSQL)
+	rows, err := p.pool.Query(ctx, listMaterializedViewsSQL)
+	if err != nil {
+		return nil, fmt.Errorf("query PostgreSQL materialized views: %w", err)
+	}
+	defer rows.Close()
+
+	materializedViews := make([]db.MaterializedView, 0)
+	for rows.Next() {
+		var view db.MaterializedView
+		if err := rows.Scan(&view.Name); err != nil {
+			return nil, fmt.Errorf("scan PostgreSQL materialized view: %w", err)
+		}
+		materializedViews = append(materializedViews, view)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate PostgreSQL materialized view: %w", err)
+	}
+
+	return materializedViews, nil
 }
 
 // ListColumns returns the columns defined by a public PostgreSQL table.

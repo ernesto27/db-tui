@@ -78,7 +78,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case spinnerTickMsg:
-		if m.loading || m.viewsLoading || m.data.loading || m.query.loading ||
+		if m.loading || m.viewsLoading || m.materializedViewsLoading || m.data.loading || m.query.loading ||
 			(m.ddlModal != nil && m.ddlModal.loading) ||
 			(m.columnsModal != nil && m.columnsModal.loading) ||
 			(m.dumpModal != nil && m.dumpModal.isRunning()) ||
@@ -111,6 +111,18 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 			return nil, true
 		}
 		m.navigator.setViews(msg.views)
+		return m.startInitialViewLoad(), true
+	case materializedViewsLoadedMsg:
+		if msg.session != m.session {
+			return nil, true
+		}
+		m.materializedViewsLoading = false
+		m.materializedViewLoadErr = msg.err
+		if msg.err != nil {
+			return nil, true
+		}
+		m.navigator.materializedViews = msg.materializedViews
+		m.navigator.normalizeSelection(1)
 		return m.startInitialViewLoad(), true
 	case rowsLoadedMsg:
 		source, ok := m.navigator.selectedRowSource()
@@ -218,12 +230,17 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 }
 
 func (m *Model) startInitialViewLoad() tea.Cmd {
-	if m.loading || m.viewsLoading || m.navigator.hasSelection() || len(m.navigator.visibleViews()) == 0 {
+	if m.loading || m.viewsLoading || m.materializedViewsLoading || m.navigator.hasSelection() {
 		return nil
 	}
-	if !m.navigator.switchSection(1, m.layout.navigatorListRows) {
+	if len(m.navigator.visibleViews()) > 0 {
+		m.navigator.section = navigatorViews
+	} else if m.navigator.materializedViewsAvailable && len(m.navigator.visibleMaterializedViews()) > 0 {
+		m.navigator.section = navigatorMaterializedViews
+	} else {
 		return nil
 	}
+	m.navigator.ensureVisible(m.layout.navigatorListRows)
 	m.data.reset()
 	return m.startRowLoad(0, 0)
 }
@@ -304,7 +321,9 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.savedConnection = msg.settings
 		m.tableLoadErr = nil
 		m.viewLoadErr = nil
+		m.materializedViewLoadErr = nil
 		m.navigator.reset()
+		m.navigator.setMaterializedViewsAvailable(msg.database.Engine() == db.EnginePostgreSQL)
 		m.data.reset()
 		m.query.reset(m.layout)
 		m.ddlModal = nil
@@ -312,6 +331,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.indexesModal = nil
 		m.loading = true
 		m.viewsLoading = true
+		m.materializedViewsLoading = true
 		m.session++
 		m.modal = nil
 		return m, tea.Batch(m.loadDatabaseObjects(), m.startSpinner())
@@ -368,6 +388,8 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tableLoadErr = nil
 			m.viewsLoading = false
 			m.viewLoadErr = nil
+			m.materializedViewsLoading = false
+			m.materializedViewLoadErr = nil
 			m.navigator.reset()
 			m.data.reset()
 			m.query.reset(m.layout)

@@ -15,6 +15,7 @@ type navigatorSection uint8
 const (
 	navigatorTables navigatorSection = iota
 	navigatorViews
+	navigatorMaterializedViews
 	navigatorSectionCount
 )
 
@@ -29,21 +30,25 @@ type navigatorItem struct {
 }
 
 type navigatorModel struct {
-	tables  []db.Table
-	views   []db.View
-	section navigatorSection
-	cursors [navigatorSectionCount]navigatorCursor
+	tables                     []db.Table
+	views                      []db.View
+	materializedViews          []db.MaterializedView
+	materializedViewsAvailable bool
+	section                    navigatorSection
+	cursors                    [navigatorSectionCount]navigatorCursor
 
 	filter    textinput.Model
 	searching bool
 }
 
 type navigatorStatus struct {
-	databaseName  string
-	tablesLoading bool
-	tableLoadErr  error
-	viewsLoading  bool
-	viewLoadErr   error
+	databaseName             string
+	tablesLoading            bool
+	tableLoadErr             error
+	viewsLoading             bool
+	viewLoadErr              error
+	materializedViewsLoading bool
+	materializedViewLoadErr  error
 }
 
 func newNavigatorModel() navigatorModel {
@@ -68,6 +73,14 @@ func (m *navigatorModel) setTables(tables []db.Table) {
 
 func (m *navigatorModel) setViews(views []db.View) {
 	m.views = views
+	m.normalizeSelection(1)
+}
+
+func (m *navigatorModel) setMaterializedViewsAvailable(available bool) {
+	m.materializedViewsAvailable = available
+	if !available && m.section == navigatorMaterializedViews {
+		m.section = navigatorViews
+	}
 	m.normalizeSelection(1)
 }
 
@@ -138,16 +151,19 @@ func (m *navigatorModel) selectIndex(index, visibleRows int) bool {
 }
 
 func (m *navigatorModel) switchSection(delta, visibleRows int) bool {
-	if !m.hasViewsSection() {
-		return false
+	previous := m.section
+	lastSection := navigatorViews
+	if m.materializedViewsAvailable {
+		lastSection = navigatorMaterializedViews
 	}
 
-	previous := m.section
-	if delta < 0 {
-		m.section = navigatorTables
-	} else {
-		m.section = navigatorViews
-	}
+	m.section = navigatorSection(
+		min(
+			max(int(m.section)+delta, int(navigatorTables)),
+			int(lastSection),
+		),
+	)
+
 	m.ensureVisible(visibleRows)
 	return previous != m.section
 }
@@ -219,10 +235,14 @@ func (m navigatorModel) view(status navigatorStatus, layout appLayout, focused b
 }
 
 func (m navigatorModel) sectionTabs(status navigatorStatus, layout appLayout) string {
-	tabs := []string{m.renderSectionTab(navigatorTables)}
-	if m.hasViewsSection() {
-		tabs = append(tabs, m.renderSectionTab(navigatorViews))
+	tabs := []string{
+		m.renderSectionTab(navigatorTables),
+		m.renderSectionTab(navigatorViews),
 	}
+	if m.materializedViewsAvailable {
+		tabs = append(tabs, m.renderSectionTab(navigatorMaterializedViews))
+	}
+
 	if status.viewsLoading {
 		tabs = append(tabs, "Loading views…")
 	} else if status.viewLoadErr != nil {
@@ -233,9 +253,14 @@ func (m navigatorModel) sectionTabs(status navigatorStatus, layout appLayout) st
 
 func (m navigatorModel) renderSectionTab(section navigatorSection) string {
 	name := "TABLES"
-	if section == navigatorViews {
+
+	switch section {
+	case navigatorViews:
 		name = "VIEWS"
+	case navigatorMaterializedViews:
+		name = "MVIEWS"
 	}
+
 	if m.section == section {
 		return "[" + name + "]"
 	}
@@ -273,21 +298,40 @@ func (m navigatorModel) visibleViews() []db.View {
 }
 
 func (m navigatorModel) visibleItems() []navigatorItem {
-	if m.section == navigatorViews {
+	switch m.section {
+	case navigatorViews:
 		views := m.visibleViews()
 		items := make([]navigatorItem, len(views))
 		for index, view := range views {
-			items[index] = navigatorItem{name: view.Name, section: navigatorViews}
+			items[index] = navigatorItem{
+				name:    view.Name,
+				section: navigatorViews,
+			}
+		}
+		return items
+
+	case navigatorMaterializedViews:
+		views := m.visibleMaterializedViews()
+		items := make([]navigatorItem, len(views))
+		for index, view := range views {
+			items[index] = navigatorItem{
+				name:    view.Name,
+				section: navigatorMaterializedViews,
+			}
+		}
+		return items
+
+	default:
+		tables := m.visibleTables()
+		items := make([]navigatorItem, len(tables))
+		for index, table := range tables {
+			items[index] = navigatorItem{
+				name:    table.Name,
+				section: navigatorTables,
+			}
 		}
 		return items
 	}
-
-	tables := m.visibleTables()
-	items := make([]navigatorItem, len(tables))
-	for index, table := range tables {
-		items[index] = navigatorItem{name: table.Name, section: navigatorTables}
-	}
-	return items
 }
 
 func (m navigatorModel) hasViewsSection() bool {
@@ -370,4 +414,19 @@ func (m *navigatorModel) normalizeSelectionWithPrevious(previous navigatorItem, 
 	cursor.offset = 0
 	m.ensureVisible(visibleRows)
 	return true
+}
+
+func (m navigatorModel) visibleMaterializedViews() []db.MaterializedView {
+	query := m.filterQuery()
+	if query == "" {
+		return m.materializedViews
+	}
+
+	views := make([]db.MaterializedView, 0, len(m.materializedViews))
+	for _, view := range m.materializedViews {
+		if strings.Contains(strings.ToLower(view.Name), query) {
+			views = append(views, view)
+		}
+	}
+	return views
 }

@@ -70,11 +70,13 @@ func engineDisplayName(engine string) string {
 
 func (m Model) navigatorStatus() navigatorStatus {
 	return navigatorStatus{
-		databaseName:  m.connectedDatabaseName(),
-		tablesLoading: m.loading,
-		tableLoadErr:  m.tableLoadErr,
-		viewsLoading:  m.viewsLoading,
-		viewLoadErr:   m.viewLoadErr,
+		databaseName:             m.connectedDatabaseName(),
+		tablesLoading:            m.loading,
+		tableLoadErr:             m.tableLoadErr,
+		viewsLoading:             m.viewsLoading,
+		viewLoadErr:              m.viewLoadErr,
+		materializedViewsLoading: m.materializedViewsLoading,
+		materializedViewLoadErr:  m.materializedViewLoadErr,
 	}
 }
 

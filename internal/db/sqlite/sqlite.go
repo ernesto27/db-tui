@@ -162,6 +162,11 @@ func (s *sqliteDatabase) ListViews(ctx context.Context) ([]db.View, error) {
 	return views, nil
 }
 
+// ListMaterializedViews is a placeholder for SQLite materialized-view discovery.
+func (s *sqliteDatabase) ListMaterializedViews(context.Context) ([]db.MaterializedView, error) {
+	return []db.MaterializedView{}, nil
+}
+
 // ListColumns returns the columns defined by a SQLite table.
 func (s *sqliteDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {
 	s.logger.Log(listColumnSQL)

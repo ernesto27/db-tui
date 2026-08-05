@@ -90,6 +90,46 @@ func TestListViews(t *testing.T) {
 	}, views, "ListViews()")
 }
 
+func TestListMaterializedViews(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	materializedViews, err := database.ListMaterializedViews(ctx)
+	if !assert.NoError(t, err, "list materialized views") {
+		return
+	}
+
+	assert.Equal(t, []db.MaterializedView{
+		{Name: "AlbumSalesMetrics"},
+		{Name: "AlbumTrackMetrics"},
+		{Name: "ArtistCatalogMetrics"},
+		{Name: "ArtistSalesMetrics"},
+		{Name: "CitySalesMetrics"},
+		{Name: "CustomerGenrePurchaseMetrics"},
+		{Name: "CustomerInvoiceTimeline"},
+		{Name: "CustomerLocationMetrics"},
+		{Name: "CustomerPurchaseMetrics"},
+		{Name: "EmployeeSupportMetrics"},
+		{Name: "GenreCatalogMetrics"},
+		{Name: "GenreSalesMetrics"},
+		{Name: "InvoiceDailyRevenueSnapshot"},
+		{Name: "InvoiceLineRevenueSnapshot"},
+		{Name: "InvoiceMonthlyRevenueSnapshot"},
+		{Name: "MediaTypeCatalogMetrics"},
+		{Name: "PlaylistCatalogMetrics"},
+		{Name: "PlaylistGenreMetrics"},
+		{Name: "SalesByCountry"},
+		{Name: "TrackSalesMetrics"},
+		{Name: "YearlyRevenueSnapshot"},
+	}, materializedViews, "ListMaterializedViews()")
+}
+
 func TestListColumns(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

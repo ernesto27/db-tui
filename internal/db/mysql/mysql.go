@@ -298,6 +298,11 @@ func (m *mysqlDatabase) ListViews(ctx context.Context) ([]db.View, error) {
 	return views, nil
 }
 
+// ListMaterializedViews is a placeholder for MySQL materialized-view discovery.
+func (m *mysqlDatabase) ListMaterializedViews(context.Context) ([]db.MaterializedView, error) {
+	return []db.MaterializedView{}, nil
+}
+
 // GetRows returns an unordered page of rows from a MySQL table.
 func (m *mysqlDatabase) GetRows(ctx context.Context, table db.Table, page db.PageRequest) (db.RowPage, error) {
 	return m.getRows(ctx, table, &page)

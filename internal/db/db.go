@@ -76,6 +76,11 @@ type View struct {
 	Name string
 }
 
+// MaterializedView identifies a materialized view available in a database session.
+type MaterializedView struct {
+	Name string
+}
+
 // PageRequest identifies a bounded range of rows to return.
 //
 // Offset must not be negative. Limit must be between 1 and MaxPageSize.
@@ -141,5 +146,6 @@ type Database interface {
 	ListColumns(ctx context.Context, table Table) ([]Column, error)
 	ListIndexes(ctx context.Context, table Table) ([]IndexColumns, error)
 	ListViews(ctx context.Context) ([]View, error)
+	ListMaterializedViews(ctx context.Context) ([]MaterializedView, error)
 	Close()
 }
