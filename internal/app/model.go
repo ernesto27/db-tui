@@ -90,6 +90,8 @@ type Model struct {
 	renameRequest  uint64
 	indexesModal   *indexesModal
 	indexesRequest uint64
+
+	editRowModal *editRowModal
 }
 
 // New creates the root Bubble Tea application model.

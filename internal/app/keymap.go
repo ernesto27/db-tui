@@ -23,6 +23,7 @@ type keyMap struct {
 	end           key.Binding
 	dump          key.Binding
 	export        key.Binding
+	editRow       key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -47,5 +48,6 @@ func defaultKeyMap() keyMap {
 		end:           key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "last table")),
 		dump:          key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "dump database")),
 		export:        key.NewBinding(key.WithKeys("ctrl+e"), key.WithHelp("ctrl+e", "export")),
+		editRow:       key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit row")),
 	}
 }

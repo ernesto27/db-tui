@@ -635,4 +635,6 @@ func (m *mysqlDatabase) Close() {
 	_ = m.logger.Close()
 }
 
-var _ db.Database = (*mysqlDatabase)(nil)
+func (m *mysqlDatabase) UpdateRow(ctx context.Context, table db.Table, setColumns map[string]any, whereColumns map[string]any) error {
+	return errors.New("edit row not yet implemented for MySQL")
+}

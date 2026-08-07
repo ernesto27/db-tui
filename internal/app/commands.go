@@ -245,3 +245,48 @@ func exportQuery(database db.Database, sql string, session uint64) tea.Cmd {
 		}
 	}
 }
+
+type editRowCancelMsg struct{}
+
+type editRowSaveMsg struct {
+	table        db.Table
+	setColumns   map[string]any
+	whereColumns map[string]any
+}
+
+type editRowSavedMsg struct {
+	session uint64
+	err     error
+}
+
+type editRowColumnsLoadedMsg struct {
+	table   db.Table
+	columns []db.Column
+	row     []any
+	session uint64
+	err     error
+}
+
+func loadEditRowColumns(database db.Database, table db.Table, row []any, session uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		defer cancel()
+		columns, err := database.ListColumns(ctx, table)
+		return editRowColumnsLoadedMsg{
+			table:   table,
+			columns: columns,
+			row:     row,
+			session: session,
+			err:     err,
+		}
+	}
+}
+
+func saveRowEdit(database db.Database, table db.Table, setColumns, whereColumns map[string]any, session uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		defer cancel()
+		err := database.UpdateRow(ctx, table, setColumns, whereColumns)
+		return editRowSavedMsg{session: session, err: err}
+	}
+}

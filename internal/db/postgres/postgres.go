@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -61,7 +62,8 @@ const listColumnsSQL = `SELECT
 	      END AS collation_name,
 	      attribute.attnotnull AS not_null,
 	      pg_catalog.pg_get_expr(default_value.adbin, default_value.adrelid) AS default_expression,
-	      pg_catalog.col_description(attribute.attrelid, attribute.attnum) AS comment
+	      pg_catalog.col_description(attribute.attrelid, attribute.attnum) AS comment,
+	      COALESCE(pk.constraint_type IS NOT NULL, false) AS is_primary_key
 	  FROM pg_catalog.pg_attribute AS attribute
 	  JOIN pg_catalog.pg_class AS relation
 	      ON relation.oid = attribute.attrelid
@@ -76,6 +78,11 @@ const listColumnsSQL = `SELECT
 	      ON collation_catalog.oid = attribute.attcollation
 	  LEFT JOIN pg_catalog.pg_namespace AS collation_schema
 	      ON collation_schema.oid = collation_catalog.collnamespace
+	  LEFT JOIN (
+	      SELECT conrelid, unnest(conkey) AS conkey_attnum, contype AS constraint_type
+	      FROM pg_catalog.pg_constraint
+	      WHERE contype = 'p'
+	  ) AS pk ON pk.conrelid = attribute.attrelid AND pk.conkey_attnum = attribute.attnum
 	  WHERE relation_schema.nspname = 'public'
 	    AND relation.relname = $1
 	    AND attribute.attnum > 0
@@ -258,6 +265,7 @@ func (p *postgresql) ListColumns(ctx context.Context, table db.Table) ([]db.Colu
 			&column.NotNull,
 			&defaultValue,
 			&comment,
+			&column.IsPrimaryKey,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan PostgreSQL column: %w", err)
@@ -567,4 +575,55 @@ func dockerContainerIDForPort(ctx context.Context, port int) (string, error) {
 	default:
 		return "", fmt.Errorf("multiple Docker containers publish port %d", port)
 	}
+}
+
+func (p *postgresql) UpdateRow(ctx context.Context, table db.Table, setColumns map[string]any, whereColumns map[string]any) error {
+	tableIdent := pgx.Identifier{"public", table.Name}.Sanitize()
+
+	setClauses := make([]string, 0, len(setColumns))
+	args := make([]any, 0, len(setColumns)+len(whereColumns))
+	argIdx := 1
+
+	setNames := make([]string, 0, len(setColumns))
+	for name := range setColumns {
+		setNames = append(setNames, name)
+	}
+	sort.Strings(setNames)
+	for _, name := range setNames {
+		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", pgx.Identifier{name}.Sanitize(), argIdx))
+		args = append(args, setColumns[name])
+		argIdx++
+	}
+
+	whereClauses := make([]string, 0, len(whereColumns))
+	whereNames := make([]string, 0, len(whereColumns))
+	for name := range whereColumns {
+		whereNames = append(whereNames, name)
+	}
+	sort.Strings(whereNames)
+	for _, name := range whereNames {
+		if whereColumns[name] == nil {
+			whereClauses = append(whereClauses, fmt.Sprintf("%s IS NULL", pgx.Identifier{name}.Sanitize()))
+		} else {
+			whereClauses = append(whereClauses, fmt.Sprintf("%s = $%d", pgx.Identifier{name}.Sanitize(), argIdx))
+			args = append(args, whereColumns[name])
+			argIdx++
+		}
+	}
+
+	query := fmt.Sprintf("UPDATE %s SET %s WHERE %s",
+		tableIdent,
+		strings.Join(setClauses, ", "),
+		strings.Join(whereClauses, " AND "),
+	)
+
+	p.logger.Log(query)
+	tag, err := p.pool.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("update PostgreSQL row: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("no row matched the WHERE clause; the row may have been modified or deleted")
+	}
+	return nil
 }

@@ -377,6 +377,10 @@ func (s *sqliteDatabase) Close() {
 	_ = s.logger.Close()
 }
 
+func (s *sqliteDatabase) UpdateRow(ctx context.Context, table db.Table, setColumns map[string]any, whereColumns map[string]any) error {
+	return errors.New("edit row not yet implemented for MySQL")
+}
+
 func readRowPage(rows *sql.Rows, rowLimit int) (db.RowPage, error) {
 	result, err := readRows(rows, rowLimit)
 	if err != nil {
@@ -453,5 +457,3 @@ func commandTag(statement string) string {
 	}
 	return command
 }
-
-var _ db.Database = (*sqliteDatabase)(nil)

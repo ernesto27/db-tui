@@ -146,7 +146,7 @@ func TestListColumns(t *testing.T) {
 	}
 
 	assert.Equal(t, []db.Column{
-		{Name: "AlbumId", OrdinalPosition: 1, DataType: "int4", NotNull: true},
+		{Name: "AlbumId", OrdinalPosition: 1, DataType: "int4", NotNull: true, IsPrimaryKey: true},
 		{Name: "Title", OrdinalPosition: 2, DataType: "varchar(160)", Collation: "default", NotNull: true},
 		{Name: "ArtistId", OrdinalPosition: 3, DataType: "int4", NotNull: true},
 	}, columns)
@@ -398,6 +398,96 @@ func TestExportQuery(t *testing.T) {
 	}
 	assert.Contains(t, string(contents), "number\n")
 	assert.Contains(t, string(contents), "\n101\n")
+}
+
+func TestUpdateRow(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	// Snapshot a row for mutation tests
+	page, err := database.GetRows(ctx, db.Table{Name: "Artist"}, db.PageRequest{Offset: 0, Limit: 1})
+	if !assert.NoError(t, err) || !assert.NotEmpty(t, page.Rows) {
+		return
+	}
+	row := page.Rows[0]
+	originalName, ok := row[1].(string)
+	if !assert.True(t, ok) {
+		return
+	}
+	artistID := row[0]
+
+	tests := []struct {
+		name         string
+		table        db.Table
+		setColumns   map[string]any
+		whereColumns map[string]any
+		wantErr      bool
+		errContains  string
+	}{
+		{
+			name:         "empty table name",
+			table:        db.Table{},
+			setColumns:   map[string]any{"Name": "x"},
+			whereColumns: map[string]any{"ArtistId": 1},
+			wantErr:      true,
+		},
+		{
+			name:         "empty setColumns",
+			table:        db.Table{Name: "Artist"},
+			setColumns:   map[string]any{},
+			whereColumns: map[string]any{"ArtistId": 1},
+			wantErr:      true,
+		},
+		{
+			name:         "empty whereColumns",
+			table:        db.Table{Name: "Artist"},
+			setColumns:   map[string]any{"Name": "x"},
+			whereColumns: map[string]any{},
+			wantErr:      true,
+		},
+		{
+			name:         "non-matching WHERE",
+			table:        db.Table{Name: "Artist"},
+			setColumns:   map[string]any{"Name": "x"},
+			whereColumns: map[string]any{"ArtistId": -99999},
+			wantErr:      true,
+			errContains:  "no row matched",
+		},
+		{
+			name:         "successful update",
+			table:        db.Table{Name: "Artist"},
+			setColumns:   map[string]any{"Name": "success_test"},
+			whereColumns: map[string]any{"ArtistId": artistID},
+			wantErr:      false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := database.UpdateRow(ctx, test.table, test.setColumns, test.whereColumns)
+			if test.wantErr {
+				assert.Error(t, err)
+				if test.errContains != "" {
+					assert.Contains(t, err.Error(), test.errContains)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+
+	// Restore original value after success case mutated it
+	err = database.UpdateRow(ctx, db.Table{Name: "Artist"},
+		map[string]any{"Name": originalName},
+		map[string]any{"ArtistId": artistID},
+	)
+	assert.NoError(t, err)
 }
 
 func TestGetRows(t *testing.T) {

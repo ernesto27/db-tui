@@ -192,6 +192,10 @@ func (f *fakeDatabase) ExportQuery(ctx context.Context, query string) error {
 	return f.exportQueryErr
 }
 
+func (f *fakeDatabase) UpdateRow(ctx context.Context, table db.Table, setColumns, whereColumns map[string]any) error {
+	return nil
+}
+
 func (f *fakeDatabase) Close() {
 	f.closeCalls++
 }

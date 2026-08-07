@@ -116,6 +116,7 @@ type Column struct {
 	NotNull         bool
 	Default         string
 	Comment         string
+	IsPrimaryKey    bool
 }
 
 type IndexColumns struct {
@@ -148,5 +149,6 @@ type Database interface {
 	ListIndexes(ctx context.Context, table Table) ([]IndexColumns, error)
 	ListViews(ctx context.Context) ([]View, error)
 	ListMaterializedViews(ctx context.Context) ([]MaterializedView, error)
+	UpdateRow(ctx context.Context, table Table, setColumns map[string]any, whereColumns map[string]any) error
 	Close()
 }

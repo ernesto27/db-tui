@@ -49,6 +49,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.indexesModal != nil {
 		return m, m.updateIndexesModal(msg)
 	}
+
+	if m.editRowModal != nil {
+		return m.updateEditRowModal(msg)
+	}
 	if m.actionsModal != nil {
 		return m.updateActionsModal(msg)
 	}
@@ -83,7 +87,8 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 			(m.columnsModal != nil && m.columnsModal.loading) ||
 			(m.dumpModal != nil && m.dumpModal.isRunning()) ||
 			(m.exportModal != nil && m.exportModal.isRunning()) ||
-			(m.indexesModal != nil && m.indexesModal.loading) {
+			(m.indexesModal != nil && m.indexesModal.loading) ||
+			(m.editRowModal != nil && m.editRowModal.state == editRowSaving) {
 			m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
 			return spinnerTick(), true
 		}
@@ -181,6 +186,9 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		if m.indexesModal != nil {
 			m.indexesModal.clamp(m.layout)
 		}
+		if m.editRowModal != nil {
+			m.editRowModal.clamp(m.layout)
+		}
 		return nil, true
 	case renameRequestMsg:
 		if msg.request != m.renameRequest || msg.index != m.activeConnectionIndex {
@@ -224,6 +232,31 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 
 		m.exportModal.state = exportSucceeded
 		return nil, true
+	case editRowColumnsLoadedMsg:
+		if msg.session != m.session {
+			return nil, true
+		}
+		if msg.err != nil {
+			return nil, true
+		}
+		if len(msg.columns) == 0 {
+			return nil, true
+		}
+		modal := newEditRowModal(msg.table, msg.columns, msg.row)
+		m.editRowModal = &modal
+		m.editRowModal.clamp(m.layout)
+		return m.editRowModal.focusInitial(), true
+	case editRowSavedMsg:
+		if msg.session != m.session || m.editRowModal == nil {
+			return nil, true
+		}
+		if msg.err != nil {
+			m.editRowModal.state = editRowFailed
+			m.editRowModal.err = msg.err
+			return nil, true
+		}
+		m.editRowModal.state = editRowSuccess
+		return m.startRowLoad(m.data.offset, m.data.selected), true
 	default:
 		return nil, false
 	}
@@ -529,6 +562,8 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 			m.data.scrollColumns(1, m.layout)
 		}
 		return nil
+	case m.panel == panelData && m.focus == focusData && m.activeRelation.set && !m.navigator.selectedIsView() && len(m.data.page.Rows) > 0 && !m.data.loading && key.Matches(msg, m.keys.editRow):
+		return m.openEditRowModal()
 	case key.Matches(msg, m.keys.up):
 		if m.focus == focusNavigator {
 			if m.navigator.move(-1, m.layout.navigatorListRows) {
@@ -954,4 +989,31 @@ func (m *Model) updateIndexesModal(msg tea.Msg) tea.Cmd {
 	}
 
 	return nil
+}
+
+func (m *Model) openEditRowModal() tea.Cmd {
+	table, ok := m.navigator.selectedTable()
+	if !ok || m.database == nil || m.data.selected >= len(m.data.page.Rows) {
+		return nil
+	}
+	row := m.data.page.Rows[m.data.selected]
+	return loadEditRowColumns(m.database, table, row, m.session)
+}
+
+func (m *Model) updateEditRowModal(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case editRowCancelMsg:
+		m.editRowModal = nil
+		return m, nil
+	case editRowSaveMsg:
+		m.editRowModal.state = editRowSaving
+		return m, tea.Batch(
+			saveRowEdit(m.database, msg.table, msg.setColumns, msg.whereColumns, m.session),
+			m.startSpinner(),
+		)
+	default:
+		modal, cmd := m.editRowModal.update(msg)
+		m.editRowModal = &modal
+		return m, cmd
+	}
 }

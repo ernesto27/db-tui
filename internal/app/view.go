@@ -14,7 +14,7 @@ import (
 // View implements tea.Model.
 func (m Model) View() tea.View {
 	view := m.baseView()
-	if m.modal != nil || m.connectionsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.columnsModal != nil || m.indexesModal != nil || m.actionsModal != nil {
+	if m.modal != nil || m.connectionsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.columnsModal != nil || m.indexesModal != nil || m.actionsModal != nil || m.editRowModal != nil {
 		view.Content = m.renderModalOverlay(view.Content)
 	}
 	return view
@@ -121,6 +121,8 @@ func (m Model) renderModalOverlay(base string) string {
 		modal = m.dumpModal.view(m.layout.width, m.spinner())
 	case m.exportModal != nil:
 		modal = m.exportModal.view(m.layout.width, m.spinner())
+	case m.editRowModal != nil:
+		modal = m.editRowModal.view(m.layout)
 	case m.actionsModal != nil:
 		modal = m.actionsModal.view(m.layout.width)
 	case m.ddlModal != nil:
@@ -200,6 +202,10 @@ func (m Model) footerText() string {
 	if tableSelected {
 		tableHelp = "  •  Ctrl+E export  •  Ctrl+G actions"
 	}
+	editHelp := ""
+	if m.activeRelation.set && !m.navigator.selectedIsView() && len(m.data.page.Rows) > 0 && !m.data.loading && m.editRowModal == nil {
+		editHelp = "  •  e edit row"
+	}
 	sectionHelp := ""
 	if m.navigator.hasViewsSection() {
 		sectionHelp = "  •  ←/→ switch section"
@@ -208,8 +214,8 @@ func (m Model) footerText() string {
 	if m.focus == focusNavigator {
 		activationHelp = "  •  Enter load rows"
 	}
-	return fmt.Sprintf("focus: %s%s%s  •  Ctrl+F search relations%s%s  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  q quit",
-		focusLabel, rowStatus, activationHelp, sectionHelp, tableHelp)
+	return fmt.Sprintf("focus: %s%s%s  •  Ctrl+F search relations%s%s%s  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  q quit",
+		focusLabel, rowStatus, activationHelp, sectionHelp, tableHelp, editHelp)
 }
 
 func panelStyle(width, height int, focused bool) lipgloss.Style {
