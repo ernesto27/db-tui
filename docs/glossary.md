@@ -1,5 +1,27 @@
 # Glossary
 
+## Row-browsable relation
+
+A base table, ordinary database view, or materialized view whose rows db-tui can display in the pageable data panel. All row-browsable relation types use the same explicit activation behavior in the navigator.
+
+## Highlighted relation
+
+The row-browsable relation under the navigator cursor. Keyboard navigation, mouse navigation, filtering, and section changes may change the highlighted relation without querying its rows.
+
+## Active relation
+
+The row-browsable relation most recently activated with `Enter` or a double-click. Activating a relation makes it the target of row-page requests and the owner of the data panel. The active relation remains unchanged while the user highlights other relations.
+
+Activation transfers data-panel ownership immediately: the prior relation's page is cleared before the new relation's first page finishes loading. A loading state or load error therefore belongs to the newly active relation.
+
+## Stale row result
+
+An asynchronous row-page result whose connection session, request ID, relation identity, or page offset no longer matches the active row request. Changing only the navigator highlight does not make a result stale; activating a different relation does.
+
+## Relation identity
+
+The combination of a relation's type and name. The active relation retains this identity independently of the navigator highlight so row paging, panel labeling, and asynchronous-result validation continue to refer to the same row source.
+
 ## Client-observed elapsed time
 
 The duration measured by the raw-query command from immediately before `db.Database.Execute` until it returns. It includes driver work, network transfer where applicable, and bounded result decoding; it is not a database-server-only execution metric. The raw-query UI labels this value `Execution time`.

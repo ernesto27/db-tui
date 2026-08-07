@@ -9,6 +9,7 @@ type keyMap struct {
 	tableData     key.Binding
 	tableDDL      key.Binding
 	tableSearch   key.Binding
+	activate      key.Binding
 	executeQuery  key.Binding
 	queryFocus    key.Binding
 	quit          key.Binding
@@ -32,6 +33,7 @@ func defaultKeyMap() keyMap {
 		tableData:     key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "table data")),
 		tableDDL:      key.NewBinding(key.WithKeys("ctrl+g"), key.WithHelp("ctrl+g", "actions")),
 		tableSearch:   key.NewBinding(key.WithKeys("ctrl+f"), key.WithHelp("ctrl+f", "search tables")),
+		activate:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "load rows")),
 		executeQuery:  key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "execute query")),
 		queryFocus:    key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "switch editor/results")),
 		quit:          key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),

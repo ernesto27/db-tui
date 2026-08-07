@@ -43,11 +43,11 @@ func TestUpdateAppliesTablesFromCurrentSession(t *testing.T) {
 		session: 8,
 	})
 
-	assert.NotNil(t, command)
+	assert.Nil(t, command)
 	assert.False(t, updated.loading)
 	assert.Equal(t, []db.Table{{Name: "Album"}}, updated.navigator.tables)
-	assert.True(t, updated.data.loading)
-	assert.Empty(t, updated.data.page.Rows)
+	assert.False(t, updated.data.loading)
+	assert.Equal(t, [][]any{{"old"}}, updated.data.page.Rows)
 	assert.Zero(t, updated.data.offset)
 }
 
@@ -79,10 +79,11 @@ func TestUpdateSelectsViewForViewsOnlyDatabaseRegardlessOfLoadOrder(t *testing.T
 			assert.Nil(t, command)
 
 			updated, command = updateModel(t, updated, test.last)
-			require.NotNil(t, command)
+			assert.Nil(t, command)
 			assert.Equal(t, navigatorViews, updated.navigator.section)
 			assert.Equal(t, "ExampleView", updated.navigator.selectedName())
-			assert.True(t, updated.data.loading)
+			assert.False(t, updated.data.loading)
+			assert.False(t, updated.activeRelation.set)
 		})
 	}
 }
@@ -107,10 +108,11 @@ func TestUpdateSelectsMaterializedViewForMaterializedViewsOnlyDatabase(t *testin
 		session:           8,
 	})
 
-	require.NotNil(t, command)
+	assert.Nil(t, command)
 	assert.Equal(t, navigatorMaterializedViews, updated.navigator.section)
 	assert.Equal(t, "SalesByCountry", updated.navigator.selectedName())
-	assert.True(t, updated.data.loading)
+	assert.False(t, updated.data.loading)
+	assert.False(t, updated.activeRelation.set)
 }
 
 func TestUpdateSelectsAvailableRelationWhenOtherDiscoveryFailsLast(t *testing.T) {
@@ -162,10 +164,11 @@ func TestUpdateSelectsAvailableRelationWhenOtherDiscoveryFailsLast(t *testing.T)
 				model, command = updateModel(t, model, message)
 			}
 
-			require.NotNil(t, command)
+			assert.Nil(t, command)
 			assert.Equal(t, test.wantSection, model.navigator.section)
 			assert.Equal(t, test.wantName, model.navigator.selectedName())
-			assert.True(t, model.data.loading)
+			assert.False(t, model.data.loading)
+			assert.False(t, model.activeRelation.set)
 		})
 	}
 }
@@ -174,6 +177,11 @@ func TestUpdateIgnoresStaleRowResults(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.session = 8
 	model.navigator.tables = []db.Table{{Name: "Track"}}
+	model.activeRelation = activeRelation{
+		item:    navigatorItem{name: "Track", section: navigatorTables},
+		request: 6,
+		set:     true,
+	}
 	model.data = dataModel{
 		page:     db.RowPage{Rows: [][]any{{"current"}}},
 		offset:   100,
@@ -182,38 +190,39 @@ func TestUpdateIgnoresStaleRowResults(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		session   uint64
-		tableName string
-		offset    int
+		name     string
+		session  uint64
+		relation navigatorItem
+		offset   int
 	}{
 		{
-			name:      "old session",
-			session:   7,
-			tableName: "Track",
-			offset:    100,
+			name:     "old session",
+			session:  7,
+			relation: navigatorItem{name: "Track", section: navigatorTables},
+			offset:   100,
 		},
 		{
-			name:      "old table",
-			session:   8,
-			tableName: "Album",
-			offset:    100,
+			name:     "old table",
+			session:  8,
+			relation: navigatorItem{name: "Album", section: navigatorTables},
+			offset:   100,
 		},
 		{
-			name:      "old page",
-			session:   8,
-			tableName: "Track",
-			offset:    0,
+			name:     "old page",
+			session:  8,
+			relation: navigatorItem{name: "Track", section: navigatorTables},
+			offset:   0,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			updated, command := updateModel(t, model, rowsLoadedMsg{
-				tableName: test.tableName,
-				offset:    test.offset,
-				page:      db.RowPage{Rows: [][]any{{"stale"}}},
-				session:   test.session,
+				relation: test.relation,
+				offset:   test.offset,
+				page:     db.RowPage{Rows: [][]any{{"stale"}}},
+				session:  test.session,
+				request:  6,
 			})
 
 			assert.Nil(t, command)
@@ -229,6 +238,11 @@ func TestUpdateAppliesMatchingRowResult(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.session = 8
 	model.navigator.tables = []db.Table{{Name: "Track"}}
+	model.activeRelation = activeRelation{
+		item:    navigatorItem{name: "Track", section: navigatorTables},
+		request: 6,
+		set:     true,
+	}
 	model.data = dataModel{
 		offset:  100,
 		loading: true,
@@ -239,11 +253,12 @@ func TestUpdateAppliesMatchingRowResult(t *testing.T) {
 	}
 
 	updated, command := updateModel(t, model, rowsLoadedMsg{
-		tableName:   "Track",
+		relation:    navigatorItem{name: "Track", section: navigatorTables},
 		offset:      100,
 		selectedRow: 1,
 		page:        page,
 		session:     8,
+		request:     6,
 	})
 
 	assert.Nil(t, command)
@@ -258,16 +273,22 @@ func TestUpdateAppliesMatchingRowError(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.session = 8
 	model.navigator.tables = []db.Table{{Name: "Track"}}
+	model.activeRelation = activeRelation{
+		item:    navigatorItem{name: "Track", section: navigatorTables},
+		request: 6,
+		set:     true,
+	}
 	model.data = dataModel{
 		offset:  100,
 		loading: true,
 	}
 
 	updated, command := updateModel(t, model, rowsLoadedMsg{
-		tableName: "Track",
-		offset:    100,
-		session:   8,
-		err:       wantErr,
+		relation: navigatorItem{name: "Track", section: navigatorTables},
+		offset:   100,
+		session:  8,
+		request:  6,
+		err:      wantErr,
 	})
 
 	assert.Nil(t, command)
@@ -475,6 +496,11 @@ func TestUpdateReplacesActiveDatabaseAfterCurrentConnectionAttempt(t *testing.T)
 	model.database = oldDatabase
 	model.session = 10
 	model.navigator.tables = []db.Table{{Name: "Old"}}
+	model.activeRelation = activeRelation{
+		item:    navigatorItem{name: "Old", section: navigatorTables},
+		request: 4,
+		set:     true,
+	}
 	model.data.page = db.RowPage{Rows: [][]any{{"old"}}}
 	model.query.result = db.QueryResult{CommandTag: "SELECT 1"}
 	modal := newConnectionModal(ConnectionSettings{})
@@ -499,6 +525,8 @@ func TestUpdateReplacesActiveDatabaseAfterCurrentConnectionAttempt(t *testing.T)
 	assert.Equal(t, uint64(11), updated.session)
 	assert.Nil(t, updated.modal)
 	assert.Empty(t, updated.navigator.tables)
+	assert.False(t, updated.activeRelation.set)
+	assert.Zero(t, updated.activeRelation.request)
 	assert.Empty(t, updated.data.page.Rows)
 	assert.Empty(t, updated.query.result.CommandTag)
 	assert.True(t, updated.loading)

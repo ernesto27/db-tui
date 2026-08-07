@@ -29,11 +29,12 @@ type viewsLoadedMsg struct {
 }
 
 type rowsLoadedMsg struct {
-	tableName   string
+	relation    navigatorItem
 	offset      int
 	selectedRow int
 	page        db.RowPage
 	session     uint64
+	request     uint64
 	err         error
 }
 
@@ -95,21 +96,22 @@ func loadViews(database db.Database, session uint64) tea.Cmd {
 	}
 }
 
-func loadRows(database db.Database, table db.Table, offset, selectedRow int, session uint64) tea.Cmd {
+func loadRows(database db.Database, relation navigatorItem, offset, selectedRow int, session, request uint64) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
 		defer cancel()
 
-		page, err := database.GetRows(ctx, table, db.PageRequest{
+		page, err := database.GetRows(ctx, relation.rowSource(), db.PageRequest{
 			Offset: offset,
 			Limit:  rowPageSize,
 		})
 		return rowsLoadedMsg{
-			tableName:   table.Name,
+			relation:    relation,
 			offset:      offset,
 			selectedRow: selectedRow,
 			page:        page,
 			session:     session,
+			request:     request,
 			err:         err,
 		}
 	}

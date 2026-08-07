@@ -25,12 +25,14 @@ type dataModel struct {
 }
 
 type dataStatus struct {
-	tableName     string
-	disconnected  bool
-	tablesLoading bool
-	tableLoadErr  error
-	noTables      bool
-	spinner       string
+	tableName       string
+	highlightedName string
+	active          bool
+	disconnected    bool
+	tablesLoading   bool
+	tableLoadErr    error
+	noTables        bool
+	spinner         string
 }
 
 func (m *dataModel) reset() {
@@ -126,6 +128,12 @@ func (m dataModel) view(status dataStatus, layout appLayout, focused bool) strin
 		return panelStyle(layout.data.width, layout.data.height, focused).Render("Unable to load database objects:\n" + sanitizeText(status.tableLoadErr.Error()))
 	case status.noTables:
 		return panelStyle(layout.data.width, layout.data.height, focused).Render("No tables or views found.")
+	case !status.active:
+		instruction := "Select a relation and press Enter to load rows."
+		if status.highlightedName != "" {
+			instruction = "Press Enter to load highlighted relation: " + status.highlightedName
+		}
+		return panelStyle(layout.data.width, layout.data.height, focused).Render("No relation active.\n\n" + instruction)
 	case m.loading:
 		return panelStyle(layout.data.width, layout.data.height, focused).Render(status.tableName + "\n\n" + status.spinner + " Query executing…")
 	case m.err != nil:

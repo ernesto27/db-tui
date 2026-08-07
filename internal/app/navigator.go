@@ -29,6 +29,10 @@ type navigatorItem struct {
 	section navigatorSection
 }
 
+func (i navigatorItem) rowSource() db.Table {
+	return db.Table{Name: i.name}
+}
+
 type navigatorModel struct {
 	tables                     []db.Table
 	views                      []db.View
@@ -106,14 +110,6 @@ func (m navigatorModel) selectedTable() (db.Table, bool) {
 	return db.Table{Name: item.name}, true
 }
 
-func (m navigatorModel) selectedRowSource() (db.Table, bool) {
-	item, ok := m.selectedItem()
-	if !ok {
-		return db.Table{}, false
-	}
-	return db.Table{Name: item.name}, true
-}
-
 func (m navigatorModel) selectedName() string {
 	item, ok := m.selectedItem()
 	if !ok {
@@ -130,6 +126,10 @@ func (m navigatorModel) selectedIsView() bool {
 func (m navigatorModel) hasSelection() bool {
 	_, ok := m.selectedItem()
 	return ok
+}
+
+func (m navigatorModel) hasRelations() bool {
+	return len(m.tables) > 0 || len(m.views) > 0 || len(m.materializedViews) > 0
 }
 
 func (m *navigatorModel) move(delta, visibleRows int) bool {

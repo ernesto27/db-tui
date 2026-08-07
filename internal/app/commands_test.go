@@ -33,10 +33,11 @@ func TestLoadRows(t *testing.T) {
 	tests := []struct {
 		name        string
 		database    *fakeDatabase
-		table       db.Table
+		relation    navigatorItem
 		offset      int
 		selectedRow int
 		session     uint64
+		request     uint64
 		wantPage    db.RowPage
 		wantErr     error
 	}{
@@ -47,10 +48,11 @@ func TestLoadRows(t *testing.T) {
 				Rows:    [][]any{{1}},
 				HasMore: true,
 			}},
-			table:       db.Table{Name: "Track"},
+			relation:    navigatorItem{name: "Track", section: navigatorTables},
 			offset:      200,
 			selectedRow: 4,
 			session:     9,
+			request:     6,
 			wantPage: db.RowPage{
 				Columns: []string{"TrackId"},
 				Rows:    [][]any{{1}},
@@ -60,10 +62,11 @@ func TestLoadRows(t *testing.T) {
 		{
 			name:        "error",
 			database:    &fakeDatabase{pageErr: wantErr},
-			table:       db.Table{Name: "Track"},
+			relation:    navigatorItem{name: "Track", section: navigatorTables},
 			offset:      0,
 			selectedRow: 0,
 			session:     2,
+			request:     3,
 			wantErr:     wantErr,
 		},
 	}
@@ -72,25 +75,27 @@ func TestLoadRows(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			message, ok := loadRows(
 				test.database,
-				test.table,
+				test.relation,
 				test.offset,
 				test.selectedRow,
 				test.session,
+				test.request,
 			)().(rowsLoadedMsg)
 			require.True(t, ok)
 
 			assert.Equal(t, 1, test.database.getRowsCalls)
-			assert.Equal(t, test.table, test.database.getRowsTable)
+			assert.Equal(t, test.relation.rowSource(), test.database.getRowsTable)
 			assert.Equal(t, db.PageRequest{
 				Offset: test.offset,
 				Limit:  rowPageSize,
 			}, test.database.getRowsRequest)
 			assert.True(t, test.database.getRowsDeadline)
 			assert.Equal(t, test.wantPage, message.page)
-			assert.Equal(t, test.table.Name, message.tableName)
+			assert.Equal(t, test.relation, message.relation)
 			assert.Equal(t, test.offset, message.offset)
 			assert.Equal(t, test.selectedRow, message.selectedRow)
 			assert.Equal(t, test.session, message.session)
+			assert.Equal(t, test.request, message.request)
 			assert.ErrorIs(t, message.err, test.wantErr)
 		})
 	}

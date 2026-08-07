@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	defaultWidth  = 100
-	defaultHeight = 24
-	wheelDebounce = 50 * time.Millisecond
+	defaultWidth      = 100
+	defaultHeight     = 24
+	wheelDebounce     = 50 * time.Millisecond
+	doubleClickWindow = 500 * time.Millisecond
 )
 
 type focusPane uint8
@@ -29,6 +30,18 @@ const (
 	panelData rightPanel = iota
 	panelQuery
 )
+
+type activeRelation struct {
+	item    navigatorItem
+	request uint64
+	set     bool
+}
+
+type navigatorClick struct {
+	item     navigatorItem
+	at       time.Time
+	recorded bool
+}
 
 // Model is the root Bubble Tea application model.
 type Model struct {
@@ -51,17 +64,19 @@ type Model struct {
 	materializedViewsLoading bool
 	materializedViewLoadErr  error
 	navigator                navigatorModel
+	activeRelation           activeRelation
 	data                     dataModel
 	panel                    rightPanel
 	query                    queryModel
 
-	spinnerFrame    int
-	spinnerRunning  bool
-	layout          appLayout
-	keys            keyMap
-	focus           focusPane
-	lastWheelAt     time.Time
-	lastWheelButton tea.MouseButton
+	spinnerFrame       int
+	spinnerRunning     bool
+	layout             appLayout
+	keys               keyMap
+	focus              focusPane
+	lastWheelAt        time.Time
+	lastWheelButton    tea.MouseButton
+	lastNavigatorClick navigatorClick
 
 	config config.Config
 

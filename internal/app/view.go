@@ -91,16 +91,22 @@ func (m Model) connectedDatabaseName() string {
 
 func (m Model) dataStatus() dataStatus {
 	tableLoadErr := error(nil)
-	if !m.navigator.hasSelection() {
+	if !m.navigator.hasRelations() {
 		tableLoadErr = m.tableLoadErr
 	}
+	tableName := ""
+	if m.activeRelation.set {
+		tableName = sanitizeText(m.activeRelation.item.name)
+	}
 	return dataStatus{
-		tableName:     m.navigator.selectedName(),
-		disconnected:  m.database == nil,
-		tablesLoading: (m.loading || m.viewsLoading) && !m.navigator.hasSelection(),
-		tableLoadErr:  tableLoadErr,
-		noTables:      !m.loading && !m.viewsLoading && !m.navigator.hasSelection(),
-		spinner:       m.spinner(),
+		tableName:       tableName,
+		highlightedName: m.navigator.selectedName(),
+		active:          m.activeRelation.set,
+		disconnected:    m.database == nil,
+		tablesLoading:   (m.loading || m.viewsLoading || m.materializedViewsLoading) && !m.navigator.hasRelations(),
+		tableLoadErr:    tableLoadErr,
+		noTables:        !m.loading && !m.viewsLoading && !m.materializedViewsLoading && !m.navigator.hasRelations(),
+		spinner:         m.spinner(),
 	}
 }
 
@@ -155,13 +161,13 @@ func (m Model) footerText() string {
 		}
 		return "raw query  •  Ctrl+P execute" + exportHelp + ddlHelp + "  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+T table data  •  Ctrl+L connections  •  q quit"
 	}
-	if (m.loading || m.viewsLoading) && !m.navigator.hasSelection() {
+	if (m.loading || m.viewsLoading || m.materializedViewsLoading) && !m.navigator.hasRelations() {
 		return "loading database objects  •  q quit"
 	}
-	if m.tableLoadErr != nil && !m.navigator.hasSelection() {
+	if m.tableLoadErr != nil && !m.navigator.hasRelations() {
 		return "unable to load tables  •  q quit"
 	}
-	if !m.navigator.hasSelection() {
+	if !m.navigator.hasRelations() {
 		return "no public tables or views  •  q quit"
 	}
 	if len(m.navigator.visibleItems()) == 0 {
@@ -198,8 +204,12 @@ func (m Model) footerText() string {
 	if m.navigator.hasViewsSection() {
 		sectionHelp = "  •  ←/→ switch section"
 	}
-	return fmt.Sprintf("focus: %s%s  •  Ctrl+F search relations%s%s  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  q quit",
-		focusLabel, rowStatus, sectionHelp, tableHelp)
+	activationHelp := ""
+	if m.focus == focusNavigator {
+		activationHelp = "  •  Enter load rows"
+	}
+	return fmt.Sprintf("focus: %s%s%s  •  Ctrl+F search relations%s%s  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  q quit",
+		focusLabel, rowStatus, activationHelp, sectionHelp, tableHelp)
 }
 
 func panelStyle(width, height int, focused bool) lipgloss.Style {
