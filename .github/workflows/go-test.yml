@@ -22,11 +22,11 @@ jobs:
           cache: true
 
       - name: Start databases
-        run: docker compose up -d --wait postgres mysql
+        run: docker compose up -d --wait postgres mysql oracle
 
       - name: Run tests
         run: go test ./...
 
       - name: Show database logs on failure
         if: failure()
-        run: docker compose logs postgres mysql
+        run: docker compose logs postgres mysql oracle
