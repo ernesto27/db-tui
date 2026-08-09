@@ -60,7 +60,24 @@ func TestListTables(t *testing.T) {
 		{Name: "department"}, {Name: "dept_emp"}, {Name: "dept_manager"},
 		{Name: "employee"}, {Name: "expected_value"}, {Name: "found_value"},
 		{Name: "salary"}, {Name: "tchecksum"}, {Name: "title"},
+		{Name: "without_primary_key"},
 	}, tables)
+}
+
+func TestListColumnsMarksPrimaryKeys(t *testing.T) {
+	database := connectEmployee(t)
+
+	columns, err := database.ListColumns(context.Background(), db.Table{Name: "employee"})
+	require.NoError(t, err)
+	require.NotEmpty(t, columns)
+	assert.Equal(t, "emp_no", columns[0].Name)
+	assert.True(t, columns[0].IsPrimaryKey)
+
+	keylessColumns, err := database.ListColumns(context.Background(), db.Table{Name: "without_primary_key"})
+	require.NoError(t, err)
+	require.Len(t, keylessColumns, 2)
+	assert.False(t, keylessColumns[0].IsPrimaryKey)
+	assert.False(t, keylessColumns[1].IsPrimaryKey)
 }
 
 func TestListViews(t *testing.T) {
@@ -183,6 +200,101 @@ func TestExecute(t *testing.T) {
 	assert.Empty(t, result.Columns)
 	assert.Empty(t, result.Rows)
 	assert.Equal(t, "CREATE TABLE", result.CommandTag)
+}
+
+func TestUpdateRow(t *testing.T) {
+	ctx := context.Background()
+	database := connectSQLiteFile(t, newSQLiteFile(t))
+
+	_, err := database.Execute(ctx, "CREATE TABLE keyed_row (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+	require.NoError(t, err)
+	_, err = database.Execute(ctx, "INSERT INTO keyed_row (id, name) VALUES (1, 'before')")
+	require.NoError(t, err)
+	_, err = database.Execute(ctx, "CREATE TABLE without_primary_key (id INTEGER NOT NULL, name TEXT NOT NULL)")
+	require.NoError(t, err)
+	_, err = database.Execute(ctx, "INSERT INTO without_primary_key (id, name) VALUES (1, 'unchanged')")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name         string
+		table        db.Table
+		setColumns   map[string]any
+		whereColumns map[string]any
+		wantErr      bool
+		errContains  string
+	}{
+		{
+			name:         "empty table name",
+			table:        db.Table{},
+			setColumns:   map[string]any{"name": "x"},
+			whereColumns: map[string]any{"id": 1},
+			wantErr:      true,
+		},
+		{
+			name:         "empty setColumns",
+			table:        db.Table{Name: "keyed_row"},
+			setColumns:   map[string]any{},
+			whereColumns: map[string]any{"id": 1},
+			wantErr:      true,
+		},
+		{
+			name:       "empty whereColumns",
+			table:      db.Table{Name: "keyed_row"},
+			setColumns: map[string]any{"name": "x"},
+			wantErr:    true,
+		},
+		{
+			name:         "table without a primary key",
+			table:        db.Table{Name: "without_primary_key"},
+			setColumns:   map[string]any{"name": "changed"},
+			whereColumns: map[string]any{"id": 1},
+			wantErr:      true,
+			errContains:  "table has no primary key",
+		},
+		{
+			name:         "non-primary-key WHERE",
+			table:        db.Table{Name: "keyed_row"},
+			setColumns:   map[string]any{"name": "x"},
+			whereColumns: map[string]any{"name": "before"},
+			wantErr:      true,
+			errContains:  "complete primary key",
+		},
+		{
+			name:         "non-matching WHERE",
+			table:        db.Table{Name: "keyed_row"},
+			setColumns:   map[string]any{"name": "x"},
+			whereColumns: map[string]any{"id": -99999},
+			wantErr:      true,
+			errContains:  "no row matched",
+		},
+		{
+			name:         "successful update",
+			table:        db.Table{Name: "keyed_row"},
+			setColumns:   map[string]any{"name": "success_test"},
+			whereColumns: map[string]any{"id": 1},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := database.UpdateRow(ctx, test.table, test.setColumns, test.whereColumns)
+			if test.wantErr {
+				assert.Error(t, err)
+				if test.errContains != "" {
+					assert.ErrorContains(t, err, test.errContains)
+				}
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+
+	keylessPage, err := database.GetRows(ctx, db.Table{Name: "without_primary_key"}, db.PageRequest{Limit: 1})
+	require.NoError(t, err)
+	require.Len(t, keylessPage.Rows, 1)
+	assert.Equal(t, "unchanged", keylessPage.Rows[0][1])
+
+	require.NoError(t, database.UpdateRow(ctx, db.Table{Name: "keyed_row"}, map[string]any{"name": "before"}, map[string]any{"id": 1}))
 }
 
 func TestExport(t *testing.T) {

@@ -5604,6 +5604,22 @@ WHERE language.`IsOfficial` = 'T'
 GROUP BY language.`Language`;
 
 --
+-- Table structure for table `without_primary_key`
+--
+
+DROP TABLE IF EXISTS `without_primary_key`;
+CREATE TABLE `without_primary_key` (
+  `id` int NOT NULL,
+  `name` varchar(50) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--
+-- Dumping data for table `without_primary_key`
+--
+
+INSERT INTO `without_primary_key` VALUES (1,'unchanged');
+
+--
 -- Dumping events for database 'world'
 --
 

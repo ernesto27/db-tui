@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -36,7 +37,17 @@ const listColumnsSQL = `
 		NULL AS collation_name,
 		CASE column_info.nullable WHEN 'N' THEN 1 ELSE 0 END AS not_null,
 		column_info.data_default,
-		comment_info.comments
+		comment_info.comments,
+		CASE WHEN EXISTS (
+			SELECT 1
+			FROM user_constraints primary_key_constraint
+			JOIN user_cons_columns primary_key_column
+				ON primary_key_column.constraint_name = primary_key_constraint.constraint_name
+				AND primary_key_column.table_name = primary_key_constraint.table_name
+			WHERE primary_key_constraint.constraint_type = 'P'
+				AND primary_key_constraint.table_name = column_info.table_name
+				AND primary_key_column.column_name = column_info.column_name
+		) THEN 1 ELSE 0 END AS is_primary_key
 	FROM user_tab_columns column_info
 	LEFT JOIN user_tab_identity_cols identity_info
 		ON identity_info.table_name = column_info.table_name
@@ -239,6 +250,7 @@ func (o *oracleDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.
 			&column.NotNull,
 			&defaultValue,
 			&comment,
+			&column.IsPrimaryKey,
 		); err != nil {
 			return nil, fmt.Errorf("scan Oracle column: %w", err)
 		}
@@ -401,7 +413,77 @@ func (o *oracleDatabase) Close() {
 }
 
 func (o *oracleDatabase) UpdateRow(ctx context.Context, table db.Table, setColumns map[string]any, whereColumns map[string]any) error {
-	return errors.New("edit row not yet implemented for MySQL")
+	columns, err := o.ListColumns(ctx, table)
+	if err != nil {
+		return fmt.Errorf("list Oracle columns before update: %w", err)
+	}
+	primaryKeys := make(map[string]struct{})
+	for _, column := range columns {
+		if column.IsPrimaryKey {
+			primaryKeys[column.Name] = struct{}{}
+		}
+	}
+	if len(primaryKeys) == 0 {
+		return errors.New("cannot update Oracle row: table has no primary key")
+	}
+	if len(whereColumns) != len(primaryKeys) {
+		return errors.New("cannot update Oracle row without its complete primary key")
+	}
+	for name := range whereColumns {
+		if _, ok := primaryKeys[name]; !ok {
+			return errors.New("cannot update Oracle row without its complete primary key")
+		}
+	}
+
+	setNames := make([]string, 0, len(setColumns))
+	for name := range setColumns {
+		setNames = append(setNames, name)
+	}
+	sort.Strings(setNames)
+	setClauses := make([]string, 0, len(setNames))
+	args := make([]any, 0, len(setColumns)+len(whereColumns))
+	argumentIndex := 1
+	for _, name := range setNames {
+		setClauses = append(setClauses, fmt.Sprintf("%s = :%d", quoteIdentifier(name), argumentIndex))
+		args = append(args, setColumns[name])
+		argumentIndex++
+	}
+
+	whereNames := make([]string, 0, len(whereColumns))
+	for name := range whereColumns {
+		whereNames = append(whereNames, name)
+	}
+	sort.Strings(whereNames)
+	whereClauses := make([]string, 0, len(whereNames))
+	for _, name := range whereNames {
+		if whereColumns[name] == nil {
+			whereClauses = append(whereClauses, quoteIdentifier(name)+" IS NULL")
+			continue
+		}
+		whereClauses = append(whereClauses, fmt.Sprintf("%s = :%d", quoteIdentifier(name), argumentIndex))
+		args = append(args, whereColumns[name])
+		argumentIndex++
+	}
+
+	query := fmt.Sprintf(
+		"UPDATE %s SET %s WHERE %s",
+		quoteIdentifier(table.Name),
+		strings.Join(setClauses, ", "),
+		strings.Join(whereClauses, " AND "),
+	)
+	o.logger.Log(query)
+	result, err := o.database.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("update Oracle row: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read Oracle update result: %w", err)
+	}
+	if rowsAffected == 0 {
+		return errors.New("no row matched the WHERE clause; the row may have been modified or deleted")
+	}
+	return nil
 }
 
 func readRowPage(rows *sql.Rows, rowLimit int) (db.RowPage, error) {

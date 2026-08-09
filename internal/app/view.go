@@ -203,7 +203,7 @@ func (m Model) footerText() string {
 		tableHelp = "  •  Ctrl+E export  •  Ctrl+G actions"
 	}
 	editHelp := ""
-	if m.activeRelation.set && !m.navigator.selectedIsView() && len(m.data.page.Rows) > 0 && !m.data.loading && m.editRowModal == nil {
+	if m.activeRelation.set && m.activeRelation.item.section == navigatorTables && len(m.data.page.Rows) > 0 && !m.data.loading && m.editRowModal == nil {
 		editHelp = "  •  e edit row"
 	}
 	sectionHelp := ""

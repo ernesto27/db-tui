@@ -125,6 +125,16 @@ CREATE TABLE currencies_countries
 );
 
 /*********************************************/
+/*********** WITHOUT_PRIMARY_KEY *************/
+/*********************************************/
+
+CREATE TABLE without_primary_key
+(
+  id    NUMBER       NOT NULL,
+  name  VARCHAR2(50) NOT NULL
+);
+
+/*********************************************/
 /*********************************************/
 /*********************************************/
 /*********** D a t a    l o a d **************/
@@ -136,6 +146,8 @@ CREATE TABLE currencies_countries
 /*********************************************/
 /***************** REGIONS *******************/
 /*********************************************/
+
+INSERT INTO without_primary_key (id, name) VALUES (1, 'unchanged');
 
 INSERT INTO regions (region_id, name) VALUES ('AF', 'Africa');
 INSERT INTO regions (region_id, name) VALUES ('AN', 'Antarctica');

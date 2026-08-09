@@ -7,10 +7,14 @@
 [x] - option to dump all database file
 [x] - add sqlite support
 [x] - export to json data
+[] - when add new connection,  go to focust table list
+[] - on enter list tables, focus on data
+[] - Create conventions-architecthre file
 [] - when press scape in modal of ctrl+g go back modal list
 [] - when remove a table in raw query do a refresh table[
 [] - in raw query show execution time, rows affected
 [] - when show ddl i want to be able to copy
+[] - update skills explain changes to show diagrams at first
 [x] - support oracle database
 [] - Oracle Data Pump dump, import, and restore support
 [x] - show host connection in some place of TUI

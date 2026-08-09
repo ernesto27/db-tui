@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -53,7 +54,15 @@ const listColumnsSQL = `
 			ELSE FALSE
 		END AS not_null,
 		column_info.COLUMN_DEFAULT AS default_expression,
-		column_info.COLUMN_COMMENT AS comment
+		column_info.COLUMN_COMMENT AS comment,
+		EXISTS (
+			SELECT 1
+			FROM information_schema.key_column_usage AS key_info
+			WHERE key_info.CONSTRAINT_SCHEMA = column_info.TABLE_SCHEMA
+				AND key_info.TABLE_NAME = column_info.TABLE_NAME
+				AND key_info.COLUMN_NAME = column_info.COLUMN_NAME
+				AND key_info.CONSTRAINT_NAME = 'PRIMARY'
+		) AS is_primary_key
 	FROM information_schema.columns AS column_info
 	JOIN information_schema.tables AS table_info
 		ON table_info.TABLE_SCHEMA = column_info.TABLE_SCHEMA
@@ -72,6 +81,14 @@ const listIndexesSQL = `
 	WHERE index_info.TABLE_SCHEMA = DATABASE()
 		AND index_info.TABLE_NAME = ?
 	ORDER BY index_info.INDEX_NAME, index_info.SEQ_IN_INDEX`
+
+const listPrimaryKeyColumnsSQL = `
+	SELECT column_name
+	FROM information_schema.key_column_usage
+	WHERE constraint_schema = DATABASE()
+		AND table_name = ?
+		AND constraint_name = 'PRIMARY'
+	ORDER BY ordinal_position`
 
 type mysqlDatabase struct {
 	database *sql.DB
@@ -103,6 +120,7 @@ func (m *mysqlDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.C
 			&column.NotNull,
 			&defaultValue,
 			&comment,
+			&column.IsPrimaryKey,
 		); err != nil {
 			return nil, fmt.Errorf("scan MySQL column: %w", err)
 		}
@@ -636,5 +654,83 @@ func (m *mysqlDatabase) Close() {
 }
 
 func (m *mysqlDatabase) UpdateRow(ctx context.Context, table db.Table, setColumns map[string]any, whereColumns map[string]any) error {
-	return errors.New("edit row not yet implemented for MySQL")
+	m.logger.Log(listPrimaryKeyColumnsSQL)
+	rows, err := m.database.QueryContext(ctx, listPrimaryKeyColumnsSQL, table.Name)
+	if err != nil {
+		return fmt.Errorf("query MySQL primary key columns: %w", err)
+	}
+	defer rows.Close()
+
+	primaryKeys := make(map[string]struct{})
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return fmt.Errorf("scan MySQL primary key column: %w", err)
+		}
+		primaryKeys[name] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate MySQL primary key columns: %w", err)
+	}
+	if len(primaryKeys) == 0 {
+		return errors.New("cannot update MySQL row: table has no primary key")
+	}
+	if len(whereColumns) != len(primaryKeys) {
+		return errors.New("cannot update MySQL row without its complete primary key")
+	}
+	for name := range whereColumns {
+		if _, ok := primaryKeys[name]; !ok {
+			return errors.New("cannot update MySQL row without its complete primary key")
+		}
+	}
+
+	setNames := make([]string, 0, len(setColumns))
+	for name := range setColumns {
+		setNames = append(setNames, name)
+	}
+	sort.Strings(setNames)
+
+	setClauses := make([]string, 0, len(setNames))
+	args := make([]any, 0, len(setColumns)+len(whereColumns))
+	for _, name := range setNames {
+		setClauses = append(setClauses, quoteIdentifier(name)+" = ?")
+		args = append(args, setColumns[name])
+	}
+
+	whereNames := make([]string, 0, len(whereColumns))
+	for name := range whereColumns {
+		whereNames = append(whereNames, name)
+	}
+	sort.Strings(whereNames)
+
+	whereClauses := make([]string, 0, len(whereNames))
+	for _, name := range whereNames {
+		if whereColumns[name] == nil {
+			whereClauses = append(whereClauses, quoteIdentifier(name)+" IS NULL")
+			continue
+		}
+		whereClauses = append(whereClauses, quoteIdentifier(name)+" = ?")
+		args = append(args, whereColumns[name])
+	}
+
+	query := fmt.Sprintf(
+		"UPDATE %s SET %s WHERE %s",
+		quoteIdentifier(table.Name),
+		strings.Join(setClauses, ", "),
+		strings.Join(whereClauses, " AND "),
+	)
+	m.logger.Log(query)
+
+	result, err := m.database.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("update MySQL row: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read MySQL update result: %w", err)
+	}
+	if rowsAffected == 0 {
+		return errors.New("no row matched the WHERE clause; the row may have been modified or deleted")
+	}
+	return nil
 }

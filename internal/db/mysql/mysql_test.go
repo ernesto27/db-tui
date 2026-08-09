@@ -88,6 +88,7 @@ func TestParseDSN(t *testing.T) {
 			assert.Equal(t, test.wantParse, config.ParseTime)
 		})
 	}
+
 }
 
 func TestEnsureTrailingSemicolon(t *testing.T) {
@@ -106,6 +107,7 @@ func TestEnsureTrailingSemicolon(t *testing.T) {
 			assert.Equal(t, test.want, ensureTrailingSemicolon(test.input))
 		})
 	}
+
 }
 
 func TestListTables(t *testing.T) {
@@ -114,7 +116,12 @@ func TestListTables(t *testing.T) {
 	tables, err := database.ListTables(context.Background())
 
 	require.NoError(t, err)
-	assert.Equal(t, []db.Table{{Name: "city"}, {Name: "country"}, {Name: "countrylanguage"}}, tables)
+	assert.Equal(t, []db.Table{
+		{Name: "city"},
+		{Name: "country"},
+		{Name: "countrylanguage"},
+		{Name: "without_primary_key"},
+	}, tables)
 }
 
 func TestListViews(t *testing.T) {
@@ -154,7 +161,7 @@ func TestListColumns(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []db.Column{
-		{Name: "ID", OrdinalPosition: 1, DataType: "int", Identity: "AUTO_INCREMENT", NotNull: true},
+		{Name: "ID", OrdinalPosition: 1, DataType: "int", Identity: "AUTO_INCREMENT", NotNull: true, IsPrimaryKey: true},
 		{Name: "Name", OrdinalPosition: 2, DataType: "char(35)", Collation: "default", NotNull: true},
 		{Name: "CountryCode", OrdinalPosition: 3, DataType: "char(3)", Collation: "default", NotNull: true},
 		{Name: "District", OrdinalPosition: 4, DataType: "char(20)", Collation: "default", NotNull: true},
@@ -317,6 +324,113 @@ func TestExecute(t *testing.T) {
 
 		assert.ErrorContains(t, err, "execute MySQL query")
 	})
+}
+
+func TestUpdateRow(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database := connectWorld(t)
+
+	page, err := database.GetRows(ctx, db.Table{Name: "city"}, db.PageRequest{Limit: 1})
+	if !assert.NoError(t, err) || !assert.NotEmpty(t, page.Rows) {
+		return
+	}
+	row := page.Rows[0]
+	originalName, ok := row[1].(string)
+	if !assert.True(t, ok) {
+		return
+	}
+	cityID := row[0]
+
+	tests := []struct {
+		name         string
+		table        db.Table
+		setColumns   map[string]any
+		whereColumns map[string]any
+		wantErr      bool
+		errContains  string
+	}{
+		{
+			name:         "empty table name",
+			table:        db.Table{},
+			setColumns:   map[string]any{"Name": "x"},
+			whereColumns: map[string]any{"ID": 1},
+			wantErr:      true,
+		},
+		{
+			name:         "empty setColumns",
+			table:        db.Table{Name: "city"},
+			setColumns:   map[string]any{},
+			whereColumns: map[string]any{"ID": 1},
+			wantErr:      true,
+		},
+		{
+			name:       "empty whereColumns",
+			table:      db.Table{Name: "city"},
+			setColumns: map[string]any{"Name": "x"},
+			wantErr:    true,
+		},
+		{
+			name:         "table without a primary key",
+			table:        db.Table{Name: "without_primary_key"},
+			setColumns:   map[string]any{"name": "changed"},
+			whereColumns: map[string]any{"id": 1},
+			wantErr:      true,
+			errContains:  "table has no primary key",
+		},
+		{
+			name:         "non-primary-key WHERE",
+			table:        db.Table{Name: "city"},
+			setColumns:   map[string]any{"Name": "x"},
+			whereColumns: map[string]any{"Name": originalName},
+			wantErr:      true,
+			errContains:  "complete primary key",
+		},
+		{
+			name:         "non-matching WHERE",
+			table:        db.Table{Name: "city"},
+			setColumns:   map[string]any{"Name": "x"},
+			whereColumns: map[string]any{"ID": -99999},
+			wantErr:      true,
+			errContains:  "no row matched",
+		},
+		{
+			name:         "successful update",
+			table:        db.Table{Name: "city"},
+			setColumns:   map[string]any{"Name": "success_test"},
+			whereColumns: map[string]any{"ID": cityID},
+		},
+	}
+
+	updated := false
+	t.Cleanup(func() {
+		if !updated {
+			return
+		}
+		err := database.UpdateRow(context.Background(), db.Table{Name: "city"}, map[string]any{"Name": originalName}, map[string]any{"ID": cityID})
+		assert.NoError(t, err)
+	})
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := database.UpdateRow(ctx, test.table, test.setColumns, test.whereColumns)
+			if test.wantErr {
+				assert.Error(t, err)
+				if test.errContains != "" {
+					assert.ErrorContains(t, err, test.errContains)
+				}
+				return
+			}
+			assert.NoError(t, err)
+			updated = true
+		})
+	}
+
+	keylessPage, err := database.GetRows(ctx, db.Table{Name: "without_primary_key"}, db.PageRequest{Limit: 1})
+	require.NoError(t, err)
+	require.Len(t, keylessPage.Rows, 1)
+	assert.Equal(t, "unchanged", keylessPage.Rows[0][1])
 }
 
 func TestDumpRejectsUnsupportedNetwork(t *testing.T) {

@@ -562,7 +562,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 			m.data.scrollColumns(1, m.layout)
 		}
 		return nil
-	case m.panel == panelData && m.focus == focusData && m.activeRelation.set && !m.navigator.selectedIsView() && len(m.data.page.Rows) > 0 && !m.data.loading && key.Matches(msg, m.keys.editRow):
+	case m.panel == panelData && m.focus == focusData && m.activeRelation.set && m.activeRelation.item.section == navigatorTables && len(m.data.page.Rows) > 0 && !m.data.loading && key.Matches(msg, m.keys.editRow):
 		return m.openEditRowModal()
 	case key.Matches(msg, m.keys.up):
 		if m.focus == focusNavigator {
@@ -992,12 +992,11 @@ func (m *Model) updateIndexesModal(msg tea.Msg) tea.Cmd {
 }
 
 func (m *Model) openEditRowModal() tea.Cmd {
-	table, ok := m.navigator.selectedTable()
-	if !ok || m.database == nil || m.data.selected >= len(m.data.page.Rows) {
+	if !m.activeRelation.set || m.activeRelation.item.section != navigatorTables || m.database == nil || m.data.selected >= len(m.data.page.Rows) {
 		return nil
 	}
 	row := m.data.page.Rows[m.data.selected]
-	return loadEditRowColumns(m.database, table, row, m.session)
+	return loadEditRowColumns(m.database, db.Table{Name: m.activeRelation.item.name}, row, m.session)
 }
 
 func (m *Model) updateEditRowModal(msg tea.Msg) (tea.Model, tea.Cmd) {

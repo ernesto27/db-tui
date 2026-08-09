@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/ernestoponce27/db-tui/internal/csvexport"
@@ -44,7 +45,11 @@ const listColumnSQL = `SELECT
         ELSE 0
     END AS not_null,
     column_info.dflt_value AS default_expression,
-    NULL AS comment
+    NULL AS comment,
+    CASE
+        WHEN column_info.pk <> 0 THEN 1
+        ELSE 0
+    END AS is_primary_key
 FROM pragma_table_xinfo(?) AS column_info
 WHERE column_info."hidden" <> 1
 ORDER BY column_info.cid`
@@ -191,6 +196,7 @@ func (s *sqliteDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.
 			&column.NotNull,
 			&defaultValue,
 			&comment,
+			&column.IsPrimaryKey,
 		); err != nil {
 			return nil, fmt.Errorf("scan SQLite column: %w", err)
 		}
@@ -378,7 +384,74 @@ func (s *sqliteDatabase) Close() {
 }
 
 func (s *sqliteDatabase) UpdateRow(ctx context.Context, table db.Table, setColumns map[string]any, whereColumns map[string]any) error {
-	return errors.New("edit row not yet implemented for MySQL")
+	columns, err := s.ListColumns(ctx, table)
+	if err != nil {
+		return fmt.Errorf("list SQLite columns before update: %w", err)
+	}
+	primaryKeys := make(map[string]struct{})
+	for _, column := range columns {
+		if column.IsPrimaryKey {
+			primaryKeys[column.Name] = struct{}{}
+		}
+	}
+	if len(primaryKeys) == 0 {
+		return errors.New("cannot update SQLite row: table has no primary key")
+	}
+	if len(whereColumns) != len(primaryKeys) {
+		return errors.New("cannot update SQLite row without its complete primary key")
+	}
+	for name := range whereColumns {
+		if _, ok := primaryKeys[name]; !ok {
+			return errors.New("cannot update SQLite row without its complete primary key")
+		}
+	}
+
+	setNames := make([]string, 0, len(setColumns))
+	for name := range setColumns {
+		setNames = append(setNames, name)
+	}
+	sort.Strings(setNames)
+	setClauses := make([]string, 0, len(setNames))
+	args := make([]any, 0, len(setColumns)+len(whereColumns))
+	for _, name := range setNames {
+		setClauses = append(setClauses, quoteIdentifier(name)+" = ?")
+		args = append(args, setColumns[name])
+	}
+
+	whereNames := make([]string, 0, len(whereColumns))
+	for name := range whereColumns {
+		whereNames = append(whereNames, name)
+	}
+	sort.Strings(whereNames)
+	whereClauses := make([]string, 0, len(whereNames))
+	for _, name := range whereNames {
+		if whereColumns[name] == nil {
+			whereClauses = append(whereClauses, quoteIdentifier(name)+" IS NULL")
+			continue
+		}
+		whereClauses = append(whereClauses, quoteIdentifier(name)+" = ?")
+		args = append(args, whereColumns[name])
+	}
+
+	query := fmt.Sprintf(
+		"UPDATE %s SET %s WHERE %s",
+		quoteIdentifier(table.Name),
+		strings.Join(setClauses, ", "),
+		strings.Join(whereClauses, " AND "),
+	)
+	s.logger.Log(query)
+	result, err := s.database.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("update SQLite row: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read SQLite update result: %w", err)
+	}
+	if rowsAffected == 0 {
+		return errors.New("no row matched the WHERE clause; the row may have been modified or deleted")
+	}
+	return nil
 }
 
 func readRowPage(rows *sql.Rows, rowLimit int) (db.RowPage, error) {

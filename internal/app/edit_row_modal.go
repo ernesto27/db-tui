@@ -16,6 +16,7 @@ type editRowState uint8
 
 const (
 	editRowEditing editRowState = iota
+	editRowConfirming
 	editRowSaving
 	editRowSuccess
 	editRowFailed
@@ -62,13 +63,15 @@ func (f editRowField) modified() bool {
 }
 
 type editRowModal struct {
-	tableName string
-	fields    []editRowField
-	selected  int
-	offset    int
-	visible   int
-	state     editRowState
-	err       error
+	tableName    string
+	fields       []editRowField
+	selected     int
+	offset       int
+	visible      int
+	state        editRowState
+	err          error
+	setColumns   map[string]any
+	whereColumns map[string]any
 }
 
 func newEditRowModal(table db.Table, columns []db.Column, row []any) editRowModal {
@@ -172,6 +175,13 @@ func (m editRowModal) update(msg tea.Msg) (editRowModal, tea.Cmd) {
 	switch m.state {
 	case editRowEditing:
 		return m.updateEditing(key)
+	case editRowConfirming:
+		switch key.String() {
+		case "enter":
+			return m.confirmSave()
+		case "esc":
+			m.state = editRowEditing
+		}
 	case editRowSuccess, editRowFailed:
 		switch key.String() {
 		case "enter", "esc":
@@ -186,7 +196,7 @@ func (m editRowModal) updateEditing(key tea.KeyPressMsg) (editRowModal, tea.Cmd)
 	case "esc":
 		return m, func() tea.Msg { return editRowCancelMsg{} }
 	case "enter":
-		return m.submitSave()
+		return m.prepareSave()
 	case "up", "shift+tab":
 		return m, m.focus(-1)
 	case "down", "tab":
@@ -214,13 +224,18 @@ func (m *editRowModal) ensureFieldVisible(visible int) {
 	}
 }
 
-func (m editRowModal) submitSave() (editRowModal, tea.Cmd) {
+func (m editRowModal) prepareSave() (editRowModal, tea.Cmd) {
 	hasPK := false
 	for _, f := range m.fields {
 		if f.column.IsPrimaryKey {
 			hasPK = true
 			break
 		}
+	}
+	if !hasPK {
+		m.state = editRowFailed
+		m.err = errors.New("cannot edit row: table has no primary key")
+		return m, nil
 	}
 
 	// Validate first so every offending field is flagged in one pass.
@@ -244,10 +259,9 @@ func (m editRowModal) submitSave() (editRowModal, tea.Cmd) {
 	whereColumns := make(map[string]any)
 
 	for _, f := range m.fields {
-		// The WHERE clause always uses the values the row was loaded with.
-		// Identity columns take part in it too — they are usually the primary
-		// key, and skipping them would leave no WHERE clause at all.
-		if f.column.IsPrimaryKey || !hasPK {
+		// The WHERE clause always uses the primary key values the row was
+		// loaded with, so it cannot update an ambiguous matching row.
+		if f.column.IsPrimaryKey {
 			whereColumns[f.column.Name] = f.original
 		}
 		if !f.modified() {
@@ -266,13 +280,20 @@ func (m editRowModal) submitSave() (editRowModal, tea.Cmd) {
 	}
 	if len(whereColumns) == 0 {
 		m.state = editRowFailed
-		m.err = errors.New("cannot identify this row: no primary key and no usable column values")
+		m.err = errors.New("cannot edit row: table has no primary key")
 		return m, nil
 	}
 
+	m.setColumns = setColumns
+	m.whereColumns = whereColumns
+	m.state = editRowConfirming
+	return m, nil
+}
+
+func (m editRowModal) confirmSave() (editRowModal, tea.Cmd) {
 	m.state = editRowSaving
 	return m, func() tea.Msg {
-		return editRowSaveMsg{table: db.Table{Name: m.tableName}, setColumns: setColumns, whereColumns: whereColumns}
+		return editRowSaveMsg{table: db.Table{Name: m.tableName}, setColumns: m.setColumns, whereColumns: m.whereColumns}
 	}
 }
 
@@ -324,6 +345,8 @@ func (m editRowModal) view(layout appLayout) string {
 	switch m.state {
 	case editRowEditing:
 		return m.viewEditing(layout)
+	case editRowConfirming:
+		return m.viewConfirmation(layout)
 	case editRowSaving:
 		return m.viewStatus(layout, "Saving…", "86")
 	case editRowSuccess:
@@ -362,9 +385,23 @@ func (m editRowModal) viewEditing(layout appLayout) string {
 
 	lines = append(lines,
 		"",
-		s.dim.Render("↑/↓ or Tab move  •  Enter save  •  Esc cancel"),
+		s.dim.Render("↑/↓ or Tab move  •  Enter review  •  Esc cancel"),
 	)
 
+	return s.container(contentWidth).Render(strings.Join(lines, "\n"))
+}
+
+func (m editRowModal) viewConfirmation(layout appLayout) string {
+	s := newEditRowStyles()
+	contentWidth := editRowContentWidth(layout.width)
+
+	lines := []string{
+		s.title.Render("Edit row") + s.dim.Render("  ·  ") + s.accent.Render(sanitizeText(m.tableName)),
+		"",
+		s.base.Render("Save changes to this row?"),
+		"",
+		s.dim.Render("Enter confirm  •  Esc back"),
+	}
 	return s.container(contentWidth).Render(strings.Join(lines, "\n"))
 }
 
@@ -409,12 +446,13 @@ func (m editRowModal) viewField(s editRowStyles, index, contentWidth, inputWidth
 
 func (m editRowModal) viewStatus(layout appLayout, message, color string) string {
 	s := newEditRowStyles()
-	contentWidth := max(40, editRowContentWidth(layout.width)-16)
+	contentWidth := editRowContentWidth(layout.width)
+	message = lipgloss.Wrap(sanitizeText(message), contentWidth, "")
 
 	lines := []string{
 		s.title.Render("Edit row") + s.dim.Render("  ·  ") + s.accent.Render(sanitizeText(m.tableName)),
 		"",
-		s.base.Foreground(lipgloss.Color(color)).Render(truncateLabel(message, contentWidth)),
+		s.base.Foreground(lipgloss.Color(color)).Render(message),
 	}
 	if m.state != editRowSaving {
 		lines = append(lines, "", s.dim.Render("Enter or Esc continue"))

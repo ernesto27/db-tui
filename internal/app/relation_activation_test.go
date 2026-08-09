@@ -180,6 +180,28 @@ func TestActiveRelationPersistsWhileNavigating(t *testing.T) {
 	assert.Equal(t, "Album", updated.dataStatus().tableName)
 }
 
+func TestEditRowUsesActiveRelationWhileAnotherTableIsHighlighted(t *testing.T) {
+	database := &fakeDatabase{name: "chinook"}
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = database
+	model.focus = focusData
+	model.navigator.tables = []db.Table{{Name: "Album"}, {Name: "Artist"}}
+	model.navigator.selectIndex(1, model.layout.navigatorListRows)
+	model.activeRelation = activeRelation{item: navigatorItem{name: "Album", section: navigatorTables}, set: true}
+	model.data = dataModel{page: db.RowPage{Rows: [][]any{{1}}}}
+
+	_, command := updateModel(t, model, keyPress('e', "e", 0))
+
+	require.NotNil(t, command)
+	message := command()
+	assert.Equal(t, db.Table{Name: "Album"}, database.listColumnsTable)
+	assert.Equal(t, editRowColumnsLoadedMsg{
+		table:   db.Table{Name: "Album"},
+		row:     []any{1},
+		session: model.session,
+	}, message)
+}
+
 func TestEnterOnActiveRelationDoesNothing(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.database = &fakeDatabase{name: "chinook"}

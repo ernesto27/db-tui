@@ -39,6 +39,7 @@ func TestListTables(t *testing.T) {
 		{Name: "CURRENCIES"},
 		{Name: "CURRENCIES_COUNTRIES"},
 		{Name: "REGIONS"},
+		{Name: "WITHOUT_PRIMARY_KEY"},
 	}, tables, "ListTables()")
 }
 
@@ -134,7 +135,7 @@ func TestListColumns(t *testing.T) {
 	}
 
 	assert.Equal(t, []db.Column{
-		{Name: "COUNTRY_ID", OrdinalPosition: 1, DataType: "VARCHAR2", NotNull: true},
+		{Name: "COUNTRY_ID", OrdinalPosition: 1, DataType: "VARCHAR2", NotNull: true, IsPrimaryKey: true},
 		{Name: "COUNTRY_CODE", OrdinalPosition: 2, DataType: "VARCHAR2", NotNull: true},
 		{Name: "NAME", OrdinalPosition: 3, DataType: "VARCHAR2", NotNull: true},
 		{Name: "OFFICIAL_NAME", OrdinalPosition: 4, DataType: "VARCHAR2"},
@@ -270,6 +271,109 @@ func TestExportQuery(t *testing.T) {
 		return
 	}
 	assert.Contains(t, string(contents), "COUNTRY_ID\n")
+}
+
+func TestUpdateRow(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := oracle.Connect(ctx, freePDBDSN)
+	if !assert.NoError(t, err, "connect to local Compose Oracle") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	page, err := database.GetRows(ctx, db.Table{Name: "COUNTRIES"}, db.PageRequest{Limit: 1})
+	if !assert.NoError(t, err) || !assert.NotEmpty(t, page.Rows) {
+		return
+	}
+	row := page.Rows[0]
+	originalName := row[2]
+	countryID := row[0]
+
+	tests := []struct {
+		name         string
+		table        db.Table
+		setColumns   map[string]any
+		whereColumns map[string]any
+		wantErr      bool
+		errContains  string
+	}{
+		{
+			name:         "empty table name",
+			table:        db.Table{},
+			setColumns:   map[string]any{"NAME": "x"},
+			whereColumns: map[string]any{"COUNTRY_ID": "AND"},
+			wantErr:      true,
+		},
+		{
+			name:         "empty setColumns",
+			table:        db.Table{Name: "COUNTRIES"},
+			setColumns:   map[string]any{},
+			whereColumns: map[string]any{"COUNTRY_ID": countryID},
+			wantErr:      true,
+		},
+		{
+			name:       "empty whereColumns",
+			table:      db.Table{Name: "COUNTRIES"},
+			setColumns: map[string]any{"NAME": "x"},
+			wantErr:    true,
+		},
+		{
+			name:         "table without a primary key",
+			table:        db.Table{Name: "WITHOUT_PRIMARY_KEY"},
+			setColumns:   map[string]any{"NAME": "changed"},
+			whereColumns: map[string]any{"ID": 1},
+			wantErr:      true,
+			errContains:  "table has no primary key",
+		},
+		{
+			name:         "non-primary-key WHERE",
+			table:        db.Table{Name: "COUNTRIES"},
+			setColumns:   map[string]any{"NAME": "x"},
+			whereColumns: map[string]any{"NAME": originalName},
+			wantErr:      true,
+			errContains:  "complete primary key",
+		},
+		{
+			name:         "non-matching WHERE",
+			table:        db.Table{Name: "COUNTRIES"},
+			setColumns:   map[string]any{"NAME": "x"},
+			whereColumns: map[string]any{"COUNTRY_ID": "XXX"},
+			wantErr:      true,
+			errContains:  "no row matched",
+		},
+		{
+			name:         "successful update",
+			table:        db.Table{Name: "COUNTRIES"},
+			setColumns:   map[string]any{"NAME": "success_test"},
+			whereColumns: map[string]any{"COUNTRY_ID": countryID},
+		},
+	}
+
+	updated := false
+	t.Cleanup(func() {
+		if !updated {
+			return
+		}
+		err := database.UpdateRow(context.Background(), db.Table{Name: "COUNTRIES"}, map[string]any{"NAME": originalName}, map[string]any{"COUNTRY_ID": countryID})
+		assert.NoError(t, err)
+	})
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := database.UpdateRow(ctx, test.table, test.setColumns, test.whereColumns)
+			if test.wantErr {
+				assert.Error(t, err)
+				if test.errContains != "" {
+					assert.ErrorContains(t, err, test.errContains)
+				}
+				return
+			}
+			assert.NoError(t, err)
+			updated = true
+		})
+	}
 }
 
 func TestGetRows(t *testing.T) {
