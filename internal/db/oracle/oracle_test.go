@@ -376,6 +376,79 @@ func TestUpdateRow(t *testing.T) {
 	}
 }
 
+func TestDeleteRow(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := oracle.Connect(ctx, freePDBDSN)
+	if !assert.NoError(t, err, "connect to local Compose Oracle") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	_, err = database.Execute(ctx, "INSERT INTO COUNTRIES (COUNTRY_ID, COUNTRY_CODE, NAME, REGION_ID) VALUES ('ZZZ', 'ZZ', 'delete_row_test', 'EU')")
+	if !assert.NoError(t, err, "insert row to delete") {
+		return
+	}
+	t.Cleanup(func() {
+		_, _ = database.Execute(context.Background(), "DELETE FROM COUNTRIES WHERE COUNTRY_ID = 'ZZZ'")
+	})
+
+	tests := []struct {
+		name         string
+		table        db.Table
+		whereColumns map[string]any
+		wantErr      bool
+		errContains  string
+	}{
+		{
+			name:         "empty table name",
+			table:        db.Table{},
+			whereColumns: map[string]any{"COUNTRY_ID": "ZZZ"},
+			wantErr:      true,
+		},
+		{
+			name:         "empty whereColumns",
+			table:        db.Table{Name: "COUNTRIES"},
+			whereColumns: map[string]any{},
+			wantErr:      true,
+		},
+		{
+			name:         "non-primary-key WHERE",
+			table:        db.Table{Name: "COUNTRIES"},
+			whereColumns: map[string]any{"NAME": "delete_row_test"},
+			wantErr:      true,
+			errContains:  "complete primary key",
+		},
+		{
+			name:         "non-matching WHERE",
+			table:        db.Table{Name: "COUNTRIES"},
+			whereColumns: map[string]any{"COUNTRY_ID": "XXX"},
+			wantErr:      true,
+			errContains:  "no row matched",
+		},
+		{
+			name:         "successful delete",
+			table:        db.Table{Name: "COUNTRIES"},
+			whereColumns: map[string]any{"COUNTRY_ID": "ZZZ"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := database.DeleteRow(ctx, test.table, test.whereColumns)
+			if test.wantErr {
+				assert.Error(t, err)
+				if test.errContains != "" {
+					assert.ErrorContains(t, err, test.errContains)
+				}
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
 func TestGetRows(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

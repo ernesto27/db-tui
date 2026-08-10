@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -488,6 +489,78 @@ func TestUpdateRow(t *testing.T) {
 		map[string]any{"ArtistId": artistID},
 	)
 	assert.NoError(t, err)
+}
+
+func TestDeleteRow(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	result, err := database.Execute(ctx, `INSERT INTO "Artist" ("ArtistId", "Name")
+		SELECT COALESCE(MAX("ArtistId"), 0) + 1, 'delete_row_test' FROM "Artist"
+		RETURNING "ArtistId"`)
+	if !assert.NoError(t, err, "insert row to delete") || !assert.Len(t, result.Rows, 1) {
+		return
+	}
+	artistID := result.Rows[0][0]
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_, _ = database.Execute(cleanupCtx, fmt.Sprintf(`DELETE FROM "Artist" WHERE "ArtistId" = %v`, artistID))
+	})
+
+	tests := []struct {
+		name         string
+		table        db.Table
+		whereColumns map[string]any
+		wantErr      bool
+		errContains  string
+	}{
+		{
+			name:         "empty table name",
+			table:        db.Table{},
+			whereColumns: map[string]any{"ArtistId": artistID},
+			wantErr:      true,
+		},
+		{
+			name:         "empty whereColumns",
+			table:        db.Table{Name: "Artist"},
+			whereColumns: map[string]any{},
+			wantErr:      true,
+		},
+		{
+			name:         "non-matching WHERE",
+			table:        db.Table{Name: "Artist"},
+			whereColumns: map[string]any{"ArtistId": -99999},
+			wantErr:      true,
+			errContains:  "no row matched",
+		},
+		{
+			name:         "successful delete",
+			table:        db.Table{Name: "Artist"},
+			whereColumns: map[string]any{"ArtistId": artistID},
+			wantErr:      false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := database.DeleteRow(ctx, test.table, test.whereColumns)
+			if test.wantErr {
+				assert.Error(t, err)
+				if test.errContains != "" {
+					assert.Contains(t, err.Error(), test.errContains)
+				}
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
 }
 
 func TestGetRows(t *testing.T) {

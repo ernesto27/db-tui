@@ -433,6 +433,81 @@ func TestUpdateRow(t *testing.T) {
 	assert.Equal(t, "unchanged", keylessPage.Rows[0][1])
 }
 
+func TestDeleteRow(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database := connectWorld(t)
+	mysqlDatabase, ok := database.(*mysqlDatabase)
+	require.True(t, ok)
+
+	result, err := mysqlDatabase.database.ExecContext(ctx,
+		"INSERT INTO city (Name, CountryCode, District, Population) VALUES (?, ?, ?, ?)",
+		"delete_row_test", "ARG", "test", 1,
+	)
+	require.NoError(t, err)
+	cityID, err := result.LastInsertId()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, err := mysqlDatabase.database.ExecContext(context.Background(), "DELETE FROM city WHERE ID = ?", cityID)
+		assert.NoError(t, err)
+	})
+
+	tests := []struct {
+		name         string
+		table        db.Table
+		whereColumns map[string]any
+		wantErr      bool
+		errContains  string
+	}{
+		{
+			name:         "empty table name",
+			table:        db.Table{},
+			whereColumns: map[string]any{"ID": cityID},
+			wantErr:      true,
+		},
+		{
+			name:         "empty whereColumns",
+			table:        db.Table{Name: "city"},
+			whereColumns: map[string]any{},
+			wantErr:      true,
+		},
+		{
+			name:         "non-primary-key WHERE",
+			table:        db.Table{Name: "city"},
+			whereColumns: map[string]any{"Name": "delete_row_test"},
+			wantErr:      true,
+			errContains:  "complete primary key",
+		},
+		{
+			name:         "non-matching WHERE",
+			table:        db.Table{Name: "city"},
+			whereColumns: map[string]any{"ID": -99999},
+			wantErr:      true,
+			errContains:  "no row matched",
+		},
+		{
+			name:         "successful delete",
+			table:        db.Table{Name: "city"},
+			whereColumns: map[string]any{"ID": cityID},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := database.DeleteRow(ctx, test.table, test.whereColumns)
+			if test.wantErr {
+				assert.Error(t, err)
+				if test.errContains != "" {
+					assert.ErrorContains(t, err, test.errContains)
+				}
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
 func TestDumpRejectsUnsupportedNetwork(t *testing.T) {
 	database := &mysqlDatabase{
 		config: &mysqldriver.Config{

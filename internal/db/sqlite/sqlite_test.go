@@ -297,6 +297,90 @@ func TestUpdateRow(t *testing.T) {
 	require.NoError(t, database.UpdateRow(ctx, db.Table{Name: "keyed_row"}, map[string]any{"name": "before"}, map[string]any{"id": 1}))
 }
 
+func TestDeleteRow(t *testing.T) {
+	ctx := context.Background()
+	database := connectSQLiteFile(t, newSQLiteFile(t))
+
+	_, err := database.Execute(ctx, "CREATE TABLE keyed_row (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+	require.NoError(t, err)
+	_, err = database.Execute(ctx, "INSERT INTO keyed_row (id, name) VALUES (1, 'delete_row_test')")
+	require.NoError(t, err)
+	_, err = database.Execute(ctx, "CREATE TABLE without_primary_key (id INTEGER NOT NULL, name TEXT NOT NULL)")
+	require.NoError(t, err)
+	_, err = database.Execute(ctx, "INSERT INTO without_primary_key (id, name) VALUES (1, 'unchanged')")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name         string
+		table        db.Table
+		whereColumns map[string]any
+		wantErr      bool
+		errContains  string
+	}{
+		{
+			name:         "empty table name",
+			table:        db.Table{},
+			whereColumns: map[string]any{"id": 1},
+			wantErr:      true,
+		},
+		{
+			name:         "empty whereColumns",
+			table:        db.Table{Name: "keyed_row"},
+			whereColumns: map[string]any{},
+			wantErr:      true,
+		},
+		{
+			name:         "table without a primary key",
+			table:        db.Table{Name: "without_primary_key"},
+			whereColumns: map[string]any{"id": 1},
+			wantErr:      true,
+			errContains:  "table has no primary key",
+		},
+		{
+			name:         "non-primary-key WHERE",
+			table:        db.Table{Name: "keyed_row"},
+			whereColumns: map[string]any{"name": "delete_row_test"},
+			wantErr:      true,
+			errContains:  "complete primary key",
+		},
+		{
+			name:         "non-matching WHERE",
+			table:        db.Table{Name: "keyed_row"},
+			whereColumns: map[string]any{"id": -99999},
+			wantErr:      true,
+			errContains:  "no row matched",
+		},
+		{
+			name:         "successful delete",
+			table:        db.Table{Name: "keyed_row"},
+			whereColumns: map[string]any{"id": 1},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := database.DeleteRow(ctx, test.table, test.whereColumns)
+			if test.wantErr {
+				assert.Error(t, err)
+				if test.errContains != "" {
+					assert.ErrorContains(t, err, test.errContains)
+				}
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+
+	page, err := database.GetRows(ctx, db.Table{Name: "keyed_row"}, db.PageRequest{Limit: 1})
+	require.NoError(t, err)
+	assert.Empty(t, page.Rows)
+
+	keylessPage, err := database.GetRows(ctx, db.Table{Name: "without_primary_key"}, db.PageRequest{Limit: 1})
+	require.NoError(t, err)
+	require.Len(t, keylessPage.Rows, 1)
+	assert.Equal(t, "unchanged", keylessPage.Rows[0][1])
+}
+
 func TestExport(t *testing.T) {
 	database := connectEmployee(t)
 	t.Chdir(t.TempDir())

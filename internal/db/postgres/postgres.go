@@ -627,3 +627,53 @@ func (p *postgresql) UpdateRow(ctx context.Context, table db.Table, setColumns m
 	}
 	return nil
 }
+
+func (p *postgresql) DeleteRow(ctx context.Context, table db.Table, whereColumns map[string]any) error {
+	tableIdent := pgx.Identifier{"public", table.Name}.Sanitize()
+
+	columns, err := p.ListColumns(ctx, table)
+	if err != nil {
+		return fmt.Errorf("list PostgreSQL columns before delete: %w", err)
+	}
+	if err := db.ValidatePrimaryKeyWhere("delete PostgreSQL row", columns, whereColumns); err != nil {
+		return err
+	}
+
+	whereNames := make([]string, 0, len(whereColumns))
+	for name := range whereColumns {
+		whereNames = append(whereNames, name)
+	}
+	sort.Strings(whereNames)
+
+	whereClauses := make([]string, 0, len(whereNames))
+	args := make([]any, 0, len(whereNames))
+
+	for index, name := range whereNames {
+		column := pgx.Identifier{name}.Sanitize()
+
+		if whereColumns[name] == nil {
+			whereClauses = append(whereClauses, column+" IS NULL")
+			continue
+		}
+
+		whereClauses = append(whereClauses, fmt.Sprintf("%s = $%d", column, index+1))
+		args = append(args, whereColumns[name])
+	}
+
+	query := fmt.Sprintf(
+		"DELETE FROM %s WHERE %s",
+		tableIdent,
+		strings.Join(whereClauses, " AND "),
+	)
+
+	t, err := p.pool.Exec(ctx, query, args...)
+
+	if err != nil {
+		return fmt.Errorf("update PostgreSQL row: %w", err)
+	}
+	if t.RowsAffected() == 0 {
+		return errors.New("no row matched the WHERE clause; the row may have been modified or deleted")
+	}
+	return nil
+
+}

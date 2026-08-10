@@ -454,6 +454,53 @@ func (s *sqliteDatabase) UpdateRow(ctx context.Context, table db.Table, setColum
 	return nil
 }
 
+func (s *sqliteDatabase) DeleteRow(ctx context.Context, table db.Table, whereColumns map[string]any) error {
+	columns, err := s.ListColumns(ctx, table)
+	if err != nil {
+		return fmt.Errorf("list SQLite columns before delete: %w", err)
+	}
+	if err := db.ValidatePrimaryKeyWhere("delete SQLite row", columns, whereColumns); err != nil {
+		return err
+	}
+
+	whereNames := make([]string, 0, len(whereColumns))
+	for name := range whereColumns {
+		whereNames = append(whereNames, name)
+	}
+	sort.Strings(whereNames)
+
+	whereClauses := make([]string, 0, len(whereNames))
+	args := make([]any, 0, len(whereNames))
+	for _, name := range whereNames {
+		if whereColumns[name] == nil {
+			whereClauses = append(whereClauses, quoteIdentifier(name)+" IS NULL")
+			continue
+		}
+		whereClauses = append(whereClauses, quoteIdentifier(name)+" = ?")
+		args = append(args, whereColumns[name])
+	}
+
+	query := fmt.Sprintf(
+		"DELETE FROM %s WHERE %s",
+		quoteIdentifier(table.Name),
+		strings.Join(whereClauses, " AND "),
+	)
+	s.logger.Log(query)
+
+	result, err := s.database.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("delete SQLite row: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read SQLite delete result: %w", err)
+	}
+	if rowsAffected == 0 {
+		return errors.New("no row matched the WHERE clause; the row may have been modified or deleted")
+	}
+	return nil
+}
+
 func readRowPage(rows *sql.Rows, rowLimit int) (db.RowPage, error) {
 	result, err := readRows(rows, rowLimit)
 	if err != nil {

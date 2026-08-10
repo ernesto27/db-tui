@@ -196,6 +196,10 @@ func (f *fakeDatabase) UpdateRow(ctx context.Context, table db.Table, setColumns
 	return nil
 }
 
+func (f *fakeDatabase) DeleteRow(ctx context.Context, table db.Table, whereColumns map[string]any) error {
+	return nil
+}
+
 func (f *fakeDatabase) Close() {
 	f.closeCalls++
 }

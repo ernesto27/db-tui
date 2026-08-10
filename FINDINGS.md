@@ -48,3 +48,21 @@ zero-row stale/deleted check correct.
 
 Add a regression test that updates a numeric city value with an equivalent
 string representation and expects `UpdateRow` to succeed.
+
+# PostgreSQL UpdateRow primary-key validation
+
+`postgresql.UpdateRow` currently builds its `WHERE` clause from whatever
+columns the caller supplies. Unlike the MySQL, SQLite, and Oracle adapters, it
+does not verify that those columns are exactly the table's complete primary
+key. A caller could therefore supply an incomplete composite key or a
+non-unique column and unintentionally update multiple rows.
+
+## Suggested fix
+
+Before executing the update, discover the table's primary-key columns and
+require `whereColumns` to contain that complete key with no unrelated columns.
+Reject tables without a primary key, empty `setColumns` or `whereColumns`, and
+invalid primary-key values with explicit errors instead of relying on
+PostgreSQL to reject malformed SQL. Keep the existing zero-row check and add
+tests for missing keys, incomplete composite keys, non-key columns, empty
+inputs, and a successful complete-key update.

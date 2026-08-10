@@ -119,6 +119,28 @@ type Column struct {
 	IsPrimaryKey    bool
 }
 
+// ValidatePrimaryKeyWhere verifies that whereColumns contains exactly a table's primary key.
+func ValidatePrimaryKeyWhere(operation string, columns []Column, whereColumns map[string]any) error {
+	primaryKeys := make(map[string]struct{})
+	for _, column := range columns {
+		if column.IsPrimaryKey {
+			primaryKeys[column.Name] = struct{}{}
+		}
+	}
+	if len(primaryKeys) == 0 {
+		return errors.New("cannot " + operation + ": table has no primary key")
+	}
+	if len(whereColumns) != len(primaryKeys) {
+		return errors.New("cannot " + operation + " without its complete primary key")
+	}
+	for name := range whereColumns {
+		if _, ok := primaryKeys[name]; !ok {
+			return errors.New("cannot " + operation + " without its complete primary key")
+		}
+	}
+	return nil
+}
+
 type IndexColumns struct {
 	Name         string
 	Column       string
@@ -150,5 +172,6 @@ type Database interface {
 	ListViews(ctx context.Context) ([]View, error)
 	ListMaterializedViews(ctx context.Context) ([]MaterializedView, error)
 	UpdateRow(ctx context.Context, table Table, setColumns map[string]any, whereColumns map[string]any) error
+	DeleteRow(ctx context.Context, table Table, whereColumns map[string]any) error
 	Close()
 }

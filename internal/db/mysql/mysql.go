@@ -734,3 +734,50 @@ func (m *mysqlDatabase) UpdateRow(ctx context.Context, table db.Table, setColumn
 	}
 	return nil
 }
+
+func (m *mysqlDatabase) DeleteRow(ctx context.Context, table db.Table, whereColumns map[string]any) error {
+	columns, err := m.ListColumns(ctx, table)
+	if err != nil {
+		return fmt.Errorf("list MySQL columns before delete: %w", err)
+	}
+	if err := db.ValidatePrimaryKeyWhere("delete MySQL row", columns, whereColumns); err != nil {
+		return err
+	}
+
+	whereNames := make([]string, 0, len(whereColumns))
+	for name := range whereColumns {
+		whereNames = append(whereNames, name)
+	}
+	sort.Strings(whereNames)
+
+	whereClauses := make([]string, 0, len(whereNames))
+	args := make([]any, 0, len(whereNames))
+	for _, name := range whereNames {
+		if whereColumns[name] == nil {
+			whereClauses = append(whereClauses, quoteIdentifier(name)+" IS NULL")
+			continue
+		}
+		whereClauses = append(whereClauses, quoteIdentifier(name)+" = ?")
+		args = append(args, whereColumns[name])
+	}
+
+	query := fmt.Sprintf(
+		"DELETE FROM %s WHERE %s",
+		quoteIdentifier(table.Name),
+		strings.Join(whereClauses, " AND "),
+	)
+	m.logger.Log(query)
+
+	result, err := m.database.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("delete MySQL row: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read MySQL delete result: %w", err)
+	}
+	if rowsAffected == 0 {
+		return errors.New("no row matched the WHERE clause; the row may have been modified or deleted")
+	}
+	return nil
+}
