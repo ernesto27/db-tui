@@ -91,7 +91,8 @@ type Model struct {
 	indexesModal   *indexesModal
 	indexesRequest uint64
 
-	editRowModal *editRowModal
+	editRowModal   *editRowModal
+	deleteRowModal *deleteRowModal
 }
 
 // New creates the root Bubble Tea application model.

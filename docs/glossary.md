@@ -1,5 +1,12 @@
 # Glossary
 
+## Row deletion confirmation
+
+A modal, destructive-action checkpoint opened with `d` for a selected row in
+an active base table while the data panel has focus. It names the table without
+displaying primary-key values. `Enter` confirms, `Esc` cancels or returns, and
+the modal shows deletion progress, success, or failure before dismissal.
+
 ## Row-browsable relation
 
 A base table, ordinary database view, or materialized view whose rows db-tui can display in the pageable data panel. All row-browsable relation types use the same explicit activation behavior in the navigator.

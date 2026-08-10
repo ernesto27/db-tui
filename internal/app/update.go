@@ -53,6 +53,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.editRowModal != nil {
 		return m.updateEditRowModal(msg)
 	}
+
+	if m.deleteRowModal != nil {
+		return m.updateDeleteRowModal(msg)
+	}
+
 	if m.actionsModal != nil {
 		return m.updateActionsModal(msg)
 	}
@@ -88,7 +93,8 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 			(m.dumpModal != nil && m.dumpModal.isRunning()) ||
 			(m.exportModal != nil && m.exportModal.isRunning()) ||
 			(m.indexesModal != nil && m.indexesModal.loading) ||
-			(m.editRowModal != nil && m.editRowModal.state == editRowSaving) {
+			(m.editRowModal != nil && m.editRowModal.state == editRowSaving) ||
+			(m.deleteRowModal != nil && m.deleteRowModal.state == deleteRowDeleting) {
 			m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
 			return spinnerTick(), true
 		}
@@ -259,6 +265,19 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 			return nil, true
 		}
 		m.editRowModal.state = editRowSuccess
+		return m.startRowLoad(m.data.offset, m.data.selected), true
+	case deleteRowFinishedMsg:
+		if msg.session != m.session || m.deleteRowModal == nil {
+			return nil, true
+		}
+
+		if msg.err != nil {
+			m.deleteRowModal.state = deleteRowFailed
+			m.deleteRowModal.err = msg.err
+			return nil, true
+		}
+
+		m.deleteRowModal.state = deleteRowSuccess
 		return m.startRowLoad(m.data.offset, m.data.selected), true
 	default:
 		return nil, false
@@ -565,8 +584,20 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 			m.data.scrollColumns(1, m.layout)
 		}
 		return nil
-	case m.panel == panelData && m.focus == focusData && m.activeRelation.set && m.activeRelation.item.section == navigatorTables && len(m.data.page.Rows) > 0 && !m.data.loading && key.Matches(msg, m.keys.editRow):
-		return m.openEditRowModal()
+	case m.panel == panelData &&
+		m.focus == focusData &&
+		m.activeRelation.set &&
+		m.activeRelation.item.section == navigatorTables &&
+		len(m.data.page.Rows) > 0 &&
+		!m.data.loading &&
+		(key.Matches(msg, m.keys.editRow) || key.Matches(msg, m.keys.deleteRow)):
+
+		if key.Matches(msg, m.keys.editRow) {
+			return m.openEditRowModal()
+		}
+
+		return m.openDeleteRowModal()
+
 	case key.Matches(msg, m.keys.up):
 		if m.focus == focusNavigator {
 			if m.navigator.move(-1, m.layout.navigatorListRows) {
@@ -1017,5 +1048,51 @@ func (m *Model) updateEditRowModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		modal, cmd := m.editRowModal.update(msg)
 		m.editRowModal = &modal
 		return m, cmd
+	}
+}
+
+func (m *Model) openDeleteRowModal() tea.Cmd {
+	if !m.activeRelation.set ||
+		m.activeRelation.item.section != navigatorTables ||
+		m.database == nil ||
+		m.data.selected >= len(m.data.page.Rows) {
+		return nil
+	}
+
+	row := m.data.page.Rows[m.data.selected]
+	whereColumns := make(map[string]any, len(m.data.page.Columns))
+
+	for index, name := range m.data.page.Columns {
+		if index < len(row) {
+			whereColumns[name] = row[index]
+		}
+	}
+
+	modal := newDeleteRowModal(
+		db.Table{Name: m.activeRelation.item.name},
+		whereColumns,
+	)
+	m.deleteRowModal = &modal
+
+	return nil
+}
+
+func (m *Model) updateDeleteRowModal(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case deleteRowCancelMsg:
+		m.deleteRowModal = nil
+		return m, nil
+
+	case deleteRowConfirmMsg:
+		m.deleteRowModal.state = deleteRowDeleting
+		return m, tea.Batch(
+			deleteRow(m.database, msg.table, msg.whereColumns, m.session),
+			m.startSpinner(),
+		)
+
+	default:
+		modal, command := m.deleteRowModal.update(msg)
+		m.deleteRowModal = &modal
+		return m, command
 	}
 }

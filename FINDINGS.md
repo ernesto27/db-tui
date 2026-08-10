@@ -66,3 +66,14 @@ invalid primary-key values with explicit errors instead of relying on
 PostgreSQL to reject malformed SQL. Keep the existing zero-row check and add
 tests for missing keys, incomplete composite keys, non-key columns, empty
 inputs, and a successful complete-key update.
+
+# Row deletion without a primary key
+
+A complete primary key is the preferred way to identify a single row. For a
+table without one, `DeleteRow` can instead build its `WHERE` clause from every
+original column value selected in the TUI, using `IS NULL` for SQL `NULL`
+values.
+
+This fallback must run in a transaction. Commit only when exactly one row is
+affected. Roll back and return an error when zero rows match or when multiple
+identical rows match, so the TUI never deletes an ambiguous row.

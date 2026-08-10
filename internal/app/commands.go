@@ -290,3 +290,33 @@ func saveRowEdit(database db.Database, table db.Table, setColumns, whereColumns 
 		return editRowSavedMsg{session: session, err: err}
 	}
 }
+
+type deleteRowCancelMsg struct{}
+
+type deleteRowConfirmMsg struct {
+	table        db.Table
+	whereColumns map[string]any
+}
+
+type deleteRowFinishedMsg struct {
+	session uint64
+	err     error
+}
+
+func deleteRow(
+	database db.Database,
+	table db.Table,
+	whereColumns map[string]any,
+	session uint64,
+) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		defer cancel()
+
+		err := database.DeleteRow(ctx, table, whereColumns)
+		return deleteRowFinishedMsg{
+			session: session,
+			err:     err,
+		}
+	}
+}
