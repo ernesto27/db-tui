@@ -135,6 +135,9 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 			return nil, true
 		}
 		m.data.finishLoad(msg.page, msg.selectedRow, msg.err, m.layout)
+
+		m.focus = focusData
+
 		return nil, true
 	case tableDDLLoadedMsg:
 		table, ok := m.navigator.selectedTable()
