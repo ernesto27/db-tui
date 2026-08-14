@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ernestoponce27/db-tui/internal/app/textselection"
 	"github.com/ernestoponce27/db-tui/internal/config"
 	"github.com/ernestoponce27/db-tui/internal/db"
 )
@@ -649,6 +650,31 @@ func TestUpdateStopsSpinnerWhenWorkFinishes(t *testing.T) {
 	assert.Nil(t, command)
 	assert.False(t, updated.spinnerRunning)
 	assert.Zero(t, updated.spinnerFrame)
+}
+
+func TestUpdateWindowSizeClearsTextSelection(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		complete bool
+	}{
+		{name: "active selection", complete: true},
+		{name: "drag in progress"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			model := New(config.Config{}, ConnectionSettings{}, nil)
+			region := textselection.Region{Left: 0, Right: 3, Top: 0, Bottom: 0}
+			require.True(t, model.data.selection.Start(textselection.Point{X: 0, Y: 0}, region))
+			if test.complete {
+				require.True(t, model.data.selection.Release(textselection.Point{X: 1, Y: 0}))
+			}
+
+			updated, command := updateModel(t, model, tea.WindowSizeMsg{Width: 80, Height: 24})
+
+			assert.Nil(t, command)
+			assert.False(t, updated.data.selection.Active())
+			assert.False(t, updated.data.selection.Dragging())
+		})
+	}
 }
 
 func TestUpdateIgnoresMouseWhileConnectionModalIsOpen(t *testing.T) {

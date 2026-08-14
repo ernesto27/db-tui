@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/ernestoponce27/db-tui/internal/app/textselection"
 	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
@@ -20,6 +21,7 @@ type dataModel struct {
 	viewport     int
 	selected     int
 	columnOffset int
+	selection    textselection.Selection
 	loading      bool
 	err          error
 }
@@ -45,6 +47,7 @@ func (m *dataModel) beginLoad(offset int) {
 	m.viewport = 0
 	m.selected = 0
 	m.columnOffset = 0
+	m.selection.Clear()
 	m.loading = true
 	m.err = nil
 }
@@ -63,6 +66,7 @@ func (m *dataModel) finishLoad(page db.RowPage, selectedRow int, err error, layo
 }
 
 func (m *dataModel) moveUp(layout appLayout) (rowLoadRequest, bool) {
+	m.clearTextSelection()
 	if m.loading {
 		return rowLoadRequest{}, false
 	}
@@ -78,6 +82,7 @@ func (m *dataModel) moveUp(layout appLayout) (rowLoadRequest, bool) {
 }
 
 func (m *dataModel) moveDown(layout appLayout) (rowLoadRequest, bool) {
+	m.clearTextSelection()
 	if m.loading {
 		return rowLoadRequest{}, false
 	}
@@ -93,6 +98,7 @@ func (m *dataModel) moveDown(layout appLayout) (rowLoadRequest, bool) {
 }
 
 func (m *dataModel) scrollColumns(delta int, layout appLayout) {
+	m.clearTextSelection()
 	m.columnOffset = min(max(m.columnOffset+delta, 0), m.maxColumnOffset())
 	m.ensureSelectedVisible(layout)
 }
@@ -142,21 +148,35 @@ func (m dataModel) view(status dataStatus, layout appLayout, focused bool) strin
 		return panelStyle(layout.data.width, layout.data.height, focused).Render(status.tableName + "\n\nNo rows in this page.")
 	}
 
-	firstColumn, lastColumn := m.visibleColumnRange(layout.data.width)
-	firstVisibleRow := m.viewport
-	lastVisibleRow := m.visibleDataEnd(layout.data.width, layout.data.height, firstColumn, lastColumn, firstVisibleRow)
-	grid := m.dataGrid(layout.data.width, firstColumn, lastColumn, firstVisibleRow, lastVisibleRow)
+	title := m.title(status, layout)
+	grid, _, ok := m.visibleDataGrid(layout, m.gridTop(title, layout))
+	if !ok {
+		return panelStyle(layout.data.width, layout.data.height, focused).Render("")
+	}
+	if m.selection.Active() {
+		grid = m.selection.Render(grid, textSelectionStyle)
+	}
+	content := strings.Join([]string{
+		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render(title),
+		"",
+		grid,
+	}, "\n")
+	return panelStyle(layout.data.width, layout.data.height, focused).Render(content)
+}
 
+func (m dataModel) title(status dataStatus, layout appLayout) string {
+	firstColumn, lastColumn := m.visibleColumnRange(layout.data.width)
 	firstRow := m.offset + 1
 	lastRow := m.offset + len(m.page.Rows)
 	title := fmt.Sprintf("%s  •  rows %d–%d  •  columns %d–%d/%d", status.tableName, firstRow, lastRow, firstColumn+1, lastColumn, len(m.page.Columns))
 	if m.page.HasMore {
 		title += "  •  PgUp/PgDown page"
 	}
-	content := strings.Join([]string{
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render(title),
-		"",
-		grid.String(),
-	}, "\n")
-	return panelStyle(layout.data.width, layout.data.height, focused).Render(content)
+	return title
+}
+
+func (m dataModel) gridTop(title string, layout appLayout) int {
+	contentWidth := max(1, layout.data.width-4) // panel border and horizontal padding
+	titleHeight := lipgloss.Height(lipgloss.NewStyle().Width(contentWidth).Render(title))
+	return layout.data.y + titleHeight + 2 // panel border and blank line
 }

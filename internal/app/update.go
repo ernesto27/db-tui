@@ -19,7 +19,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.modal != nil {
 		switch msg.(type) {
-		case tea.MouseClickMsg, tea.MouseWheelMsg:
+		case tea.MouseClickMsg, tea.MouseReleaseMsg, tea.MouseWheelMsg, tea.MouseMotionMsg:
 			return m, nil
 		default:
 			return m.updateModal(msg)
@@ -27,7 +27,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if m.connectionsModal != nil {
 		switch msg.(type) {
-		case tea.MouseClickMsg, tea.MouseWheelMsg:
+		case tea.MouseClickMsg, tea.MouseReleaseMsg, tea.MouseWheelMsg, tea.MouseMotionMsg:
 			return m, nil
 		default:
 			return m.updateConnectionsModal(msg)
@@ -77,6 +77,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.MouseClickMsg:
 		return m, m.updateMouseClick(msg)
+	case tea.MouseMotionMsg:
+		return m, m.updateMouseMotion(msg)
+	case tea.MouseReleaseMsg:
+		return m, m.updateMouseRelease(msg)
 	case tea.MouseWheelMsg:
 		return m, m.updateMouseWheel(msg)
 	default:
@@ -180,6 +184,9 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		m.query.finishExecute(msg.result, msg.elapsed, msg.err)
 		return nil, true
 	case tea.WindowSizeMsg:
+		// Grid coordinates can change after a resize, invalidating any
+		// completed selection or drag in progress.
+		m.data.clearTextSelection()
 		m.layout = newAppLayout(msg.Width, msg.Height)
 		m.navigator.resize(m.layout)
 		m.navigator.ensureVisible(m.layout.navigatorListRows)
@@ -709,10 +716,37 @@ func (m *Model) updateMouseClick(msg tea.MouseClickMsg) tea.Cmd {
 		return nil
 	}
 	m.lastNavigatorClick = navigatorClick{}
+	if m.panel == panelData && msg.Button == tea.MouseLeft && m.data.beginTextSelection(msg.X, msg.Y, m.layout, m.dataGridTop()) {
+		m.focus = focusData
+		return nil
+	}
 	if msg.Button == tea.MouseLeft && msg.X >= m.layout.navigator.width {
 		m.focus = focusData
 	}
 	return nil
+}
+
+func (m *Model) updateMouseMotion(msg tea.MouseMotionMsg) tea.Cmd {
+	if m.panel == panelData && m.data.extendTextSelection(msg.X, msg.Y, m.layout, m.dataGridTop()) {
+		m.focus = focusData
+	}
+	return nil
+}
+
+func (m *Model) updateMouseRelease(msg tea.MouseReleaseMsg) tea.Cmd {
+	if m.panel != panelData || !m.data.selection.Dragging() {
+		return nil
+	}
+	// SGR mouse reports identify the released button, while the fallback
+	// protocol reports a generic release as MouseNone.
+	if msg.Button != tea.MouseLeft && msg.Button != tea.MouseNone {
+		return nil
+	}
+	text, ok := m.data.finishTextSelection(msg.X, msg.Y, m.layout, m.dataGridTop())
+	if !ok {
+		return nil
+	}
+	return tea.SetClipboard(text)
 }
 
 func (m *Model) updateMouseWheel(msg tea.MouseWheelMsg) tea.Cmd {

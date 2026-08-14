@@ -110,6 +110,11 @@ func (m Model) dataStatus() dataStatus {
 	}
 }
 
+func (m Model) dataGridTop() int {
+	status := m.dataStatus()
+	return m.data.gridTop(m.data.title(status, m.layout), m.layout)
+}
+
 func (m Model) renderModalOverlay(base string) string {
 	var modal string
 	switch {

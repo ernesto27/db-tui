@@ -1,5 +1,16 @@
 # Glossary
 
+## Data-grid text selection
+
+An application-owned, character-range selection within one rendered data-grid
+cell. Its selectable surface comprises column-header cells and visible
+result-data cells; it excludes panel chrome, the navigator, query panel, and
+overlays. A drag is clamped to the row and column where it starts. Releasing a
+primary-button drag copies the selected text as plain text, retaining selected
+spacing but omitting ANSI styling sequences.
+A click without a drag remains the ordinary data-row selection interaction and
+does not copy.
+
 ## Row deletion confirmation
 
 A modal, destructive-action checkpoint opened with `d` for a selected row in

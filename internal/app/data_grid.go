@@ -3,6 +3,8 @@ package app
 import (
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+
+	"github.com/ernestoponce27/db-tui/internal/app/textselection"
 )
 
 const (
@@ -10,6 +12,17 @@ const (
 	tableOuterBorderWidth  = 2
 	tableColumnBorderWidth = 1
 )
+
+var textSelectionStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("16")).
+	Background(lipgloss.Color("153"))
+
+type dataGridBounds struct {
+	x      int
+	y      int
+	width  int
+	height int
+}
 
 func (m dataModel) visibleColumnRange(width int) (int, int) {
 	if len(m.page.Columns) == 0 {
@@ -93,6 +106,121 @@ func (m dataModel) dataGrid(width, firstColumn, lastColumn, firstRow, lastRow in
 			}
 			return style.Foreground(lipgloss.Color("250"))
 		})
+}
+
+func (m dataModel) visibleDataGrid(layout appLayout, gridTop int) (string, dataGridBounds, bool) {
+	if len(m.page.Columns) == 0 || len(m.page.Rows) == 0 {
+		return "", dataGridBounds{}, false
+	}
+
+	firstColumn, lastColumn := m.visibleColumnRange(layout.data.width)
+	firstVisibleRow := m.viewport
+	lastVisibleRow := m.visibleDataEnd(layout.data.width, layout.data.height, firstColumn, lastColumn, firstVisibleRow)
+	rendered := m.dataGrid(layout.data.width, firstColumn, lastColumn, firstVisibleRow, lastVisibleRow).String()
+	return rendered, dataGridBounds{
+		x:      layout.data.x + 2, // panel border and left padding
+		y:      gridTop,
+		width:  lipgloss.Width(rendered),
+		height: lipgloss.Height(rendered),
+	}, true
+}
+
+func (m *dataModel) beginTextSelection(x, y int, layout appLayout, gridTop int) bool {
+	point, ok := m.selectionPointAt(x, y, layout, gridTop)
+	if !ok {
+		return false
+	}
+	region, ok := m.cellBoundsAt(point, layout)
+	if !ok {
+		return false
+	}
+	return m.selection.Start(point, region)
+}
+
+func (m *dataModel) extendTextSelection(x, y int, layout appLayout, gridTop int) bool {
+	if !m.selection.Dragging() {
+		return false
+	}
+	point, ok := m.selectionPointAt(x, y, layout, gridTop)
+	if !ok {
+		return false
+	}
+	return m.selection.Update(point)
+}
+
+func (m *dataModel) finishTextSelection(x, y int, layout appLayout, gridTop int) (string, bool) {
+	if !m.selection.Dragging() {
+		return "", false
+	}
+
+	point, ok := m.selectionPointAt(x, y, layout, gridTop)
+	if !ok {
+		m.clearTextSelection()
+		return "", false
+	}
+	if !m.selection.Release(point) {
+		return "", false
+	}
+
+	grid, _, ok := m.visibleDataGrid(layout, gridTop)
+	if !ok {
+		m.clearTextSelection()
+		return "", false
+	}
+	return m.selection.Text(grid), true
+}
+
+func (m *dataModel) clearTextSelection() {
+	m.selection.Clear()
+}
+
+func (m dataModel) selectionPointAt(x, y int, layout appLayout, gridTop int) (textselection.Point, bool) {
+	_, bounds, ok := m.visibleDataGrid(layout, gridTop)
+	if !ok || x <= bounds.x || x >= bounds.x+bounds.width-1 || y <= bounds.y || y >= bounds.y+bounds.height-1 {
+		return textselection.Point{}, false
+	}
+	return textselection.Point{X: x - bounds.x, Y: y - bounds.y}, true
+}
+
+func (m dataModel) cellBoundsAt(point textselection.Point, layout appLayout) (textselection.Region, bool) {
+	// The header separator is not a selectable row.
+	if point.Y == 2 {
+		return textselection.Region{}, false
+	}
+
+	firstColumn, lastColumn := m.visibleColumnRange(layout.data.width)
+	columnWidths := m.dataColumnWidths(layout.data.width, firstColumn, lastColumn)
+	cellLeft, cellRight := 0, 0
+	foundColumn := false
+	left := 1 // outer table border
+	for _, width := range columnWidths {
+		right := left + width
+		if point.X >= left && point.X < right {
+			cellLeft, cellRight, foundColumn = left, right-1, true
+			break
+		}
+		left = right + tableColumnBorderWidth
+	}
+	if !foundColumn {
+		return textselection.Region{}, false
+	}
+
+	if point.Y == 1 {
+		return textselection.Region{Left: cellLeft, Right: cellRight, Top: 1, Bottom: 1}, true
+	}
+
+	firstVisibleRow := m.viewport
+	lastVisibleRow := m.visibleDataEnd(layout.data.width, layout.data.height, firstColumn, lastColumn, firstVisibleRow)
+	top := 3 // top border, header, and header separator
+	for row := firstVisibleRow; row < lastVisibleRow; row++ {
+		rowHeight := lipgloss.Height(m.dataGrid(layout.data.width, firstColumn, lastColumn, row, row+1).String()) - 4
+		bottom := top + rowHeight - 1
+		if point.Y >= top && point.Y <= bottom {
+			return textselection.Region{Left: cellLeft, Right: cellRight, Top: top, Bottom: bottom}, true
+		}
+		top = bottom + 1
+	}
+	return textselection.Region{}, false
 }
 
 func (m dataModel) dataColumnWidths(width, firstColumn, lastColumn int) []int {
