@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"image/color"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
@@ -29,11 +30,10 @@ const (
 	editRowFieldRows = 3
 	// editRowChromeRows is everything around the field list: border, padding,
 	// title, spacers, scroll hints and the help line.
-	editRowChromeRows      = 11
-	editRowDefaultVisible  = 6
-	editRowIndent          = "  "
-	editRowIndentWidth     = 2
-	editRowModalBackground = "235"
+	editRowChromeRows     = 11
+	editRowDefaultVisible = 6
+	editRowIndent         = "  "
+	editRowIndentWidth    = 2
 )
 
 type editRowField struct {
@@ -110,15 +110,15 @@ func newEditRowModal(table db.Table, columns []db.Column, row []any) editRowModa
 // in the terminal's default colour, which shows up as a black bar.
 func editRowInputStyles() textinput.Styles {
 	styles := textinput.DefaultDarkStyles()
-	background := lipgloss.Color(editRowModalBackground)
+	background := colorModalBackground
 
-	styles.Focused.Text = styles.Focused.Text.Background(background).Foreground(lipgloss.Color("252"))
-	styles.Focused.Placeholder = styles.Focused.Placeholder.Background(background).Foreground(lipgloss.Color("243"))
+	styles.Focused.Text = styles.Focused.Text.Background(background).Foreground(colorText)
+	styles.Focused.Placeholder = styles.Focused.Placeholder.Background(background).Foreground(colorTextPlaceholder)
 	styles.Focused.Prompt = styles.Focused.Prompt.Background(background)
 	styles.Focused.Suggestion = styles.Focused.Suggestion.Background(background)
 	styles.Blurred = styles.Focused
 
-	styles.Cursor.Color = lipgloss.Color("86")
+	styles.Cursor.Color = colorAccent
 	return styles
 }
 
@@ -311,16 +311,16 @@ type editRowStyles struct {
 }
 
 func newEditRowStyles() editRowStyles {
-	base := lipgloss.NewStyle().Background(lipgloss.Color(editRowModalBackground))
+	base := lipgloss.NewStyle().Background(colorModalBackground)
 	return editRowStyles{
 		base:     base,
-		title:    base.Bold(true).Foreground(lipgloss.Color("230")),
-		accent:   base.Foreground(lipgloss.Color("86")),
-		name:     base.Foreground(lipgloss.Color("252")),
-		dim:      base.Foreground(lipgloss.Color("245")),
-		value:    base.Foreground(lipgloss.Color("252")),
-		fail:     base.Foreground(lipgloss.Color("203")),
-		readOnly: base.Foreground(lipgloss.Color("243")).Italic(true),
+		title:    base.Bold(true).Foreground(colorTitle),
+		accent:   base.Foreground(colorAccent),
+		name:     base.Foreground(colorText),
+		dim:      base.Foreground(colorTextMuted),
+		value:    base.Foreground(colorText),
+		fail:     base.Foreground(colorError),
+		readOnly: base.Foreground(colorTextPlaceholder).Italic(true),
 	}
 }
 
@@ -329,8 +329,8 @@ func (s editRowStyles) container(width int) lipgloss.Style {
 		Width(width).
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Background(lipgloss.Color(editRowModalBackground))
+		BorderForeground(colorBorderActive).
+		Background(colorModalBackground)
 }
 
 func editRowContentWidth(width int) int {
@@ -348,11 +348,11 @@ func (m editRowModal) view(layout appLayout) string {
 	case editRowConfirming:
 		return m.viewConfirmation(layout)
 	case editRowSaving:
-		return m.viewStatus(layout, "Saving…", "86")
+		return m.viewStatus(layout, "Saving…", colorAccent)
 	case editRowSuccess:
-		return m.viewStatus(layout, "✓ Row updated", "86")
+		return m.viewStatus(layout, "✓ Row updated", colorAccent)
 	case editRowFailed:
-		return m.viewStatus(layout, "✕ "+sanitizeText(m.err.Error()), "203")
+		return m.viewStatus(layout, "✕ "+sanitizeText(m.err.Error()), colorError)
 	}
 	return ""
 }
@@ -444,7 +444,7 @@ func (m editRowModal) viewField(s editRowStyles, index, contentWidth, inputWidth
 	return lines
 }
 
-func (m editRowModal) viewStatus(layout appLayout, message, color string) string {
+func (m editRowModal) viewStatus(layout appLayout, message string, messageColor color.Color) string {
 	s := newEditRowStyles()
 	contentWidth := editRowContentWidth(layout.width)
 	message = lipgloss.Wrap(sanitizeText(message), contentWidth, "")
@@ -452,7 +452,7 @@ func (m editRowModal) viewStatus(layout appLayout, message, color string) string
 	lines := []string{
 		s.title.Render("Edit row") + s.dim.Render("  ·  ") + s.accent.Render(sanitizeText(m.tableName)),
 		"",
-		s.base.Foreground(lipgloss.Color(color)).Render(message),
+		s.base.Foreground(messageColor).Render(message),
 	}
 	if m.state != editRowSaving {
 		lines = append(lines, "", s.dim.Render("Enter or Esc continue"))

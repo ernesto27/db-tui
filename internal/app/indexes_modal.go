@@ -67,7 +67,7 @@ func (m indexesModal) view(layout appLayout, spinner string) string {
 	lines := []string{
 		lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("230")).
+			Foreground(colorTitle).
 			Render("Indexes · " + sanitizeText(m.tableName)),
 		"",
 	}
@@ -76,13 +76,13 @@ func (m indexesModal) view(layout appLayout, spinner string) string {
 	case m.loading:
 		lines = append(lines,
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("86")).
+				Foreground(colorAccent).
 				Render(spinner+" Loading indexes…"),
 		)
 	case m.err != nil:
 		lines = append(lines,
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("203")).
+				Foreground(colorError).
 				Render("✕ Unable to load indexes"),
 			sanitizeText(m.err.Error()),
 		)
@@ -100,7 +100,7 @@ func (m indexesModal) view(layout appLayout, spinner string) string {
 
 	lines = append(lines, "",
 		lipgloss.NewStyle().
-			Foreground(lipgloss.Color("245")).
+			Foreground(colorTextMuted).
 			Render("←/→ fields  •  ↑/↓ rows  •  PgUp/PgDn  •  Home/End  •  Esc close"),
 	)
 
@@ -109,8 +109,8 @@ func (m indexesModal) view(layout appLayout, spinner string) string {
 		Height(modalHeight).
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Background(lipgloss.Color("235")).
+		BorderForeground(colorBorderActive).
+		Background(colorModalBackground).
 		Render(strings.Join(lines, "\n"))
 }
 
@@ -148,11 +148,11 @@ func (m indexesModal) visibleFields(width int) []indexGridField {
 
 func (m indexesModal) renderHeader(fields []indexGridField) string {
 	values := make([]string, 0, len(fields))
-	style := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Background(lipgloss.Color("235"))
+	style := lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Background(colorModalBackground)
 	for _, field := range fields {
 		values = append(values, style.Width(field.width).Render(truncateLabel(field.title, field.width)))
 	}
-	separator := lipgloss.NewStyle().Background(lipgloss.Color("235")).Render(" │ ")
+	separator := lipgloss.NewStyle().Background(colorModalBackground).Render(" │ ")
 	return strings.Join(values, separator)
 }
 

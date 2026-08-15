@@ -199,7 +199,7 @@ func (m navigatorModel) itemAtMouse(msg tea.MouseClickMsg, layout appLayout) (in
 }
 
 func (m navigatorModel) view(status navigatorStatus, layout appLayout, focused bool) string {
-	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render("● " + sanitizeText(status.databaseName)), ""}
+	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render("● " + sanitizeText(status.databaseName)), ""}
 	lines = append(lines, m.filter.View())
 	lines = append(lines, m.sectionTabs(status, layout))
 
@@ -226,7 +226,7 @@ func (m navigatorModel) view(status navigatorStatus, layout appLayout, focused b
 			style := lipgloss.NewStyle().Width(itemWidth)
 			if index == cursor.selected {
 				marker = "> "
-				style = style.Bold(true).Foreground(lipgloss.Color("230")).Background(lipgloss.Color("62"))
+				style = style.Bold(true).Foreground(colorSelectionForeground).Background(colorSelectionBackground)
 			}
 			lines = append(lines, style.Render(marker+truncateLabel(items[index].name, max(0, itemWidth-len(marker)))))
 		}

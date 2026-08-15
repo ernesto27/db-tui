@@ -38,7 +38,7 @@ func (m dumpModal) view(width int, spinner string) string {
 	lines := []string{
 		lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("230")).
+			Foreground(colorTitle).
 			Render("Database dump"),
 		"",
 	}
@@ -49,38 +49,38 @@ func (m dumpModal) view(width int, spinner string) string {
 			"Create an SQL dump of "+sanitizeText(m.databaseName)+"?",
 			"",
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("245")).
+				Foreground(colorTextMuted).
 				Render("Enter confirm  •  Esc cancel"),
 		)
 	case dumpRunning:
 		lines = append(lines,
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("86")).
+				Foreground(colorAccent).
 				Render(spinner+" Creating SQL dump…"),
 			"",
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("245")).
+				Foreground(colorTextMuted).
 				Render("Please wait"),
 		)
 	case dumpSucceeded:
 		lines = append(lines,
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("86")).
+				Foreground(colorAccent).
 				Render("✓ SQL dump created successfully"),
 			"",
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("245")).
+				Foreground(colorTextMuted).
 				Render("Enter or Esc close"),
 		)
 	case dumpFailed:
 		lines = append(lines,
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("203")).
+				Foreground(colorError).
 				Render("✕ Dump failed"),
 			sanitizeText(m.err.Error()),
 			"",
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("245")).
+				Foreground(colorTextMuted).
 				Render("Enter or Esc close"),
 		)
 	}
@@ -89,7 +89,7 @@ func (m dumpModal) view(width int, spinner string) string {
 		Width(modalWidth).
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Background(lipgloss.Color("235")).
+		BorderForeground(colorBorderActive).
+		Background(colorModalBackground).
 		Render(strings.Join(lines, "\n"))
 }

@@ -157,7 +157,7 @@ func (m dataModel) view(status dataStatus, layout appLayout, focused bool) strin
 		grid = m.selection.Render(grid, textSelectionStyle)
 	}
 	content := strings.Join([]string{
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render(title),
+		lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render(title),
 		"",
 		grid,
 	}, "\n")

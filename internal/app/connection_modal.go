@@ -225,15 +225,15 @@ func (m connectionModal) connectionSettings() (ConnectionSettings, error) {
 func (m connectionModal) view(width int) string {
 	modalWidth := min(64, max(52, width-8))
 	fieldStyle := lipgloss.NewStyle().Width(modalWidth - 6)
-	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(colorAccent)
 
 	lines := []string{
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Render("Connect to database"),
+		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Connect to database"),
 		"",
 	}
 	engineStyle := fieldStyle
 	if m.focused == engineInput {
-		engineStyle = engineStyle.Foreground(lipgloss.Color("230")).Bold(true)
+		engineStyle = engineStyle.Foreground(colorTitle).Bold(true)
 	}
 	lines = append(lines,
 		labelStyle.Render("Engine"),
@@ -261,18 +261,18 @@ func (m connectionModal) view(width int) string {
 	}
 	if m.errorText != "" {
 		lines = append(lines, "", lipgloss.NewStyle().
-			Foreground(lipgloss.Color("210")).
-			Background(lipgloss.Color("52")).
+			Foreground(colorWarningForeground).
+			Background(colorWarningBackground).
 			Width(modalWidth-6).
 			Padding(0, 1).
 			Render("✕ "+sanitizeText(m.errorText)))
 	}
 	if m.connecting {
-		lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render("Checking connection…"))
+		lines = append(lines, "", lipgloss.NewStyle().Foreground(colorAccent).Render("Checking connection…"))
 	} else {
 		lines = append(lines,
 			"",
-			lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("Tab move  •  ←/→ select engine  •  Enter connect  •  Esc cancel"),
+			lipgloss.NewStyle().Foreground(colorTextMuted).Render("Tab move  •  ←/→ select engine  •  Enter connect  •  Esc cancel"),
 		)
 	}
 
@@ -280,7 +280,7 @@ func (m connectionModal) view(width int) string {
 		Width(modalWidth).
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Background(lipgloss.Color("235")).
+		BorderForeground(colorBorderActive).
+		Background(colorModalBackground).
 		Render(strings.Join(lines, "\n"))
 }

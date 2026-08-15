@@ -71,15 +71,15 @@ func (m columnsModal) view(layout appLayout, spinner string) string {
 	modalWidth := min(120, max(40, layout.width-8))
 	modalHeight := max(8, layout.height-6)
 	lines := []string{
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Render("Columns · " + sanitizeText(m.tableName)),
+		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Columns · " + sanitizeText(m.tableName)),
 		"",
 	}
 
 	switch {
 	case m.loading:
-		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render(spinner+" Loading columns…"))
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorAccent).Render(spinner+" Loading columns…"))
 	case m.err != nil:
-		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Render("✕ Unable to load columns"), sanitizeText(m.err.Error()))
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorError).Render("✕ Unable to load columns"), sanitizeText(m.err.Error()))
 	case len(m.columns) == 0:
 		lines = append(lines, "No columns found.")
 	default:
@@ -91,8 +91,8 @@ func (m columnsModal) view(layout appLayout, spinner string) string {
 		}
 	}
 
-	lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("←/→ fields  •  ↑/↓ rows  •  PgUp/PgDn  •  Home/End  •  Esc close"))
-	return lipgloss.NewStyle().Width(modalWidth).Height(modalHeight).Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("62")).Background(lipgloss.Color("235")).Render(strings.Join(lines, "\n"))
+	lines = append(lines, "", lipgloss.NewStyle().Foreground(colorTextMuted).Render("←/→ fields  •  ↑/↓ rows  •  PgUp/PgDn  •  Home/End  •  Esc close"))
+	return lipgloss.NewStyle().Width(modalWidth).Height(modalHeight).Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(colorBorderActive).Background(colorModalBackground).Render(strings.Join(lines, "\n"))
 }
 
 func (m columnsModal) visibleRows(layout appLayout) int {
@@ -127,11 +127,11 @@ func (m columnsModal) visibleFields(width int) []columnGridField {
 
 func (m columnsModal) renderHeader(fields []columnGridField) string {
 	values := make([]string, 0, len(fields))
-	style := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Background(lipgloss.Color("235"))
+	style := lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Background(colorModalBackground)
 	for _, field := range fields {
 		values = append(values, style.Width(field.width).Render(truncateLabel(field.title, field.width)))
 	}
-	separator := lipgloss.NewStyle().Background(lipgloss.Color("235")).Render(" │ ")
+	separator := lipgloss.NewStyle().Background(colorModalBackground).Render(" │ ")
 	return strings.Join(values, separator)
 }
 

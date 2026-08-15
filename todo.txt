@@ -9,7 +9,8 @@
 [x] - export to json data
 [] - when there is no data after enter ,  back to navigation tables
 [] - add configure option limit query
-[] - option to copy from TUI text
+[x] - option to copy from TUI text
+[x] - create colors file update UI
 [] - update connection data does not save in file
 [] - Create conventions-architecthre file
 [] - when press scape in modal of ctrl+g go back modal list

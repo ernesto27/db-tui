@@ -35,7 +35,7 @@ func (m Model) baseView() tea.View {
 		headerTitle = strings.Join(segments, "  /  ")
 	}
 	header := lipgloss.NewStyle().Width(m.layout.width).Padding(0, 1).Bold(true).
-		Foreground(lipgloss.Color("230")).Background(lipgloss.Color("62")).
+		Foreground(colorTitle).Background(colorHeaderBackground).
 		Render(headerTitle)
 	rightPanel := m.data.view(m.dataStatus(), m.layout, m.focus == focusData)
 	if m.panel == panelQuery {
@@ -46,7 +46,7 @@ func (m Model) baseView() tea.View {
 		rightPanel,
 	)
 	footer := lipgloss.NewStyle().Width(m.layout.width).Padding(0, 1).
-		Foreground(lipgloss.Color("245")).Render(m.footerText())
+		Foreground(colorTextMuted).Render(m.footerText())
 
 	view := tea.NewView(strings.Join([]string{header, body, footer}, "\n"))
 	view.AltScreen = true
@@ -226,9 +226,9 @@ func (m Model) footerText() string {
 }
 
 func panelStyle(width, height int, focused bool) lipgloss.Style {
-	borderColor := lipgloss.Color("240")
+	borderColor := colorBorderInactive
 	if focused {
-		borderColor = lipgloss.Color("62")
+		borderColor = colorBorderActive
 	}
 	return lipgloss.NewStyle().Width(width).Height(height).Padding(0, 1).
 		Border(lipgloss.RoundedBorder()).BorderForeground(borderColor)

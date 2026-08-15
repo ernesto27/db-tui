@@ -61,7 +61,7 @@ func (m exportModal) view(width int, spinner string) string {
 	lines := []string{
 		lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("230")).
+			Foreground(colorTitle).
 			Render("Export format"),
 		"",
 	}
@@ -74,7 +74,7 @@ func (m exportModal) view(width int, spinner string) string {
 			m.formatOption(db.ExportTypeJSON),
 			"",
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("245")).
+				Foreground(colorTextMuted).
 				Render("↑/↓ or j/k choose  •  Enter continue  •  Esc cancel"),
 		)
 	case exportConfirming:
@@ -82,38 +82,38 @@ func (m exportModal) view(width int, spinner string) string {
 			"Export "+m.description()+" to "+m.formatName()+"?",
 			"",
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("245")).
+				Foreground(colorTextMuted).
 				Render("Enter confirm  •  Esc cancel"),
 		)
 	case exportRunning:
 		lines = append(lines,
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("86")).
+				Foreground(colorAccent).
 				Render(spinner+" Exporting "+m.description()+" to "+m.formatName()+"…"),
 			"",
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("245")).
+				Foreground(colorTextMuted).
 				Render("Please wait"),
 		)
 	case exportSucceeded:
 		lines = append(lines,
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("86")).
+				Foreground(colorAccent).
 				Render("✓ "+m.formatName()+" exported successfully"),
 			"",
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("245")).
+				Foreground(colorTextMuted).
 				Render("Enter or Esc close"),
 		)
 	case exportFailed:
 		lines = append(lines,
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("203")).
+				Foreground(colorError).
 				Render("✕ "+m.formatName()+" export failed"),
 			sanitizeText(m.err.Error()),
 			"",
 			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("245")).
+				Foreground(colorTextMuted).
 				Render("Enter or Esc close"),
 		)
 	}
@@ -122,8 +122,8 @@ func (m exportModal) view(width int, spinner string) string {
 		Width(modalWidth).
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Background(lipgloss.Color("235")).
+		BorderForeground(colorBorderActive).
+		Background(colorModalBackground).
 		Render(strings.Join(lines, "\n"))
 }
 

@@ -33,7 +33,7 @@ func TestEditRowFailureWrapsFullErrorMessage(t *testing.T) {
 		state:     editRowFailed,
 	}
 
-	view := ansi.Strip(modal.viewStatus(layout, message, "203"))
+	view := ansi.Strip(modal.viewStatus(layout, message, colorError))
 
 	assert.NotContains(t, view, "…")
 	for _, word := range strings.Fields(message) {

@@ -40,12 +40,12 @@ func (m *ddlModal) clamp(layout appLayout) {
 func (m ddlModal) view(layout appLayout, spinner string) string {
 	modalWidth := min(100, max(40, layout.width-8))
 	modalHeight := max(8, layout.height-6)
-	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Render("DDL · public." + sanitizeText(m.tableName)), ""}
+	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("DDL · public." + sanitizeText(m.tableName)), ""}
 	switch {
 	case m.loading:
-		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render(spinner+" Loading table DDL…"))
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorAccent).Render(spinner+" Loading table DDL…"))
 	case m.err != nil:
-		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Render("✕ Unable to load DDL"), sanitizeText(m.err.Error()))
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorError).Render("✕ Unable to load DDL"), sanitizeText(m.err.Error()))
 	default:
 		ddlLines := m.lines(layout)
 		last := min(m.offset+m.visibleRows(layout), len(ddlLines))
@@ -55,8 +55,8 @@ func (m ddlModal) view(layout appLayout, spinner string) string {
 	if m.copied {
 		footer = "↑/↓ scroll  •  PgUp/PgDn  •  Home/End  •  Copied DDL  •  Esc close"
 	}
-	lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(footer))
-	return lipgloss.NewStyle().Width(modalWidth).Height(modalHeight).Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("62")).Background(lipgloss.Color("235")).Render(strings.Join(lines, "\n"))
+	lines = append(lines, "", lipgloss.NewStyle().Foreground(colorTextMuted).Render(footer))
+	return lipgloss.NewStyle().Width(modalWidth).Height(modalHeight).Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(colorBorderActive).Background(colorModalBackground).Render(strings.Join(lines, "\n"))
 }
 
 func (m ddlModal) visibleRows(layout appLayout) int {

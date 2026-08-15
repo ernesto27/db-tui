@@ -156,12 +156,12 @@ func (m connectionsModal) view(width int) string {
 	modalWidth := min(56, max(40, width-8))
 	nameWidth := max(12, modalWidth-24)
 	nameStyle := lipgloss.NewStyle().Width(nameWidth)
-	engineStyle := lipgloss.NewStyle().Width(connectionEngineWidth).Foreground(lipgloss.Color("245"))
-	selectedNameStyle := nameStyle.Copy().Foreground(lipgloss.Color("230")).Bold(true)
-	selectedEngineStyle := engineStyle.Copy().Foreground(lipgloss.Color("230")).Bold(true)
+	engineStyle := lipgloss.NewStyle().Width(connectionEngineWidth).Foreground(colorTextMuted)
+	selectedNameStyle := nameStyle.Copy().Foreground(colorTitle).Bold(true)
+	selectedEngineStyle := engineStyle.Copy().Foreground(colorTitle).Bold(true)
 
 	lines := []string{
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Render("Connections"),
+		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Connections"),
 		"",
 	}
 	if m.confirmingDeletion {
@@ -169,16 +169,16 @@ func (m connectionsModal) view(width int) string {
 		lines = append(lines,
 			"Remove "+truncateLabel(connection.Name, modalWidth-8)+"?",
 			"",
-			lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("y confirm  •  n/Esc cancel"),
+			lipgloss.NewStyle().Foreground(colorTextMuted).Render("y confirm  •  n/Esc cancel"),
 		)
 		if m.deletionError != "" {
-			lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Render(sanitizeText(m.deletionError)))
+			lines = append(lines, "", lipgloss.NewStyle().Foreground(colorError).Render(sanitizeText(m.deletionError)))
 		}
 		return lipgloss.NewStyle().
 			Width(modalWidth).
 			Padding(1, 2).
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
+			BorderForeground(colorBorderActive).
 			Render(strings.Join(lines, "\n"))
 	}
 
@@ -193,12 +193,12 @@ func (m connectionsModal) view(width int) string {
 		}
 		lines = append(lines, "  "+nameStyle.Render(name)+engineStyle.Render(engine))
 	}
-	lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("↑/↓ move  •  Enter connect  •  Ctrl+E edit  •  d remove  •  Esc close"))
+	lines = append(lines, "", lipgloss.NewStyle().Foreground(colorTextMuted).Render("↑/↓ move  •  Enter connect  •  Ctrl+E edit  •  d remove  •  Esc close"))
 
 	return lipgloss.NewStyle().
 		Width(modalWidth).
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
+		BorderForeground(colorBorderActive).
 		Render(strings.Join(lines, "\n"))
 }

@@ -109,7 +109,7 @@ func (m queryModel) view(layout appLayout, focused, connected bool, spinner stri
 	if m.resultsFocused {
 		headingText += "  •  results focused"
 	}
-	heading := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render(headingText)
+	heading := lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render(headingText)
 	result := m.resultView(layout, connected, spinner)
 	content := strings.Join([]string{heading, m.editor.View(), "", result}, "\n")
 	return queryPanelStyle(layout.data.width, layout.data.height, focused).Render(content)
@@ -155,15 +155,15 @@ func (m queryModel) resultView(layout appLayout, connected bool, spinner string)
 	)
 	title = truncateLabel(title, contentWidth)
 	return strings.Join([]string{
-		lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(title),
+		lipgloss.NewStyle().Foreground(colorTextMuted).Render(title),
 		grid.String(),
 	}, "\n")
 }
 
 func queryPanelStyle(width, height int, focused bool) lipgloss.Style {
-	borderColor := lipgloss.Color("240")
+	borderColor := colorBorderInactive
 	if focused {
-		borderColor = lipgloss.Color("62")
+		borderColor = colorBorderActive
 	}
 	return lipgloss.NewStyle().Width(width).Height(height).
 		Padding(0, queryPanelHorizontalPadding).
@@ -188,8 +188,8 @@ func queryEditorViewportHeight(layout appLayout) int {
 
 func styleQueryEditor(editor *textarea.Model) {
 	styles := editor.Styles()
-	focusedText := lipgloss.Color("252")
-	blurredText := lipgloss.Color("250")
+	focusedText := colorText
+	blurredText := colorTextInactive
 	styles.Focused.Text = styles.Focused.Text.Foreground(focusedText)
 	styles.Blurred.Text = styles.Blurred.Text.Foreground(blurredText)
 	styles.Focused.CursorLine = lipgloss.NewStyle().Foreground(focusedText)

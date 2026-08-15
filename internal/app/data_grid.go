@@ -14,8 +14,8 @@ const (
 )
 
 var textSelectionStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("16")).
-	Background(lipgloss.Color("153"))
+	Foreground(colorSelectionForeground).
+	Background(colorSelectionBackground)
 
 type dataGridBounds struct {
 	x      int
@@ -92,19 +92,16 @@ func (m dataModel) dataGrid(width, firstColumn, lastColumn, firstRow, lastRow in
 		Width(totalTableWidth(columnWidths)).
 		Wrap(true).
 		Border(lipgloss.NormalBorder()).
-		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+		BorderStyle(lipgloss.NewStyle().Foreground(colorBorderInactive)).
 		StyleFunc(func(row, column int) lipgloss.Style {
 			style := lipgloss.NewStyle().Padding(0, 1).Width(columnWidths[column])
 			if row == table.HeaderRow {
-				return style.Bold(true).Foreground(lipgloss.Color("86"))
+				return style.Bold(true).Foreground(colorAccent)
 			}
 			if row == m.selected-firstRow {
-				return style.Foreground(lipgloss.Color("230")).Background(lipgloss.Color("62"))
+				return style.Foreground(colorSelectionForeground).Background(colorSelectionBackground)
 			}
-			if row%2 == 1 {
-				return style.Foreground(lipgloss.Color("252"))
-			}
-			return style.Foreground(lipgloss.Color("250"))
+			return style.Foreground(colorText)
 		})
 }
 

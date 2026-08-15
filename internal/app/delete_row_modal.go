@@ -83,12 +83,12 @@ func (m deleteRowModal) view(layout appLayout) string {
 
 	case deleteRowDeleting:
 		lines = append(lines,
-			styles.base.Foreground(lipgloss.Color("86")).Render("Deleting…"),
+			styles.base.Foreground(colorAccent).Render("Deleting…"),
 		)
 
 	case deleteRowSuccess:
 		lines = append(lines,
-			styles.base.Foreground(lipgloss.Color("86")).Render("✓ Row deleted"),
+			styles.base.Foreground(colorAccent).Render("✓ Row deleted"),
 			"",
 			styles.dim.Render("Enter or Esc continue"),
 		)
@@ -96,7 +96,7 @@ func (m deleteRowModal) view(layout appLayout) string {
 	case deleteRowFailed:
 		message := lipgloss.Wrap(sanitizeText(m.err.Error()), contentWidth, "")
 		lines = append(lines,
-			styles.base.Foreground(lipgloss.Color("203")).Render("✕ "+message),
+			styles.base.Foreground(colorError).Render("✕ "+message),
 			"",
 			styles.dim.Render("Enter or Esc continue"),
 		)

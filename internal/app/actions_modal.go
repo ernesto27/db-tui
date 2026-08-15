@@ -194,9 +194,9 @@ func (m actionsModal) view(width int) string {
 
 func (m actionsModal) viewSelecting(width int) string {
 	modalWidth := min(56, max(40, width-8))
-	boldStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230"))
-	normalStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	selectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("230")).Bold(true)
+	boldStyle := lipgloss.NewStyle().Bold(true).Foreground(colorTitle)
+	normalStyle := lipgloss.NewStyle().Foreground(colorTextMuted)
+	selectedStyle := lipgloss.NewStyle().Foreground(colorTitle).Bold(true)
 
 	lines := []string{
 		boldStyle.Render("Actions"),
@@ -244,90 +244,90 @@ func (m actionsModal) viewSelecting(width int) string {
 		lines = append(lines, prefix+style.Render("Rename connection \""+sanitizeText(m.connName)+"\""))
 	}
 
-	lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("↑/↓ or j/k move  •  Enter select  •  Esc close"))
+	lines = append(lines, "", lipgloss.NewStyle().Foreground(colorTextMuted).Render("↑/↓ or j/k move  •  Enter select  •  Esc close"))
 
 	return lipgloss.NewStyle().
 		Width(modalWidth).
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Background(lipgloss.Color("235")).
+		BorderForeground(colorBorderActive).
+		Background(colorModalBackground).
 		Render(strings.Join(lines, "\n"))
 }
 
 func (m actionsModal) viewRenameEditing(width int) string {
 	modalWidth := min(56, max(40, width-8))
 	lines := []string{
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Render("Rename connection"),
+		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Rename connection"),
 		"",
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render("New name:"),
+		lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render("New name:"),
 		m.renameInput.View(),
 		"",
 	}
 	if m.renameError != "" {
-		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Render("✕ "+sanitizeText(m.renameError)))
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorError).Render("✕ "+sanitizeText(m.renameError)))
 		lines = append(lines, "")
 	}
-	lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("Enter confirm  •  Esc back"))
+	lines = append(lines, lipgloss.NewStyle().Foreground(colorTextMuted).Render("Enter confirm  •  Esc back"))
 	return lipgloss.NewStyle().
 		Width(modalWidth).
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Background(lipgloss.Color("235")).
+		BorderForeground(colorBorderActive).
+		Background(colorModalBackground).
 		Render(strings.Join(lines, "\n"))
 }
 
 func (m actionsModal) viewRenameSaving(width int) string {
 	modalWidth := min(56, max(40, width-8))
 	lines := []string{
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Render("Rename connection"),
+		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Rename connection"),
 		"",
 		"New name: " + sanitizeText(m.renameInput.Value()),
 		"",
-		lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render("Saving…"),
+		lipgloss.NewStyle().Foreground(colorAccent).Render("Saving…"),
 	}
 	return lipgloss.NewStyle().
 		Width(modalWidth).
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Background(lipgloss.Color("235")).
+		BorderForeground(colorBorderActive).
+		Background(colorModalBackground).
 		Render(strings.Join(lines, "\n"))
 }
 
 func (m actionsModal) viewRenameSuccess(width int) string {
 	modalWidth := min(56, max(40, width-8))
 	lines := []string{
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Render("Rename connection"),
+		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Rename connection"),
 		"",
-		lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render("✓ Connection renamed"),
+		lipgloss.NewStyle().Foreground(colorAccent).Render("✓ Connection renamed"),
 		"",
-		lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("Enter or Esc continue"),
+		lipgloss.NewStyle().Foreground(colorTextMuted).Render("Enter or Esc continue"),
 	}
 	return lipgloss.NewStyle().
 		Width(modalWidth).
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Background(lipgloss.Color("235")).
+		BorderForeground(colorBorderActive).
+		Background(colorModalBackground).
 		Render(strings.Join(lines, "\n"))
 }
 
 func (m actionsModal) viewRenameFailed(width int) string {
 	modalWidth := min(56, max(40, width-8))
 	lines := []string{
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Render("Rename connection"),
+		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Rename connection"),
 		"",
-		lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Render("✕ " + sanitizeText(m.renameError)),
+		lipgloss.NewStyle().Foreground(colorError).Render("✕ " + sanitizeText(m.renameError)),
 		"",
-		lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("Enter or Esc continue"),
+		lipgloss.NewStyle().Foreground(colorTextMuted).Render("Enter or Esc continue"),
 	}
 	return lipgloss.NewStyle().
 		Width(modalWidth).
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Background(lipgloss.Color("235")).
+		BorderForeground(colorBorderActive).
+		Background(colorModalBackground).
 		Render(strings.Join(lines, "\n"))
 }
