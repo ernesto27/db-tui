@@ -9,11 +9,8 @@ import (
 	"time"
 )
 
-// MaxPageSize is the largest number of rows a single page can contain.
+// MaxPageSize is the largest number of rows returned by a table page or raw query.
 const MaxPageSize = 100
-
-// MaxQueryResultRows is the largest number of rows returned for a raw query.
-const MaxQueryResultRows = 100
 
 const filenameTimestampLayout = "20060102_150405"
 

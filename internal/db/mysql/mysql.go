@@ -407,7 +407,7 @@ func (m *mysqlDatabase) Execute(ctx context.Context, statement string) (db.Query
 		return db.QueryResult{}, fmt.Errorf("execute MySQL query: %w", err)
 	}
 
-	return readQueryResult(rows, db.MaxQueryResultRows, commandTag(statement))
+	return readQueryResult(rows, db.MaxPageSize, commandTag(statement))
 }
 
 func readQueryResult(rows *sql.Rows, rowLimit int, commandTag string) (db.QueryResult, error) {

@@ -13,7 +13,6 @@ const (
 	tableLoadTimeout      = 5 * time.Second
 	dumpTimeout           = 30 * time.Minute
 	queryExecutionTimeout = 20 * time.Minute
-	rowPageSize           = 100
 )
 
 type tablesLoadedMsg struct {
@@ -96,14 +95,14 @@ func loadViews(database db.Database, session uint64) tea.Cmd {
 	}
 }
 
-func loadRows(database db.Database, relation navigatorItem, offset, selectedRow int, session, request uint64) tea.Cmd {
+func loadRows(database db.Database, relation navigatorItem, offset, selectedRow, maxPageSize int, session, request uint64) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
 		defer cancel()
 
 		page, err := database.GetRows(ctx, relation.rowSource(), db.PageRequest{
 			Offset: offset,
-			Limit:  rowPageSize,
+			Limit:  maxPageSize,
 		})
 		return rowsLoadedMsg{
 			relation:    relation,

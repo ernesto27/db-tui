@@ -335,14 +335,14 @@ func (o *oracleDatabase) TableDDL(ctx context.Context, table db.Table) (string, 
 	return ensureTrailingSemicolon(ddl), nil
 }
 
-// Execute runs arbitrary SQL and returns up to db.MaxQueryResultRows rows.
+// Execute runs arbitrary SQL and returns up to db.MaxPageSize rows.
 func (o *oracleDatabase) Execute(ctx context.Context, statement string) (db.QueryResult, error) {
 	o.logger.Log(statement)
 	rows, err := o.database.QueryContext(ctx, statement)
 	if err != nil {
 		return db.QueryResult{}, fmt.Errorf("execute Oracle query: %w", err)
 	}
-	return readQueryResult(rows, db.MaxQueryResultRows, commandTag(statement))
+	return readQueryResult(rows, db.MaxPageSize, commandTag(statement))
 }
 
 // Dump reports that Oracle Data Pump is not supported by db-tui.

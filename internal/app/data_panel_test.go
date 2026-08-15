@@ -9,6 +9,8 @@ import (
 	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
+const testPageSize = 10
+
 func TestDataMoveBlocksWhileLoading(t *testing.T) {
 	layout := newAppLayout(100, 24)
 	data := dataModel{
@@ -18,8 +20,8 @@ func TestDataMoveBlocksWhileLoading(t *testing.T) {
 		loading:  true,
 	}
 
-	upRequest, upLoad := data.moveUp(layout)
-	downRequest, downLoad := data.moveDown(layout)
+	upRequest, upLoad := data.moveUp(layout, testPageSize)
+	downRequest, downLoad := data.moveDown(layout, testPageSize)
 
 	assert.False(t, upLoad)
 	assert.Empty(t, upRequest)
@@ -38,12 +40,12 @@ func TestDataMoveWithinPage(t *testing.T) {
 		selected: 1,
 	}
 
-	request, load := data.moveDown(layout)
+	request, load := data.moveDown(layout, testPageSize)
 	assert.False(t, load)
 	assert.Empty(t, request)
 	assert.Equal(t, 2, data.selected)
 
-	request, load = data.moveUp(layout)
+	request, load = data.moveUp(layout, testPageSize)
 	assert.False(t, load)
 	assert.Empty(t, request)
 	assert.Equal(t, 1, data.selected)
@@ -55,7 +57,7 @@ func TestDataMoveUpAtBeginningDoesNothing(t *testing.T) {
 		page: db.RowPage{Rows: [][]any{{1}}},
 	}
 
-	request, load := data.moveUp(layout)
+	request, load := data.moveUp(layout, testPageSize)
 
 	assert.False(t, load)
 	assert.Empty(t, request)
@@ -66,15 +68,15 @@ func TestDataMoveUpRequestsPreviousPage(t *testing.T) {
 	layout := newAppLayout(100, 24)
 	data := dataModel{
 		page:   db.RowPage{Rows: [][]any{{101}}},
-		offset: 100,
+		offset: testPageSize,
 	}
 
-	request, load := data.moveUp(layout)
+	request, load := data.moveUp(layout, testPageSize)
 
 	assert.True(t, load)
 	assert.Equal(t, rowLoadRequest{
 		offset:      0,
-		selectedRow: rowPageSize - 1,
+		selectedRow: testPageSize - 1,
 	}, request)
 	assert.Zero(t, data.selected)
 }
@@ -85,7 +87,7 @@ func TestDataMoveDownAtEndDoesNothing(t *testing.T) {
 		page: db.RowPage{Rows: [][]any{{1}}},
 	}
 
-	request, load := data.moveDown(layout)
+	request, load := data.moveDown(layout, testPageSize)
 
 	assert.False(t, load)
 	assert.Empty(t, request)
@@ -99,15 +101,15 @@ func TestDataMoveDownRequestsNextPage(t *testing.T) {
 			Rows:    [][]any{{1}, {2}},
 			HasMore: true,
 		},
-		offset:   100,
+		offset:   testPageSize,
 		selected: 1,
 	}
 
-	request, load := data.moveDown(layout)
+	request, load := data.moveDown(layout, testPageSize)
 
 	assert.True(t, load)
 	assert.Equal(t, rowLoadRequest{
-		offset:      200,
+		offset:      2 * testPageSize,
 		selectedRow: 0,
 	}, request)
 	assert.Equal(t, 1, data.selected)

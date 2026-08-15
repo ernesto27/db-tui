@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -282,6 +283,7 @@ func TestRenameSuccessUpdatesModalConnName(t *testing.T) {
 
 func TestRenameCommandCallsConfigSave(t *testing.T) {
 	cfg := config.Config{
+		MaxPageSize: db.MaxPageSize,
 		Connections: []config.Connection{
 			{Name: "NewName", Engine: "postgres"},
 		},
@@ -299,5 +301,5 @@ func TestRenameCommandCallsConfigSave(t *testing.T) {
 
 	contents, err := os.ReadFile(filepath.Join(appTestHome, ".config", "db-tui", "config.json"))
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"connections":[{"name":"NewName","engine":"postgres","settings":{"hostname":"","database":"","username":"","password":"","port":"","dsn":""},"status":false}]}`, string(contents))
+	assert.JSONEq(t, fmt.Sprintf(`{"maxPageSize":%d,"connections":[{"name":"NewName","engine":"postgres","settings":{"hostname":"","database":"","username":"","password":"","port":"","dsn":""},"status":false}]}`, db.MaxPageSize), string(contents))
 }

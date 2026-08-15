@@ -36,7 +36,7 @@ func TestExecute(t *testing.T) {
 			name:        "limits rows",
 			sql:         "SELECT level AS value FROM dual CONNECT BY level <= 101",
 			wantColumns: []string{"VALUE"},
-			wantRows:    db.MaxQueryResultRows,
+			wantRows:    db.MaxPageSize,
 			wantTag:     "SELECT",
 		},
 		{

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
 const (
@@ -34,6 +36,15 @@ type Connection struct {
 // Config contains db-tui connection settings.
 type Config struct {
 	Connections []Connection `json:"connections,omitempty"`
+	MaxPageSize int          `json:"maxPageSize"`
+}
+
+// PageSize returns the configured page size bounded by the application maximum.
+func (config Config) PageSize() int {
+	if config.MaxPageSize < 1 {
+		return db.MaxPageSize
+	}
+	return min(config.MaxPageSize, db.MaxPageSize)
 }
 
 // Load reads the db-tui configuration from $HOME/.config/db-tui/config.json.
@@ -60,6 +71,7 @@ func Load() (Config, error) {
 	if err := json.Unmarshal(data, &config); err != nil {
 		return Config{}, fmt.Errorf("decode config: %w", err)
 	}
+	config.MaxPageSize = config.PageSize()
 
 	return config, nil
 }
@@ -70,16 +82,19 @@ func (config *Config) saveConnection(conn Connection) error {
 }
 
 // Save writes config to the db-tui configuration file.
-func (config Config) Save() error {
+func (config *Config) Save() error {
 	path, err := configPath()
 	if err != nil {
 		return err
 	}
-	return writeConfig(path, config)
+	config.MaxPageSize = config.PageSize()
+	return writeConfig(path, *config)
 }
 
 func createEmptyConfig(path string) ([]byte, error) {
-	data, err := encodeConfig(Config{})
+	data, err := encodeConfig(Config{
+		MaxPageSize: db.MaxPageSize,
+	})
 	if err != nil {
 		return nil, err
 	}

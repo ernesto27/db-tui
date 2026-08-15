@@ -612,7 +612,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 			}
 			return nil
 		}
-		request, load := m.data.moveUp(m.layout)
+		request, load := m.data.moveUp(m.layout, m.config.PageSize())
 		if load {
 			return m.startRowLoad(request.offset, request.selectedRow)
 		}
@@ -624,7 +624,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 			}
 			return nil
 		}
-		request, load := m.data.moveDown(m.layout)
+		request, load := m.data.moveDown(m.layout, m.config.PageSize())
 		if load {
 			return m.startRowLoad(request.offset, request.selectedRow)
 		}
@@ -637,7 +637,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		if m.data.offset > 0 && !m.data.loading {
-			return m.startRowLoad(max(0, m.data.offset-rowPageSize), 0)
+			return m.startRowLoad(max(0, m.data.offset-m.config.PageSize()), 0)
 		}
 		return nil
 	case key.Matches(msg, m.keys.pageDown):
@@ -648,7 +648,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		if m.data.page.HasMore && !m.data.loading {
-			return m.startRowLoad(m.data.offset+rowPageSize, 0)
+			return m.startRowLoad(m.data.offset+m.config.PageSize(), 0)
 		}
 		return nil
 	case key.Matches(msg, m.keys.home):
@@ -779,12 +779,12 @@ func (m *Model) updateMouseWheel(msg tea.MouseWheelMsg) tea.Cmd {
 	m.focus = focusData
 	switch msg.Button {
 	case tea.MouseWheelUp:
-		request, load := m.data.moveUp(m.layout)
+		request, load := m.data.moveUp(m.layout, m.config.PageSize())
 		if load {
 			return m.startRowLoad(request.offset, request.selectedRow)
 		}
 	case tea.MouseWheelDown:
-		request, load := m.data.moveDown(m.layout)
+		request, load := m.data.moveDown(m.layout, m.config.PageSize())
 		if load {
 			return m.startRowLoad(request.offset, request.selectedRow)
 		}
@@ -806,9 +806,10 @@ func (m *Model) startRowLoad(offset, selectedRow int) tea.Cmd {
 	if m.database == nil || !m.activeRelation.set {
 		return nil
 	}
+
 	m.activeRelation.request++
 	m.data.beginLoad(offset)
-	return tea.Batch(loadRows(m.database, m.activeRelation.item, offset, selectedRow, m.session, m.activeRelation.request), m.startSpinner())
+	return tea.Batch(loadRows(m.database, m.activeRelation.item, offset, selectedRow, m.config.PageSize(), m.session, m.activeRelation.request), m.startSpinner())
 }
 
 func (m *Model) startQuery() tea.Cmd {

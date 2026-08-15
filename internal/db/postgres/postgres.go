@@ -392,7 +392,7 @@ func (p *postgresql) Execute(ctx context.Context, sql string) (db.QueryResult, e
 		return db.QueryResult{}, fmt.Errorf("execute PostgreSQL query: %w", err)
 	}
 
-	return readQueryResult(rows, db.MaxQueryResultRows)
+	return readQueryResult(rows, db.MaxPageSize)
 }
 
 func readQueryResult(rows pgx.Rows, rowLimit int) (db.QueryResult, error) {

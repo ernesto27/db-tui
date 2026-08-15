@@ -296,14 +296,14 @@ func (s *sqliteDatabase) TableDDL(ctx context.Context, table db.Table) (string, 
 	return ensureTrailingSemicolon(ddl.String), nil
 }
 
-// Execute runs arbitrary SQL and returns up to db.MaxQueryResultRows rows.
+// Execute runs arbitrary SQL and returns up to db.MaxPageSize rows.
 func (s *sqliteDatabase) Execute(ctx context.Context, statement string) (db.QueryResult, error) {
 	s.logger.Log(statement)
 	rows, err := s.database.QueryContext(ctx, statement)
 	if err != nil {
 		return db.QueryResult{}, fmt.Errorf("execute SQLite query: %w", err)
 	}
-	return readQueryResult(rows, db.MaxQueryResultRows, commandTag(statement))
+	return readQueryResult(rows, db.MaxPageSize, commandTag(statement))
 }
 
 // Dump writes an SQLite .dump to a timestamped SQL file using sqlite3.

@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -229,8 +230,8 @@ func TestGetRowsValidatesPage(t *testing.T) {
 	}{
 		{name: "empty table", page: db.PageRequest{Limit: 1}, error: "table name is required"},
 		{name: "negative offset", table: db.Table{Name: "city"}, page: db.PageRequest{Offset: -1, Limit: 1}, error: "page offset cannot be negative"},
-		{name: "zero limit", table: db.Table{Name: "city"}, error: "page limit must be between 1 and 100"},
-		{name: "large limit", table: db.Table{Name: "city"}, page: db.PageRequest{Limit: db.MaxPageSize + 1}, error: "page limit must be between 1 and 100"},
+		{name: "zero limit", table: db.Table{Name: "city"}, error: fmt.Sprintf("page limit must be between 1 and %d", db.MaxPageSize)},
+		{name: "large limit", table: db.Table{Name: "city"}, page: db.PageRequest{Limit: db.MaxPageSize + 1}, error: fmt.Sprintf("page limit must be between 1 and %d", db.MaxPageSize)},
 	}
 
 	for _, test := range tests {
@@ -305,7 +306,7 @@ func TestExecute(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, []string{"ID"}, result.Columns)
-		assert.Len(t, result.Rows, db.MaxQueryResultRows)
+		assert.Len(t, result.Rows, db.MaxPageSize)
 		assert.IsType(t, int64(0), result.Rows[0][0])
 		assert.Equal(t, "SELECT", result.CommandTag)
 	})

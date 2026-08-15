@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -161,8 +162,8 @@ func TestGetRows(t *testing.T) {
 	}{
 		{name: "empty table", page: db.PageRequest{Limit: 1}, want: "table name is required"},
 		{name: "negative offset", table: db.Table{Name: "employee"}, page: db.PageRequest{Offset: -1, Limit: 1}, want: "page offset cannot be negative"},
-		{name: "zero limit", table: db.Table{Name: "employee"}, want: "page limit must be between 1 and 100"},
-		{name: "large limit", table: db.Table{Name: "employee"}, page: db.PageRequest{Limit: db.MaxPageSize + 1}, want: "page limit must be between 1 and 100"},
+		{name: "zero limit", table: db.Table{Name: "employee"}, want: fmt.Sprintf("page limit must be between 1 and %d", db.MaxPageSize)},
+		{name: "large limit", table: db.Table{Name: "employee"}, page: db.PageRequest{Limit: db.MaxPageSize + 1}, want: fmt.Sprintf("page limit must be between 1 and %d", db.MaxPageSize)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := database.GetRows(context.Background(), test.table, test.page)
@@ -191,7 +192,7 @@ func TestExecute(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"emp_no"}, result.Columns)
-	assert.Len(t, result.Rows, db.MaxQueryResultRows)
+	assert.Len(t, result.Rows, db.MaxPageSize)
 	assert.Equal(t, "SELECT", result.CommandTag)
 
 	isolated := connectSQLiteFile(t, newSQLiteFile(t))

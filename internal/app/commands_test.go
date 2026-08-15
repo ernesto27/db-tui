@@ -36,6 +36,7 @@ func TestLoadRows(t *testing.T) {
 		relation    navigatorItem
 		offset      int
 		selectedRow int
+		maxPageSize int
 		session     uint64
 		request     uint64
 		wantPage    db.RowPage
@@ -51,6 +52,7 @@ func TestLoadRows(t *testing.T) {
 			relation:    navigatorItem{name: "Track", section: navigatorTables},
 			offset:      200,
 			selectedRow: 4,
+			maxPageSize: 25,
 			session:     9,
 			request:     6,
 			wantPage: db.RowPage{
@@ -65,6 +67,7 @@ func TestLoadRows(t *testing.T) {
 			relation:    navigatorItem{name: "Track", section: navigatorTables},
 			offset:      0,
 			selectedRow: 0,
+			maxPageSize: 25,
 			session:     2,
 			request:     3,
 			wantErr:     wantErr,
@@ -78,6 +81,7 @@ func TestLoadRows(t *testing.T) {
 				test.relation,
 				test.offset,
 				test.selectedRow,
+				test.maxPageSize,
 				test.session,
 				test.request,
 			)().(rowsLoadedMsg)
@@ -87,7 +91,7 @@ func TestLoadRows(t *testing.T) {
 			assert.Equal(t, test.relation.rowSource(), test.database.getRowsTable)
 			assert.Equal(t, db.PageRequest{
 				Offset: test.offset,
-				Limit:  rowPageSize,
+				Limit:  test.maxPageSize,
 			}, test.database.getRowsRequest)
 			assert.True(t, test.database.getRowsDeadline)
 			assert.Equal(t, test.wantPage, message.page)

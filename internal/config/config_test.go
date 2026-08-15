@@ -1,10 +1,12 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/ernestoponce27/db-tui/internal/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +21,7 @@ func TestLoad(t *testing.T) {
 		{
 			name:     "valid configuration",
 			contents: `{"connections":[{"name":"local","engine":"postgres","settings":{"hostname":"127.0.0.1","database":"chinook","username":"db_tui","password":"secret","port":"5433","dsn":""},"status":true}]}`,
-			want: Config{Connections: []Connection{{
+			want: Config{MaxPageSize: db.MaxPageSize, Connections: []Connection{{
 				Name:   "local",
 				Engine: "postgres",
 				Settings: Settings{
@@ -35,7 +37,7 @@ func TestLoad(t *testing.T) {
 		{
 			name:     "empty configuration",
 			contents: `{}`,
-			want:     Config{},
+			want:     Config{MaxPageSize: db.MaxPageSize},
 		},
 		{
 			name:     "malformed JSON",
@@ -88,12 +90,13 @@ func TestConfigSaveConnection(t *testing.T) {
 
 	contents, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.JSONEq(t, `{
+	assert.JSONEq(t, fmt.Sprintf(`{
+		"maxPageSize": %d,
 		"connections": [
 			{"name":"local","engine":"postgres","settings":{"hostname":"","database":"","username":"","password":"","port":"","dsn":""},"status":false},
 			{"name":"production","engine":"postgres","settings":{"hostname":"db.example.com","database":"chinook","username":"db_tui","password":"","port":"5432","dsn":""},"status":false}
 		]
-	}`, string(contents))
+	}`, db.MaxPageSize), string(contents))
 }
 
 func TestConfigSave(t *testing.T) {
@@ -116,11 +119,12 @@ func TestConfigSave(t *testing.T) {
 
 	contents, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.JSONEq(t, `{
+	assert.JSONEq(t, fmt.Sprintf(`{
+		"maxPageSize": %d,
 		"connections": [
 			{"name":"local","engine":"postgres","settings":{"hostname":"127.0.0.1","database":"chinook","username":"updated_user","password":"","port":"5433","dsn":""},"status":false}
 		]
-	}`, string(contents))
+	}`, db.MaxPageSize), string(contents))
 }
 
 func TestConfigPersistsSQLiteDatabasePathInExistingDSNField(t *testing.T) {
@@ -138,7 +142,7 @@ func TestConfigPersistsSQLiteDatabasePathInExistingDSNField(t *testing.T) {
 	require.NoError(t, config.Save())
 	contents, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"connections":[{"name":"Employee","engine":"sqlite","settings":{"hostname":"","database":"","username":"","password":"","port":"","dsn":"docker/sqlite/employee.db"},"status":false}]}`, string(contents))
+	assert.JSONEq(t, fmt.Sprintf(`{"maxPageSize":%d,"connections":[{"name":"Employee","engine":"sqlite","settings":{"hostname":"","database":"","username":"","password":"","port":"","dsn":"docker/sqlite/employee.db"},"status":false}]}`, db.MaxPageSize), string(contents))
 }
 
 func useTemporaryHome(t *testing.T) string {

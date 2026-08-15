@@ -40,9 +40,9 @@ func TestExecute(t *testing.T) {
 			name:        "limits rows",
 			sql:         "SELECT generate_series(1, 101) AS number",
 			wantColumns: []string{"number"},
-			wantRows:    db.MaxQueryResultRows,
+			wantRows:    db.MaxPageSize,
 			wantFirst:   int32(1),
-			wantLast:    int32(100),
+			wantLast:    int32(db.MaxPageSize),
 			wantTag:     "SELECT 101",
 		},
 		{
