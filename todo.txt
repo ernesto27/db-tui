@@ -15,6 +15,7 @@
 [] - Create conventions-architecthre file
 [] - when press scape in modal of ctrl+g go back modal list
 [] - when remove a table in raw query do a refresh table
+[] - prevent data-panel flicker while refreshing table rows
 [] - in raw query show execution time, rows affected
 [] - when show ddl i want to be able to copy
 [] - update skills explain changes to show diagrams at first

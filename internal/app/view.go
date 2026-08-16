@@ -223,8 +223,12 @@ func (m Model) footerText() string {
 	if m.focus == focusNavigator {
 		activationHelp = "  •  Enter load rows"
 	}
-	return fmt.Sprintf("focus: %s%s%s  •  Ctrl+F search relations%s%s%s  •  Ctrl+S settings  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  q quit",
-		focusLabel, rowStatus, activationHelp, sectionHelp, tableHelp, editHelp)
+	refreshHelp := ""
+	if m.panel == panelData && m.focus == focusData {
+		refreshHelp = "  •  r refresh"
+	}
+	return fmt.Sprintf("focus: %s%s%s%s  •  Ctrl+F search relations%s%s%s  •  Ctrl+S settings  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  q quit",
+		focusLabel, rowStatus, activationHelp, refreshHelp, sectionHelp, tableHelp, editHelp)
 }
 
 func panelStyle(width, height int, focused bool) lipgloss.Style {

@@ -9,6 +9,15 @@ the next row-page request uses the new size. When moving forward after a size
 change, the next page starts immediately after the last row in the currently
 displayed page so that the transition neither skips nor repeats rows.
 
+## Data-panel refresh
+
+An explicit `r` action available only when the table-data panel has focus. It
+reissues the active relation's row query from offset zero with no selected row,
+so a successful refresh displays its first configured page. While a row load
+is in progress, with no active relation, or outside data-panel focus, the
+action has no effect. Refresh uses normal row-load feedback and displays the
+normal row-load error if it fails.
+
 ## Data-grid text selection
 
 An application-owned, character-range selection within one rendered data-grid

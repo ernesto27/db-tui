@@ -715,6 +715,8 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		modal := newExportModal(table.Name)
 		m.exportModal = &modal
 		return nil
+	case m.panel == panelData && m.focus == focusData && !m.data.loading && key.Matches(msg, m.keys.refreshTable):
+		return m.startRowLoad(0, 0)
 	default:
 		return nil
 	}

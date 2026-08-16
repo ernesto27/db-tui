@@ -25,12 +25,6 @@
       "skillPath": "skills/deep-research/SKILL.md",
       "computedHash": "59a9a850fb0e77692c24605360a9ee76a13f6636a9c8c7ee01598c175d606d9f"
     },
-    "domain-modeling": {
-      "source": "mattpocock/skills",
-      "sourceType": "github",
-      "skillPath": "skills/engineering/domain-modeling/SKILL.md",
-      "computedHash": "683744795bdc9fbfb6c0c2122c4b8119c950e2fe5bcbbf44237dd28aaea34b67"
-    },
     "explain-changes": {
       "source": "ernesto27/skills",
       "sourceType": "github",

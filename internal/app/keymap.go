@@ -26,6 +26,7 @@ type keyMap struct {
 	export        key.Binding
 	editRow       key.Binding
 	deleteRow     key.Binding
+	refreshTable  key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -53,5 +54,6 @@ func defaultKeyMap() keyMap {
 		export:        key.NewBinding(key.WithKeys("ctrl+e"), key.WithHelp("ctrl+e", "export")),
 		editRow:       key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit row")),
 		deleteRow:     key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete row")),
+		refreshTable:  key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh table")),
 	}
 }
