@@ -52,6 +52,7 @@ type Model struct {
 	connect                ConnectFunc
 	modal                  *connectionModal
 	connectionsModal       *connectionsModal
+	settingsModal          *settingsModal
 	editingConnection      int
 	creatingConnection     bool
 	connectionAttempt      uint64

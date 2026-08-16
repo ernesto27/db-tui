@@ -65,7 +65,7 @@ func (m *dataModel) finishLoad(page db.RowPage, selectedRow int, err error, layo
 	m.ensureSelectedVisible(layout)
 }
 
-func (m *dataModel) moveUp(layout appLayout, maxPageSize int) (rowLoadRequest, bool) {
+func (m *dataModel) moveUp(layout appLayout, pageSize int) (rowLoadRequest, bool) {
 	m.clearTextSelection()
 	if m.loading {
 		return rowLoadRequest{}, false
@@ -76,12 +76,12 @@ func (m *dataModel) moveUp(layout appLayout, maxPageSize int) (rowLoadRequest, b
 		return rowLoadRequest{}, false
 	}
 	if m.offset > 0 {
-		return rowLoadRequest{offset: max(0, m.offset-maxPageSize), selectedRow: maxPageSize - 1}, true
+		return rowLoadRequest{offset: max(0, m.offset-pageSize), selectedRow: pageSize - 1}, true
 	}
 	return rowLoadRequest{}, false
 }
 
-func (m *dataModel) moveDown(layout appLayout, maxPageSize int) (rowLoadRequest, bool) {
+func (m *dataModel) moveDown(layout appLayout, pageSize int) (rowLoadRequest, bool) {
 	m.clearTextSelection()
 	if m.loading {
 		return rowLoadRequest{}, false
@@ -92,7 +92,7 @@ func (m *dataModel) moveDown(layout appLayout, maxPageSize int) (rowLoadRequest,
 		return rowLoadRequest{}, false
 	}
 	if m.page.HasMore {
-		return rowLoadRequest{offset: m.offset + maxPageSize}, true
+		return rowLoadRequest{offset: m.offset + len(m.page.Rows)}, true
 	}
 	return rowLoadRequest{}, false
 }

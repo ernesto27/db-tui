@@ -30,9 +30,15 @@ Use `gofmt`; the formatter determines indentation. Keep package names short, low
 
 Every new feature must include automated tests that verify its expected behavior. A feature is not complete until its tests are added and passing. Use Go's `testing` package, `testify/assert`, and table-driven subtests for varied inputs. Add focused regression coverage at the lowest practical layer, especially for paging bounds, identifier quoting, cancellation, layout edges, SQL `NULL`, and query-log behavior. No numeric coverage threshold is set, but every behavior change needs relevant tests. Do not make integration tests depend on remote databases or credentials.
 
+Implement the requested change before running automated checks. Do not use test-first development or run incremental test commands unless the user explicitly asks; run the relevant automated verification once at the end. The user performs manual testing.
+
 ## Commit & Pull Request Guidelines
 
 Recent commits use concise imperative subjects (for example, `add basic view of tables`). Keep each commit scoped to one task. Pull requests should state intent, link relevant work, list verification commands, and include terminal screenshots for visible UI changes. Never commit passwords, credential-bearing DSNs, local config, logs, or generated binaries.
+
+## Specifications
+
+Save specifications and design decisions as Markdown files in this repository. Do not publish them to GitHub issues, pull requests, or an external issue tracker unless the user explicitly asks.
 
 
 IMPORTANT do not use superpowers plugin as default, do not use git worktree or commit

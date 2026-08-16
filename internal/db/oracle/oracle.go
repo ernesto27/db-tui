@@ -297,8 +297,8 @@ func (o *oracleDatabase) GetRows(ctx context.Context, table db.Table, page db.Pa
 	if page.Offset < 0 {
 		return db.RowPage{}, errors.New("page offset cannot be negative")
 	}
-	if page.Limit < 1 || page.Limit > db.MaxPageSize {
-		return db.RowPage{}, fmt.Errorf("page limit must be between 1 and %d", db.MaxPageSize)
+	if page.Limit < 1 {
+		return db.RowPage{}, errors.New("page limit must be positive")
 	}
 
 	query := "SELECT * FROM " + quoteIdentifier(table.Name) + " OFFSET :1 ROWS FETCH NEXT :2 ROWS ONLY"

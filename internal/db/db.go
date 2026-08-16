@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// MaxPageSize is the largest number of rows returned by a table page or raw query.
+// MaxPageSize is the default relation-page size and the raw-query row limit.
 const MaxPageSize = 100
 
 const filenameTimestampLayout = "20060102_150405"
@@ -81,7 +81,7 @@ type MaterializedView struct {
 
 // PageRequest identifies a bounded range of rows to return.
 //
-// Offset must not be negative. Limit must be between 1 and MaxPageSize.
+// Offset must not be negative. Limit must be positive.
 type PageRequest struct {
 	Offset int
 	Limit  int

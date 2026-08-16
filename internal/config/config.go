@@ -39,12 +39,12 @@ type Config struct {
 	MaxPageSize int          `json:"maxPageSize"`
 }
 
-// PageSize returns the configured page size bounded by the application maximum.
+// PageSize returns the configured page size or the default when it is invalid.
 func (config Config) PageSize() int {
 	if config.MaxPageSize < 1 {
 		return db.MaxPageSize
 	}
-	return min(config.MaxPageSize, db.MaxPageSize)
+	return config.MaxPageSize
 }
 
 // Load reads the db-tui configuration from $HOME/.config/db-tui/config.json.

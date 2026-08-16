@@ -616,12 +616,6 @@ func TestGetRows(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "limit above maximum",
-			table:   db.Table{Name: "Album"},
-			page:    db.PageRequest{Limit: db.MaxPageSize + 1},
-			wantErr: true,
-		},
-		{
 			name:    "malicious table name is quoted",
 			table:   db.Table{Name: "Album\"; DROP TABLE public.\"Artist\"; --"},
 			page:    db.PageRequest{Limit: 1},
@@ -644,4 +638,7 @@ func TestGetRows(t *testing.T) {
 			}
 		})
 	}
+
+	_, err = database.GetRows(ctx, db.Table{Name: "Album"}, db.PageRequest{Limit: db.MaxPageSize + 1})
+	assert.NoError(t, err)
 }

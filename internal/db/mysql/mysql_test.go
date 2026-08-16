@@ -3,7 +3,6 @@ package mysql
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -230,8 +229,7 @@ func TestGetRowsValidatesPage(t *testing.T) {
 	}{
 		{name: "empty table", page: db.PageRequest{Limit: 1}, error: "table name is required"},
 		{name: "negative offset", table: db.Table{Name: "city"}, page: db.PageRequest{Offset: -1, Limit: 1}, error: "page offset cannot be negative"},
-		{name: "zero limit", table: db.Table{Name: "city"}, error: fmt.Sprintf("page limit must be between 1 and %d", db.MaxPageSize)},
-		{name: "large limit", table: db.Table{Name: "city"}, page: db.PageRequest{Limit: db.MaxPageSize + 1}, error: fmt.Sprintf("page limit must be between 1 and %d", db.MaxPageSize)},
+		{name: "zero limit", table: db.Table{Name: "city"}, error: "page limit must be positive"},
 	}
 
 	for _, test := range tests {
@@ -240,6 +238,9 @@ func TestGetRowsValidatesPage(t *testing.T) {
 			assert.EqualError(t, err, test.error)
 		})
 	}
+
+	_, err := database.GetRows(context.Background(), db.Table{Name: "city"}, db.PageRequest{Limit: db.MaxPageSize + 1})
+	assert.NoError(t, err)
 }
 
 func TestExport(t *testing.T) {

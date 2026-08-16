@@ -33,6 +33,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateConnectionsModal(msg)
 		}
 	}
+	if m.settingsModal != nil {
+		switch msg.(type) {
+		case tea.MouseClickMsg, tea.MouseReleaseMsg, tea.MouseWheelMsg, tea.MouseMotionMsg:
+			return m, nil
+		default:
+			return m.updateSettingsModal(msg)
+		}
+	}
 
 	if m.dumpModal != nil {
 		return m, m.updateDumpModal(msg)
@@ -286,6 +294,18 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 
 		m.deleteRowModal.state = deleteRowSuccess
 		return m.startRowLoad(m.data.offset, m.data.selected), true
+	case settingsSavedMsg:
+		if m.settingsModal == nil {
+			return nil, true
+		}
+		m.settingsModal.saving = false
+		if msg.err != nil {
+			m.settingsModal.errorText = "save settings: " + msg.err.Error()
+			return nil, true
+		}
+		m.config.MaxPageSize = msg.maxPageSize
+		m.settingsModal = nil
+		return nil, true
 	default:
 		return nil, false
 	}
@@ -476,9 +496,28 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
+func (m Model) updateSettingsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case saveSettingsMsg:
+		m.settingsModal.saving = true
+		return m, saveSettings(m.config, msg.maxPageSize)
+	case cancelSettingsMsg:
+		m.settingsModal = nil
+		return m, nil
+	default:
+		modal, command := m.settingsModal.update(msg)
+		m.settingsModal = &modal
+		return m, command
+	}
+}
+
 func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 	m.lastNavigatorClick = navigatorClick{}
 	switch {
+	case key.Matches(msg, m.keys.settings):
+		modal := newSettingsModal(m.config.PageSize())
+		m.settingsModal = &modal
+		return m.settingsModal.maxPageSize.Focus()
 	case key.Matches(msg, m.keys.connections):
 		modal := newConnectionsModal(m.config)
 		m.connectionsModal = &modal
@@ -648,7 +687,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		if m.data.page.HasMore && !m.data.loading {
-			return m.startRowLoad(m.data.offset+m.config.PageSize(), 0)
+			return m.startRowLoad(m.data.offset+len(m.data.page.Rows), 0)
 		}
 		return nil
 	case key.Matches(msg, m.keys.home):

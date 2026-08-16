@@ -25,6 +25,12 @@
       "skillPath": "skills/deep-research/SKILL.md",
       "computedHash": "59a9a850fb0e77692c24605360a9ee76a13f6636a9c8c7ee01598c175d606d9f"
     },
+    "domain-modeling": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/domain-modeling/SKILL.md",
+      "computedHash": "683744795bdc9fbfb6c0c2122c4b8119c950e2fe5bcbbf44237dd28aaea34b67"
+    },
     "explain-changes": {
       "source": "ernesto27/skills",
       "sourceType": "github",
@@ -67,6 +73,12 @@
       "skillPath": "skills/engineering/research/SKILL.md",
       "computedHash": "bd3e2c6826671d82c86ed0da3dac3370ebcf63b0fe847f91bb444e1fb7dac21b"
     },
+    "teach": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/productivity/teach/SKILL.md",
+      "computedHash": "68999bb1a241384b2f921f3321d779b7d05eb6089077b70d88cee2aee3d75ccc"
+    },
     "to-spec": {
       "source": "mattpocock/skills",
       "sourceType": "github",
@@ -78,6 +90,12 @@
       "sourceType": "github",
       "skillPath": "skills/tutorial-master/SKILL.md",
       "computedHash": "81295f597cc55f381082d3937cb7265f88a7613292f6b40beda3a86c520aaef2"
+    },
+    "wizard": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/wizard/SKILL.md",
+      "computedHash": "2c0d1187398b1b7ebb9902a4c91b24181ee07892f285615b46c59f45e2c4229c"
     }
   }
 }

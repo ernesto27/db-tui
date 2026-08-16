@@ -64,6 +64,28 @@ func TestLoad(t *testing.T) {
 	}
 }
 
+func TestLoadPreservesMaxPageSizeAboveDefault(t *testing.T) {
+	path := useTemporaryHome(t)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), configDirectoryMode))
+	require.NoError(t, os.WriteFile(path, []byte(`{"maxPageSize":250}`), 0o600))
+
+	config, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, 250, config.MaxPageSize)
+}
+
+func TestSavePreservesMaxPageSizeAboveDefault(t *testing.T) {
+	path := useTemporaryHome(t)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), configDirectoryMode))
+	config := Config{MaxPageSize: 250}
+
+	require.NoError(t, config.Save())
+	contents, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"maxPageSize":250}`, string(contents))
+}
+
 func TestConfigSaveConnection(t *testing.T) {
 	path := useTemporaryHome(t)
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), configDirectoryMode))

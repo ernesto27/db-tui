@@ -109,7 +109,7 @@ func TestDataMoveDownRequestsNextPage(t *testing.T) {
 
 	assert.True(t, load)
 	assert.Equal(t, rowLoadRequest{
-		offset:      2 * testPageSize,
+		offset:      testPageSize + 2,
 		selectedRow: 0,
 	}, request)
 	assert.Equal(t, 1, data.selected)

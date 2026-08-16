@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/ernestoponce27/db-tui/internal/config"
 	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
@@ -113,6 +114,13 @@ func loadRows(database db.Database, relation navigatorItem, offset, selectedRow,
 			request:     request,
 			err:         err,
 		}
+	}
+}
+
+func saveSettings(appConfig config.Config, maxPageSize int) tea.Cmd {
+	return func() tea.Msg {
+		appConfig.MaxPageSize = maxPageSize
+		return settingsSavedMsg{maxPageSize: maxPageSize, err: appConfig.Save()}
 	}
 }
 

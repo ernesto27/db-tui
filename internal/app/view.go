@@ -14,7 +14,7 @@ import (
 // View implements tea.Model.
 func (m Model) View() tea.View {
 	view := m.baseView()
-	if m.modal != nil || m.connectionsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.columnsModal != nil || m.indexesModal != nil || m.actionsModal != nil || m.editRowModal != nil || m.deleteRowModal != nil {
+	if m.modal != nil || m.connectionsModal != nil || m.settingsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.columnsModal != nil || m.indexesModal != nil || m.actionsModal != nil || m.editRowModal != nil || m.deleteRowModal != nil {
 		view.Content = m.renderModalOverlay(view.Content)
 	}
 	return view
@@ -122,6 +122,8 @@ func (m Model) renderModalOverlay(base string) string {
 		modal = m.modal.view(m.layout.width)
 	case m.connectionsModal != nil:
 		modal = m.connectionsModal.view(m.layout.width)
+	case m.settingsModal != nil:
+		modal = m.settingsModal.view(m.layout.width)
 	case m.dumpModal != nil:
 		modal = m.dumpModal.view(m.layout.width, m.spinner())
 	case m.exportModal != nil:
@@ -154,9 +156,9 @@ func (m Model) renderModalOverlay(base string) string {
 func (m Model) footerText() string {
 	if m.database == nil {
 		if m.panel == panelQuery {
-			return "raw query  •  connection required  •  Ctrl+T table data  •  Ctrl+N new connection  •  Ctrl+L open connections  •  q quit"
+			return "raw query  •  connection required  •  Ctrl+S settings  •  Ctrl+T table data  •  Ctrl+N new connection  •  Ctrl+L open connections  •  q quit"
 		}
-		return "Ctrl+N new connection  •  Ctrl+L open connections  •  Ctrl+R raw query  •  q quit"
+		return "Ctrl+S settings  •  Ctrl+N new connection  •  Ctrl+L open connections  •  Ctrl+R raw query  •  q quit"
 	}
 	if m.panel == panelQuery {
 		exportHelp := ""
@@ -168,7 +170,7 @@ func (m Model) footerText() string {
 		if !m.navigator.selectedIsView() && (tableSelected || (m.activeConnectionIndex >= 0 && m.activeConnectionIndex < len(m.config.Connections))) {
 			ddlHelp = "  •  Ctrl+G actions"
 		}
-		return "raw query  •  Ctrl+P execute" + exportHelp + ddlHelp + "  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+T table data  •  Ctrl+L connections  •  q quit"
+		return "raw query  •  Ctrl+P execute" + exportHelp + ddlHelp + "  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+S settings  •  Ctrl+T table data  •  Ctrl+L connections  •  q quit"
 	}
 	if (m.loading || m.viewsLoading || m.materializedViewsLoading) && !m.navigator.hasRelations() {
 		return "loading database objects  •  q quit"
@@ -221,7 +223,7 @@ func (m Model) footerText() string {
 	if m.focus == focusNavigator {
 		activationHelp = "  •  Enter load rows"
 	}
-	return fmt.Sprintf("focus: %s%s%s  •  Ctrl+F search relations%s%s%s  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  q quit",
+	return fmt.Sprintf("focus: %s%s%s  •  Ctrl+F search relations%s%s%s  •  Ctrl+S settings  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  q quit",
 		focusLabel, rowStatus, activationHelp, sectionHelp, tableHelp, editHelp)
 }
 

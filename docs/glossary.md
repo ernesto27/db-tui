@@ -1,5 +1,14 @@
 # Glossary
 
+## Configured page size
+
+The application-wide, persisted number of rows requested for each row page.
+It is any positive whole number and has no application-defined upper bound.
+Saving a new configured page size does not reload the currently displayed page;
+the next row-page request uses the new size. When moving forward after a size
+change, the next page starts immediately after the last row in the currently
+displayed page so that the transition neither skips nor repeats rows.
+
 ## Data-grid text selection
 
 An application-owned, character-range selection within one rendered data-grid

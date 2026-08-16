@@ -485,7 +485,6 @@ func TestGetRows(t *testing.T) {
 		{name: "empty table name", page: db.PageRequest{Limit: 1}, wantErr: true},
 		{name: "negative offset", table: db.Table{Name: "COUNTRIES"}, page: db.PageRequest{Offset: -1, Limit: 1}, wantErr: true},
 		{name: "zero limit", table: db.Table{Name: "COUNTRIES"}, page: db.PageRequest{}, wantErr: true},
-		{name: "limit above maximum", table: db.Table{Name: "COUNTRIES"}, page: db.PageRequest{Limit: db.MaxPageSize + 1}, wantErr: true},
 		{name: "malicious table name is quoted", table: db.Table{Name: `COUNTRIES"; DROP TABLE "REGIONS"; --`}, page: db.PageRequest{Limit: 1}, wantErr: true},
 	}
 
@@ -504,4 +503,7 @@ func TestGetRows(t *testing.T) {
 			}
 		})
 	}
+
+	_, err = database.GetRows(ctx, db.Table{Name: "COUNTRIES"}, db.PageRequest{Limit: db.MaxPageSize + 1})
+	assert.NoError(t, err)
 }
