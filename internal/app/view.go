@@ -185,22 +185,11 @@ func (m Model) footerText() string {
 		return "no matching database objects  •  Ctrl+F edit search  •  Esc clear search  •  q quit"
 	}
 
-	focusLabel := "navigator"
-	if m.focus == focusData {
-		focusLabel = "data"
-	}
 	rowStatus := ""
 	if m.data.loading {
 		rowStatus = "  •  " + m.spinner() + " Query executing…"
 	} else if m.data.err != nil {
 		rowStatus = "  •  row load failed"
-	} else if len(m.data.page.Rows) > 0 {
-		firstRow := m.data.offset + 1
-		lastRow := m.data.offset + len(m.data.page.Rows)
-		rowStatus = fmt.Sprintf("  •  rows %d–%d", firstRow, lastRow)
-		if m.data.page.HasMore {
-			rowStatus += "  •  PgDown next"
-		}
 	}
 
 	tableSelected := false
@@ -227,8 +216,8 @@ func (m Model) footerText() string {
 	if m.panel == panelData && m.focus == focusData {
 		refreshHelp = "  •  r refresh"
 	}
-	return fmt.Sprintf("focus: %s%s%s%s  •  Ctrl+F search relations%s%s%s  •  Ctrl+S settings  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  q quit",
-		focusLabel, rowStatus, activationHelp, refreshHelp, sectionHelp, tableHelp, editHelp)
+	return fmt.Sprintf("Ctrl+F search relations%s%s%s%s%s%s  •  Ctrl+S settings  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  q quit",
+		rowStatus, activationHelp, refreshHelp, sectionHelp, tableHelp, editHelp)
 }
 
 func panelStyle(width, height int, focused bool) lipgloss.Style {

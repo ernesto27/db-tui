@@ -68,8 +68,36 @@ func newConnectionInput(placeholder string) textinput.Model {
 	input := textinput.New()
 	input.Prompt = ""
 	input.Placeholder = placeholder
+	styles := textinput.DefaultDarkStyles()
+	styles.Focused.Text = styles.Focused.Text.Background(colorInputBackground)
+	styles.Focused.Placeholder = styles.Focused.Placeholder.Background(colorInputBackground).Foreground(colorInputPlaceholder)
+	styles.Focused.Prompt = styles.Focused.Prompt.Background(colorInputBackground)
+	styles.Focused.Suggestion = styles.Focused.Suggestion.Background(colorInputBackground)
+	styles.Blurred.Text = styles.Blurred.Text.Background(colorInputBackground)
+	styles.Blurred.Placeholder = styles.Blurred.Placeholder.Background(colorInputBackground).Foreground(colorInputPlaceholder)
+	styles.Blurred.Prompt = styles.Blurred.Prompt.Background(colorInputBackground)
+	styles.Blurred.Suggestion = styles.Blurred.Suggestion.Background(colorInputBackground)
+	styles.Cursor.Color = colorAccent
+	styles.Cursor.Blink = false
+	input.SetStyles(styles)
 	input.SetWidth(connectionModalInputWidth)
 	return input
+}
+
+func blurredConnectionInputView(input textinput.Model) string {
+	value := input.Value()
+	style := lipgloss.NewStyle().Width(input.Width()).Background(colorInputBackground)
+	if value == "" {
+		return style.Foreground(colorInputPlaceholder).Render(truncateLabel(input.Placeholder, input.Width()))
+	}
+
+	switch input.EchoMode {
+	case textinput.EchoPassword:
+		value = strings.Repeat(string(input.EchoCharacter), lipgloss.Width(value))
+	case textinput.EchoNone:
+		value = ""
+	}
+	return style.Foreground(colorText).Render(truncateLabel(value, input.Width()))
 }
 
 func (m connectionModal) update(msg tea.Msg) (connectionModal, tea.Cmd) {
@@ -224,14 +252,14 @@ func (m connectionModal) connectionSettings() (ConnectionSettings, error) {
 
 func (m connectionModal) view(width int) string {
 	modalWidth := min(64, max(52, width-8))
-	fieldStyle := lipgloss.NewStyle().Width(modalWidth - 6)
+	fieldStyle := lipgloss.NewStyle().Width(modalWidth - 6).Background(colorInputBackground)
 	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(colorAccent)
 
 	lines := []string{
 		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Connect to database"),
 		"",
 	}
-	engineStyle := fieldStyle
+	engineStyle := fieldStyle.Background(colorModalBackground)
 	if m.focused == engineInput {
 		engineStyle = engineStyle.Foreground(colorTitle).Bold(true)
 	}
@@ -257,7 +285,11 @@ func (m connectionModal) view(width int) string {
 		}{{"Database file", dsnInput}}
 	}
 	for _, field := range fields {
-		lines = append(lines, labelStyle.Render(field.label), fieldStyle.Render(m.inputs[field.input].View()))
+		inputView := m.inputs[field.input].View()
+		if field.input != m.focused {
+			inputView = blurredConnectionInputView(m.inputs[field.input])
+		}
+		lines = append(lines, labelStyle.Render(field.label), fieldStyle.Render(inputView))
 	}
 	if m.errorText != "" {
 		lines = append(lines, "", lipgloss.NewStyle().

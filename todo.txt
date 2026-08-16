@@ -8,7 +8,7 @@
 [x] - add sqlite support
 [x] - export to json data
 [] - when there is no data after enter ,  back to navigation tables
-[] - add configure option limit query
+[x] - add configure option limit query
 [x] - option to copy from TUI text
 [x] - create colors file update UI
 [] - update connection data does not save in file

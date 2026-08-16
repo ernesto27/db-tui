@@ -12,6 +12,8 @@ var (
 	colorError               = lipgloss.Color("#cc6666")
 	colorHeaderBackground    = lipgloss.Color("#282832")
 	colorModalBackground     = lipgloss.Color("#343541")
+	colorInputBackground     = lipgloss.Color("#4a4b5a")
+	colorInputPlaceholder    = lipgloss.Color("#aeb0be")
 	colorBorderActive        = lipgloss.Color("#d4d4d4")
 	colorBorderInactive      = lipgloss.Color("#505050")
 	colorSelectionForeground = lipgloss.Color("#d4d4d4")
