@@ -123,6 +123,15 @@ func encodeConfig(config Config) ([]byte, error) {
 	return append(data, '\n'), nil
 }
 
+// ConfigDir returns the db-tui configuration directory.
+func ConfigDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve home directory: %w", err)
+	}
+	return filepath.Join(home, ".config", "db-tui"), nil
+}
+
 func configPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
