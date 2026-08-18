@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish Linux release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build Linux archive
+        run: |
+          mkdir -p dist/package
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/package/db-tui ./cmd/db-tui
+          tar -C dist/package -czf dist/db-tui_linux_amd64.tar.gz db-tui
+          sha256sum dist/db-tui_linux_amd64.tar.gz > dist/db-tui_linux_amd64.tar.gz.sha256
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/db-tui_linux_amd64.tar.gz
+            dist/db-tui_linux_amd64.tar.gz.sha256
