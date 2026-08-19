@@ -77,3 +77,16 @@ values.
 This fallback must run in a transaction. Commit only when exactly one row is
 affected. Roll back and return an error when zero rows match or when multiple
 identical rows match, so the TUI never deletes an ambiguous row.
+
+# Saved SQL script writes can complete out of order
+
+Saving a loaded SQL script runs concurrently with database execution. When a
+database query completes before its script write, the raw-query panel accepts
+another `Ctrl+P`. If the user revises and re-executes the same loaded script,
+both saves write to the same file concurrently.
+
+The later submission can finish first, after which the delayed first save can
+overwrite the newer SQL. Request/session checks currently protect only the UI
+warning state; they do not prevent the stale filesystem write.
+
+This is intentionally deferred because it is low priority.

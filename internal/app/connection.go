@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 
@@ -139,5 +140,46 @@ func saveConnectionName(cfg config.Config, renameRequest uint64, index int) tea.
 			config:  cfg,
 			err:     err,
 		}
+	}
+}
+
+func renameConnectionWithSQLScripts(cfg config.Config, oldName, newName string, request uint64, index int) tea.Cmd {
+	return func() tea.Msg {
+		source, err := sqlScriptsDirectory(oldName)
+		if err != nil {
+			return renameRequestMsg{request: request, index: index, config: cfg, err: err}
+		}
+		destination, err := sqlScriptsDirectory(newName)
+		if err != nil {
+			return renameRequestMsg{request: request, index: index, config: cfg, err: err}
+		}
+		moved := false
+		if source != destination {
+			if _, err := os.Stat(destination); err == nil {
+				return renameRequestMsg{request: request, index: index, config: cfg, err: fmt.Errorf("saved SQL script library already exists for %q", newName)}
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return renameRequestMsg{request: request, index: index, config: cfg, err: fmt.Errorf("inspect destination SQL scripts directory: %w", err)}
+			}
+			if info, err := os.Stat(source); err == nil {
+				if !info.IsDir() {
+					return renameRequestMsg{request: request, index: index, config: cfg, err: errors.New("source SQL scripts path is not a directory")}
+				}
+				if err := os.Rename(source, destination); err != nil {
+					return renameRequestMsg{request: request, index: index, config: cfg, err: fmt.Errorf("move SQL scripts directory: %w", err)}
+				}
+				moved = true
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return renameRequestMsg{request: request, index: index, config: cfg, err: fmt.Errorf("inspect source SQL scripts directory: %w", err)}
+			}
+		}
+		if err := cfg.Save(); err != nil {
+			if moved {
+				if rollbackErr := os.Rename(destination, source); rollbackErr != nil {
+					err = fmt.Errorf("save connection name: %w; restore SQL scripts directory: %v", err, rollbackErr)
+				}
+			}
+			return renameRequestMsg{request: request, index: index, config: cfg, err: err}
+		}
+		return renameRequestMsg{request: request, index: index, config: cfg}
 	}
 }

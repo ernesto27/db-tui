@@ -47,6 +47,7 @@ type navigatorClick struct {
 type Model struct {
 	database               db.Database
 	savedConnection        ConnectionSettings
+	sqlScripts             ListSqlScript
 	activeConnectionIndex  int
 	pendingConnectionIndex int
 	connect                ConnectFunc
@@ -69,6 +70,8 @@ type Model struct {
 	data                     dataModel
 	panel                    rightPanel
 	query                    queryModel
+	sqlScriptsModal          *sqlScriptsModal
+	sqlScriptsRequest        uint64
 
 	spinnerFrame       int
 	spinnerRunning     bool
@@ -103,6 +106,7 @@ func New(config config.Config, savedConnection ConnectionSettings, connect Conne
 	navigator.resize(layout)
 	return Model{
 		savedConnection:        savedConnection,
+		sqlScripts:             ListSqlScript{},
 		activeConnectionIndex:  -1,
 		pendingConnectionIndex: -1,
 		connect:                connect,

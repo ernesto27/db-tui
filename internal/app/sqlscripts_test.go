@@ -13,7 +13,7 @@ import (
 
 func TestListSqlScriptCreateByConnection(t *testing.T) {
 	const (
-		connectionName = "testconnection"
+		connectionName = "test connection (2026)"
 		content        = "SELECT id, name, email FROM users WHERE active = TRUE ORDER BY name;"
 	)
 
@@ -89,11 +89,17 @@ func TestSQLScriptsDirectoryValidatesConnectionName(t *testing.T) {
 		connectionName string
 		errorMessage   string
 	}{
-		{name: "random string characters", connectionName: "aB7z"},
+		{name: "letters and numbers", connectionName: "aB7z"},
+		{name: "spaces and parentheses", connectionName: "production database (read only)"},
+		{name: "punctuation", connectionName: "orders-db [primary]!"},
 		{name: "empty", errorMessage: "connection name is required"},
-		{name: "current directory", connectionName: "./scripts", errorMessage: "connection name must contain only letters and numbers"},
-		{name: "parent directory", connectionName: "../scripts", errorMessage: "connection name must contain only letters and numbers"},
-		{name: "path separator", connectionName: "scripts/other", errorMessage: "connection name must contain only letters and numbers"},
+		{name: "spaces only", connectionName: "   ", errorMessage: "connection name is required"},
+		{name: "current directory", connectionName: ".", errorMessage: "connection name must be a single directory name"},
+		{name: "parent directory", connectionName: "..", errorMessage: "connection name must be a single directory name"},
+		{name: "relative traversal", connectionName: "../scripts", errorMessage: "connection name must be a single directory name"},
+		{name: "absolute path", connectionName: "/tmp/scripts", errorMessage: "connection name must be a single directory name"},
+		{name: "path separator", connectionName: "scripts/other", errorMessage: "connection name must be a single directory name"},
+		{name: "windows path separator", connectionName: `scripts\\other`, errorMessage: "connection name must be a single directory name"},
 	}
 
 	for _, test := range tests {

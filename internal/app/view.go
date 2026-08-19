@@ -14,7 +14,7 @@ import (
 // View implements tea.Model.
 func (m Model) View() tea.View {
 	view := m.baseView()
-	if m.modal != nil || m.connectionsModal != nil || m.settingsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.columnsModal != nil || m.indexesModal != nil || m.actionsModal != nil || m.editRowModal != nil || m.deleteRowModal != nil {
+	if m.modal != nil || m.connectionsModal != nil || m.settingsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.columnsModal != nil || m.indexesModal != nil || m.actionsModal != nil || m.editRowModal != nil || m.deleteRowModal != nil || m.sqlScriptsModal != nil {
 		view.Content = m.renderModalOverlay(view.Content)
 	}
 	return view
@@ -140,6 +140,8 @@ func (m Model) renderModalOverlay(base string) string {
 		modal = m.columnsModal.view(m.layout, m.spinner())
 	case m.indexesModal != nil:
 		modal = m.indexesModal.view(m.layout, m.spinner())
+	case m.sqlScriptsModal != nil:
+		modal = m.sqlScriptsModal.view(m.layout)
 	default:
 		return base
 	}
@@ -170,7 +172,7 @@ func (m Model) footerText() string {
 		if !m.navigator.selectedIsView() && (tableSelected || (m.activeConnectionIndex >= 0 && m.activeConnectionIndex < len(m.config.Connections))) {
 			ddlHelp = "  •  Ctrl+G actions"
 		}
-		return "raw query  •  Ctrl+P execute" + exportHelp + ddlHelp + "  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+S settings  •  Ctrl+T table data  •  Ctrl+L connections  •  q quit"
+		return "raw query  •  Ctrl+N new script  •  Ctrl+P execute  •  Ctrl+H saved scripts" + exportHelp + ddlHelp + "  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+S settings  •  Ctrl+T table data  •  Ctrl+L connections  •  q quit"
 	}
 	if (m.loading || m.viewsLoading || m.materializedViewsLoading) && !m.navigator.hasRelations() {
 		return "loading database objects  •  q quit"

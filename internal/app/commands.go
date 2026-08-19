@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"errors"
+	"os"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -74,6 +76,34 @@ type materializedViewsLoadedMsg struct {
 	materializedViews []db.MaterializedView
 	session           uint64
 	err               error
+}
+
+func loadSQLScripts(sqlScripts ListSqlScript, connectionName string, request uint64) tea.Cmd {
+	return func() tea.Msg {
+		scripts, err := sqlScripts.getList(connectionName)
+		if errors.Is(err, os.ErrNotExist) {
+			scripts = []SqlScript{}
+			err = nil
+		}
+		return sqlScriptsLoadedMsg{
+			connectionName: connectionName,
+			request:        request,
+			scripts:        scripts,
+			err:            err,
+		}
+	}
+}
+
+func saveSQLScript(sqlScripts ListSqlScript, connectionName, fileName, content string, session, request uint64) tea.Cmd {
+	return func() tea.Msg {
+		var err error
+		if fileName == "" {
+			err = sqlScripts.createByConnection(connectionName, content)
+		} else {
+			err = sqlScripts.editByConnection(connectionName, fileName, content)
+		}
+		return sqlScriptSavedMsg{session: session, request: request, err: err}
+	}
 }
 
 func loadTables(database db.Database, session uint64) tea.Cmd {

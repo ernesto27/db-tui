@@ -26,6 +26,8 @@ type queryModel struct {
 	err               error
 	request           uint64
 	lastExecutedSQL   string
+	loadedScriptName  string
+	saveWarning       string
 	viewport          int
 	resultsFocused    bool
 	executionDuration time.Duration
@@ -63,6 +65,7 @@ func (m *queryModel) beginExecute(sql string) uint64 {
 	m.lastExecutedSQL = sql
 	m.request++
 	m.executionDuration = 0
+	m.saveWarning = ""
 	return m.request
 }
 
@@ -111,7 +114,12 @@ func (m queryModel) view(layout appLayout, focused, connected bool, spinner stri
 	}
 	heading := lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render(headingText)
 	result := m.resultView(layout, connected, spinner)
-	content := strings.Join([]string{heading, m.editor.View(), "", result}, "\n")
+	sections := []string{heading, m.editor.View(), ""}
+	if m.saveWarning != "" {
+		sections = append(sections, lipgloss.NewStyle().Foreground(colorError).Render("⚠ SQL script was not saved: "+sanitizeText(m.saveWarning)), "")
+	}
+	sections = append(sections, result)
+	content := strings.Join(sections, "\n")
 	return queryPanelStyle(layout.data.width, layout.data.height, focused).Render(content)
 }
 

@@ -41,6 +41,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSettingsModal(msg)
 		}
 	}
+	if m.sqlScriptsModal != nil {
+		switch msg.(type) {
+		case tea.MouseClickMsg, tea.MouseReleaseMsg, tea.MouseWheelMsg, tea.MouseMotionMsg:
+			return m, nil
+		default:
+			return m, m.updateSQLScriptsModal(msg)
+		}
+	}
 
 	if m.dumpModal != nil {
 		return m, m.updateDumpModal(msg)
@@ -191,6 +199,22 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		m.query.finishExecute(msg.result, msg.elapsed, msg.err)
 		return nil, true
+	case sqlScriptsLoadedMsg:
+		if m.sqlScriptsModal == nil ||
+			msg.connectionName != m.sqlScriptsModal.connectionName ||
+			msg.request != m.sqlScriptsModal.request {
+			return nil, true
+		}
+		m.sqlScriptsModal.finish(msg.scripts, msg.err, m.layout)
+		return nil, true
+	case sqlScriptSavedMsg:
+		if msg.session != m.session || msg.request != m.query.request {
+			return nil, true
+		}
+		if msg.err != nil {
+			m.query.saveWarning = msg.err.Error()
+		}
+		return nil, true
 	case tea.WindowSizeMsg:
 		// Grid coordinates can change after a resize, invalidating any
 		// completed selection or drag in progress.
@@ -212,6 +236,9 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		if m.editRowModal != nil {
 			m.editRowModal.clamp(m.layout)
+		}
+		if m.sqlScriptsModal != nil {
+			m.sqlScriptsModal.clamp(m.layout)
 		}
 		return nil, true
 	case renameRequestMsg:
@@ -522,6 +549,10 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		modal := newConnectionsModal(m.config)
 		m.connectionsModal = &modal
 		return nil
+	case m.panel == panelQuery && key.Matches(msg, m.keys.newConnection):
+		m.query.reset(m.layout)
+		m.focus = focusData
+		return m.query.focusEditor()
 	case key.Matches(msg, m.keys.newConnection):
 		modal := newConnectionModal(ConnectionSettings{})
 		m.modal = &modal
@@ -537,6 +568,16 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.panel = panelData
 		m.focus = focusData
 		return nil
+	case m.panel == panelQuery && key.Matches(msg, m.keys.sqlScripts):
+		if m.activeConnectionIndex < 0 || m.activeConnectionIndex >= len(m.config.Connections) {
+			return nil
+		}
+		connectionName := m.config.Connections[m.activeConnectionIndex].Name
+		m.sqlScriptsRequest++
+		request := m.sqlScriptsRequest
+		modal := newSQLScriptsModal(connectionName, request)
+		m.sqlScriptsModal = &modal
+		return loadSQLScripts(m.sqlScripts, connectionName, request)
 	case key.Matches(msg, m.keys.tableDDL):
 		if m.navigator.selectedIsView() {
 			return nil
@@ -858,7 +899,45 @@ func (m *Model) startQuery() tea.Cmd {
 		return nil
 	}
 	request := m.query.beginExecute(m.query.editor.Value())
-	return tea.Batch(executeQuery(m.database, m.query.editor.Value(), m.session, request), m.startSpinner())
+	session := m.session
+	commands := []tea.Cmd{executeQuery(m.database, m.query.editor.Value(), session, request), m.startSpinner()}
+	if m.activeConnectionIndex >= 0 && m.activeConnectionIndex < len(m.config.Connections) {
+		connectionName := m.config.Connections[m.activeConnectionIndex].Name
+		fileName := m.query.loadedScriptName
+		content := m.query.editor.Value()
+		commands = append(commands, saveSQLScript(m.sqlScripts, connectionName, fileName, content, session, request))
+	}
+	return tea.Batch(commands...)
+}
+
+func (m *Model) updateSQLScriptsModal(msg tea.Msg) tea.Cmd {
+	keyMsg, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return nil
+	}
+	switch keyMsg.String() {
+	case "esc":
+		m.sqlScriptsModal = nil
+	case "up", "k":
+		if !m.sqlScriptsModal.loading && m.sqlScriptsModal.loadErr == nil && len(m.sqlScriptsModal.scripts) > 0 {
+			m.sqlScriptsModal.move(-1, m.layout)
+		}
+	case "down", "j":
+		if !m.sqlScriptsModal.loading && m.sqlScriptsModal.loadErr == nil && len(m.sqlScriptsModal.scripts) > 0 {
+			m.sqlScriptsModal.move(1, m.layout)
+		}
+	case "enter":
+		if m.sqlScriptsModal.loading || m.sqlScriptsModal.loadErr != nil || len(m.sqlScriptsModal.scripts) == 0 {
+			return nil
+		}
+		script := m.sqlScriptsModal.scripts[m.sqlScriptsModal.selected]
+		m.query.editor.SetValue(script.content)
+		m.query.loadedScriptName = script.name
+		m.query.saveWarning = ""
+		m.sqlScriptsModal = nil
+		return m.query.focusEditor()
+	}
+	return nil
 }
 
 func (m *Model) acceptWheel(button tea.MouseButton) bool {
@@ -953,12 +1032,16 @@ func (m *Model) updateActionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.actionsModal = nil
 			return *m, nil
 		}
+		oldName := m.config.Connections[m.activeConnectionIndex].Name
 		m.renameRequest++
+		request := m.renameRequest
+		index := m.activeConnectionIndex
+		newName := msg.newName
 		cloned := m.config
 		cloned.Connections = slices.Clone(m.config.Connections)
 		cloned.Connections[m.activeConnectionIndex].Name = msg.newName
 		m.actionsModal.state = actionsRenameSaving
-		return *m, saveConnectionName(cloned, m.renameRequest, m.activeConnectionIndex)
+		return *m, renameConnectionWithSQLScripts(cloned, oldName, newName, request, index)
 	case cancelActionsMsg:
 		m.actionsModal = nil
 		return *m, nil

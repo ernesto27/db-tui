@@ -12,6 +12,7 @@ type keyMap struct {
 	settings      key.Binding
 	activate      key.Binding
 	executeQuery  key.Binding
+	sqlScripts    key.Binding
 	queryFocus    key.Binding
 	quit          key.Binding
 	focusLeft     key.Binding
@@ -40,6 +41,7 @@ func defaultKeyMap() keyMap {
 		settings:      key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "settings")),
 		activate:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "load rows")),
 		executeQuery:  key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "execute query")),
+		sqlScripts:    key.NewBinding(key.WithKeys("ctrl+h"), key.WithHelp("ctrl+h", "saved scripts")),
 		queryFocus:    key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "switch editor/results")),
 		quit:          key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		focusLeft:     key.NewBinding(key.WithKeys("left"), key.WithHelp("←", "left")),

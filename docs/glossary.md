@@ -1,5 +1,68 @@
 # Glossary
 
+## Connection script library
+
+The local collection of saved SQL scripts for one configured connection. Its
+directory uses the connection's current display name. When that connection is
+renamed successfully, db-tui moves the directory to the new name so the same
+scripts remain available. The raw-query panel can access only the library of
+its active database connection. Executing non-empty SQL creates a script even
+if the database reports an execution failure; empty editor content creates no
+script. `Ctrl+H` opens its script library.
+
+## SQL script preview
+
+The truncated first non-empty SQL line shown for a saved script in the active
+connection's script-library modal. It lets users identify scripts whose
+generated filenames are not meaningful.
+
+## Saved SQL filename
+
+The generated local filename for a saved SQL script. It retains the `.txt`
+extension.
+
+## SQL script ordering
+
+The script-library modal lists saved SQL scripts with the most recently
+created or updated script first.
+
+## SQL-scripts shortcut scope
+
+`Ctrl+H` is available only while the raw-query panel is active. It has no
+effect in other panels.
+
+## Empty SQL script library
+
+The normal script-modal state for an active connection with no saved scripts.
+It displays “No saved scripts”; absence of the library directory is not an
+error.
+
+## Load-only SQL-scripts modal
+
+The initial script-library modal supports selection with `Up`/`Down`, loading
+with `Enter`, and closing with `Esc`. It intentionally excludes script
+deletion, renaming, and manual saving.
+
+## Loaded SQL script
+
+A saved script selected from the active connection's script-library modal.
+Loading it replaces all raw-query editor content; the user can then edit the
+SQL before executing it. Its generated filename is retained, so executing
+non-empty SQL with `Ctrl+P` replaces the same saved file.
+
+## SQL script save failure
+
+A local filesystem error while creating or updating a saved SQL script. It is
+shown to the user but does not prevent the corresponding SQL from executing
+against the active database. The raw-query panel displays it as a non-modal
+warning alongside the query outcome.
+
+## Script-library rename collision
+
+The condition where the target directory for a renamed connection already
+exists. db-tui rejects the rename and leaves the connection configuration and
+all script directories unchanged.
+
 ## Configured page size
 
 The application-wide, persisted number of rows requested for each row page.
