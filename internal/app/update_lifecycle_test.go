@@ -722,6 +722,33 @@ func TestUpdateClosesConnectionModalAfterCancelMessage(t *testing.T) {
 	assert.Nil(t, updated.modal)
 }
 
+func TestUpdateModalSubmissionFocusesNavigatorAfterValidation(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	modal := newConnectionModal(ConnectionSettings{DSN: "postgres://db_tui@localhost/chinook"})
+	model.modal = &modal
+	model.focus = focusData
+
+	updated, command := updateModel(t, model, submitConnectionMsg{})
+
+	require.NotNil(t, command)
+	assert.True(t, updated.modal.connecting)
+	assert.Equal(t, focusPane(navigatorTables), updated.focus)
+}
+
+func TestUpdateModalInvalidSubmissionPreservesFocus(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	modal := newConnectionModal(ConnectionSettings{})
+	model.modal = &modal
+	model.focus = focusData
+
+	updated, command := updateModel(t, model, submitConnectionMsg{})
+
+	assert.Nil(t, command)
+	assert.False(t, updated.modal.connecting)
+	assert.NotEmpty(t, updated.modal.errorText)
+	assert.Equal(t, focusData, updated.focus)
+}
+
 func TestConnectionModalEscapeEmitsCancelMessage(t *testing.T) {
 	modal := newConnectionModal(ConnectionSettings{})
 

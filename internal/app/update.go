@@ -363,6 +363,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.modal.errorText = ""
 		m.modal.connecting = true
 		m.connectionAttempt++
+		m.focus = focusPane(navigatorTables)
 		return m, connectConnection(m.connect, settings, m.connectionAttempt)
 	case cancelConnectionMsg:
 		m.modal = nil
