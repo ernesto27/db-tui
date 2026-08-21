@@ -116,6 +116,14 @@ type Column struct {
 	IsPrimaryKey    bool
 }
 
+type FuncionColumns struct {
+	Name       string
+	Arguments  string
+	ReturnType string
+	Language   string
+	Definitin  string
+}
+
 // ValidatePrimaryKeyWhere verifies that whereColumns contains exactly a table's primary key.
 func ValidatePrimaryKeyWhere(operation string, columns []Column, whereColumns map[string]any) error {
 	primaryKeys := make(map[string]struct{})
@@ -170,5 +178,6 @@ type Database interface {
 	ListMaterializedViews(ctx context.Context) ([]MaterializedView, error)
 	UpdateRow(ctx context.Context, table Table, setColumns map[string]any, whereColumns map[string]any) error
 	DeleteRow(ctx context.Context, table Table, whereColumns map[string]any) error
+	ListFunctions(ctx context.Context, schema string) ([]FuncionColumns, error)
 	Close()
 }

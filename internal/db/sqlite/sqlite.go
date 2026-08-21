@@ -172,6 +172,11 @@ func (s *sqliteDatabase) ListMaterializedViews(context.Context) ([]db.Materializ
 	return []db.MaterializedView{}, nil
 }
 
+// ListFunctions is a placeholder because SQLite has no persistent function catalog.
+func (s *sqliteDatabase) ListFunctions(context.Context, string) ([]db.FuncionColumns, error) {
+	return []db.FuncionColumns{}, nil
+}
+
 // ListColumns returns the columns defined by a SQLite table.
 func (s *sqliteDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {
 	s.logger.Log(listColumnSQL)

@@ -1092,3 +1092,87 @@ SELECT region_id, SUM(area_sq_km) AS area_sq_km FROM countries GROUP BY region_i
 
 CREATE MATERIALIZED VIEW currency_symbol_mv BUILD IMMEDIATE REFRESH COMPLETE ON DEMAND AS
 SELECT currency_id, name, symbol FROM currencies;
+
+/*********************************************/
+/***************** FUNCTIONS *****************/
+/*********************************************/
+
+CREATE OR REPLACE FUNCTION country_name_for_id (
+  p_country_id IN VARCHAR2
+) RETURN VARCHAR2 IS
+  l_country_name countries.name%TYPE;
+BEGIN
+  SELECT name
+    INTO l_country_name
+    FROM countries
+   WHERE country_id = p_country_id;
+
+  RETURN l_country_name;
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+    RETURN NULL;
+END;
+/
+
+CREATE OR REPLACE FUNCTION country_population_for_id (
+  p_country_id IN VARCHAR2
+) RETURN NUMBER IS
+  l_population countries.population%TYPE;
+BEGIN
+  SELECT population
+    INTO l_population
+    FROM countries
+   WHERE country_id = p_country_id;
+
+  RETURN l_population;
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+    RETURN NULL;
+END;
+/
+
+CREATE OR REPLACE FUNCTION city_count_for_country (
+  p_country_id IN VARCHAR2
+) RETURN NUMBER IS
+  l_city_count NUMBER;
+BEGIN
+  SELECT COUNT(*)
+    INTO l_city_count
+    FROM cities
+   WHERE country_id = p_country_id;
+
+  RETURN l_city_count;
+END;
+/
+
+CREATE OR REPLACE FUNCTION capital_name_for_country (
+  p_country_id IN VARCHAR2
+) RETURN VARCHAR2 IS
+  l_capital_name cities.name%TYPE;
+BEGIN
+  SELECT name
+    INTO l_capital_name
+    FROM cities
+   WHERE country_id = p_country_id
+     AND is_capital = 'Y';
+
+  RETURN l_capital_name;
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+    RETURN NULL;
+END;
+/
+
+CREATE OR REPLACE FUNCTION population_for_region (
+  p_region_id IN VARCHAR2
+) RETURN NUMBER IS
+  l_population NUMBER;
+BEGIN
+  SELECT NVL(SUM(population), 0)
+    INTO l_population
+    FROM countries
+   WHERE region_id = p_region_id;
+
+  RETURN l_population;
+END;
+/

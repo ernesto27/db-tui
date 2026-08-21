@@ -226,6 +226,11 @@ func (o *oracleDatabase) ListMaterializedViews(ctx context.Context) ([]db.Materi
 	return views, nil
 }
 
+// ListFunctions is a placeholder for Oracle function discovery.
+func (o *oracleDatabase) ListFunctions(context.Context, string) ([]db.FuncionColumns, error) {
+	return []db.FuncionColumns{}, nil
+}
+
 // ListColumns returns the columns defined by an Oracle table visible to the current user.
 func (o *oracleDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {
 	o.logger.Log(listColumnsSQL)

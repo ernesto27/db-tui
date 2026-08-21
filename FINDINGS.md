@@ -90,3 +90,18 @@ overwrite the newer SQL. Request/session checks currently protect only the UI
 warning state; they do not prevent the stale filesystem write.
 
 This is intentionally deferred because it is low priority.
+
+# PostgreSQL function discovery is limited to the public schema
+
+The PostgreSQL function-discovery query filters `pg_namespace.nspname` to
+`public`. This works for the Chinook demo database, but hides user-defined
+functions in other application schemas such as `app`, `billing`, or
+`tenant_a`.
+
+## Suggested fix
+
+List functions from every non-system schema by excluding `pg_catalog`,
+`information_schema`, and schemas whose names begin with `pg_toast`. Preserve
+the schema name in each result so the UI can identify functions with the same
+name in different schemas. If the UI later supports schema selection, use the
+selected schema as an optional filter rather than hard-coding `public`.

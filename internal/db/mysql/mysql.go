@@ -321,6 +321,11 @@ func (m *mysqlDatabase) ListMaterializedViews(context.Context) ([]db.Materialize
 	return []db.MaterializedView{}, nil
 }
 
+// ListFunctions is a placeholder for MySQL function discovery.
+func (m *mysqlDatabase) ListFunctions(context.Context, string) ([]db.FuncionColumns, error) {
+	return []db.FuncionColumns{}, nil
+}
+
 // GetRows returns an unordered page of rows from a MySQL table.
 func (m *mysqlDatabase) GetRows(ctx context.Context, table db.Table, page db.PageRequest) (db.RowPage, error) {
 	return m.getRows(ctx, table, &page)

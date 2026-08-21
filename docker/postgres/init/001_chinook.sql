@@ -16461,6 +16461,74 @@ GROUP BY album."AlbumId", album."Title", artist."Name";
 
 
 --
+-- PostgreSQL function examples. These demonstrate scalar, aggregate, and
+-- set-returning functions against the Chinook sample data.
+--
+
+CREATE OR REPLACE FUNCTION public.track_duration_seconds(track_id integer)
+RETURNS numeric
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT coalesce(track."Milliseconds", 0)::numeric / 1000
+    FROM public."Track" AS track
+    WHERE track."TrackId" = track_id;
+$$;
+
+CREATE OR REPLACE FUNCTION public.customer_full_name(customer_id integer)
+RETURNS text
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT concat_ws(' ', customer."FirstName", customer."LastName")
+    FROM public."Customer" AS customer
+    WHERE customer."CustomerId" = customer_id;
+$$;
+
+CREATE OR REPLACE FUNCTION public.customer_lifetime_spend(customer_id integer)
+RETURNS numeric
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT coalesce(sum(invoice."Total"), 0)::numeric(10,2)
+    FROM public."Invoice" AS invoice
+    WHERE invoice."CustomerId" = customer_id;
+$$;
+
+CREATE OR REPLACE FUNCTION public.album_track_count(album_id integer)
+RETURNS bigint
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT count(*)
+    FROM public."Track" AS track
+    WHERE track."AlbumId" = album_id;
+$$;
+
+CREATE OR REPLACE FUNCTION public.search_tracks(search_text text)
+RETURNS TABLE (
+    "TrackId" integer,
+    "TrackName" text,
+    "AlbumTitle" text,
+    "ArtistName" text
+)
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT
+        track."TrackId",
+        track."Name"::text,
+        album."Title"::text,
+        artist."Name"::text
+    FROM public."Track" AS track
+    JOIN public."Album" AS album ON album."AlbumId" = track."AlbumId"
+    JOIN public."Artist" AS artist ON artist."ArtistId" = album."ArtistId"
+    WHERE track."Name" ILIKE '%' || trim(search_text) || '%'
+    ORDER BY artist."Name", album."Title", track."Name";
+$$;
+
+
+--
 -- Materialized-view examples. Refresh any snapshot after source data changes:
 -- REFRESH MATERIALIZED VIEW public."AlbumTrackMetrics";
 --

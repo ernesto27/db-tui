@@ -118,6 +118,20 @@ const listMaterializedViewsSQL = `SELECT matviewname AS materialized_view_name
   WHERE schemaname = 'public'
   ORDER BY matviewname`
 
+const listFunctions = `SELECT
+    namespace.nspname AS schema_name,
+    routine.proname AS function_name,
+    pg_get_function_identity_arguments(routine.oid) AS arguments,
+    pg_get_function_result(routine.oid) AS returns,
+    language.lanname AS language,
+    pg_get_functiondef(routine.oid) AS definition
+  FROM pg_proc AS routine
+  JOIN pg_namespace AS namespace ON namespace.oid = routine.pronamespace
+  JOIN pg_language AS language ON language.oid = routine.prolang
+  WHERE routine.prokind = 'f'
+    AND namespace.nspname = 'public'
+  ORDER BY routine.proname`
+
 type postgresql struct {
 	pool   *pgxpool.Pool
 	logger *logger.Logger
@@ -236,6 +250,11 @@ func (p *postgresql) ListMaterializedViews(ctx context.Context) ([]db.Materializ
 	}
 
 	return materializedViews, nil
+}
+
+// ListFunctions is a placeholder for PostgreSQL function discovery.
+func (p *postgresql) ListFunctions(context.Context, string) ([]db.FuncionColumns, error) {
+	return []db.FuncionColumns{}, nil
 }
 
 // ListColumns returns the columns defined by a public PostgreSQL table.

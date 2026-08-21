@@ -5596,12 +5596,68 @@ WHERE language.`IsOfficial` = 'T';
 
 CREATE VIEW `OfficialLanguageSummary` AS
 SELECT
-  language.`Language`,
+    language.`Language`,
   COUNT(*) AS `CountryCount`,
   AVG(language.`Percentage`) AS `AveragePercentage`
 FROM `countrylanguage` AS language
 WHERE language.`IsOfficial` = 'T'
 GROUP BY language.`Language`;
+
+--
+-- MySQL stored-function examples using the World sample data.
+--
+
+DROP FUNCTION IF EXISTS `country_population`;
+CREATE FUNCTION `country_population`(country_code CHAR(3))
+RETURNS INT
+READS SQL DATA
+RETURN COALESCE((
+    SELECT country.`Population`
+    FROM `country` AS country
+    WHERE country.`Code` = country_code
+), 0);
+
+DROP FUNCTION IF EXISTS `country_capital_name`;
+CREATE FUNCTION `country_capital_name`(country_code CHAR(3))
+RETURNS VARCHAR(35)
+READS SQL DATA
+RETURN (
+    SELECT city.`Name`
+    FROM `country` AS country
+    JOIN `city` AS city ON city.`ID` = country.`Capital`
+    WHERE country.`Code` = country_code
+);
+
+DROP FUNCTION IF EXISTS `country_city_count`;
+CREATE FUNCTION `country_city_count`(country_code CHAR(3))
+RETURNS INT
+READS SQL DATA
+RETURN (
+    SELECT COUNT(*)
+    FROM `city` AS city
+    WHERE city.`CountryCode` = country_code
+);
+
+DROP FUNCTION IF EXISTS `country_official_language_count`;
+CREATE FUNCTION `country_official_language_count`(country_code CHAR(3))
+RETURNS INT
+READS SQL DATA
+RETURN (
+    SELECT COUNT(*)
+    FROM `countrylanguage` AS language
+    WHERE language.`CountryCode` = country_code
+      AND language.`IsOfficial` = 'T'
+);
+
+DROP FUNCTION IF EXISTS `country_population_density`;
+CREATE FUNCTION `country_population_density`(country_code CHAR(3))
+RETURNS DECIMAL(14,2)
+READS SQL DATA
+RETURN COALESCE((
+    SELECT country.`Population` / NULLIF(country.`SurfaceArea`, 0)
+    FROM `country` AS country
+    WHERE country.`Code` = country_code
+), 0);
 
 --
 -- Table structure for table `without_primary_key`

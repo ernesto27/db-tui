@@ -128,6 +128,10 @@ func (f *fakeDatabase) ListMaterializedViews(context.Context) ([]db.Materialized
 	return []db.MaterializedView{}, nil
 }
 
+func (f *fakeDatabase) ListFunctions(context.Context, string) ([]db.FuncionColumns, error) {
+	return []db.FuncionColumns{}, nil
+}
+
 func (f *fakeDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {
 	f.listColumnsCalls++
 	f.listColumnsTable = table
