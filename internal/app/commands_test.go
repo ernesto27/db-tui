@@ -28,6 +28,22 @@ func TestLoadTables(t *testing.T) {
 	assert.Equal(t, uint64(7), message.session)
 }
 
+func TestLoadFunctions(t *testing.T) {
+	wantErr := errors.New("list failed")
+	wantFunctions := []db.FunctionColumns{{Name: "customer_total", Arguments: "customer_id integer", ReturnType: "numeric", Definition: "SELECT 1"}}
+	database := &fakeDatabase{functions: wantFunctions, functionsErr: wantErr}
+
+	message, ok := loadFunctions(database, "public", 7)().(functionsLoadedMsg)
+
+	require.True(t, ok)
+	assert.Equal(t, 1, database.listFunctionsCalls)
+	assert.Equal(t, "public", database.listFunctionsSchema)
+	assert.True(t, database.listFunctionsDeadline)
+	assert.Equal(t, wantFunctions, message.functions)
+	assert.ErrorIs(t, message.err, wantErr)
+	assert.Equal(t, uint64(7), message.session)
+}
+
 func TestLoadRows(t *testing.T) {
 	wantErr := errors.New("rows failed")
 	tests := []struct {

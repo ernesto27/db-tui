@@ -14,7 +14,7 @@ import (
 // View implements tea.Model.
 func (m Model) View() tea.View {
 	view := m.baseView()
-	if m.modal != nil || m.connectionsModal != nil || m.settingsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.columnsModal != nil || m.indexesModal != nil || m.actionsModal != nil || m.editRowModal != nil || m.deleteRowModal != nil || m.sqlScriptsModal != nil {
+	if m.modal != nil || m.connectionsModal != nil || m.settingsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.columnsModal != nil || m.indexesModal != nil || m.actionsModal != nil || m.editRowModal != nil || m.deleteRowModal != nil || m.sqlScriptsModal != nil || m.objectsModal != nil {
 		view.Content = m.renderModalOverlay(view.Content)
 	}
 	return view
@@ -38,6 +38,9 @@ func (m Model) baseView() tea.View {
 		Foreground(colorTitle).Background(colorHeaderBackground).
 		Render(headerTitle)
 	rightPanel := m.data.view(m.dataStatus(), m.layout, m.focus == focusData)
+	if m.activeFunction.set {
+		rightPanel = m.activeFunction.view(m.layout, m.focus == focusData)
+	}
 	if m.panel == panelQuery {
 		rightPanel = m.query.view(m.layout, m.focus == focusData, m.database != nil, m.spinner())
 	}
@@ -79,6 +82,8 @@ func (m Model) navigatorStatus() navigatorStatus {
 		viewLoadErr:              m.viewLoadErr,
 		materializedViewsLoading: m.materializedViewsLoading,
 		materializedViewLoadErr:  m.materializedViewLoadErr,
+		functionsLoading:         m.functionsLoading,
+		functionLoadErr:          m.functionLoadErr,
 	}
 }
 
@@ -103,9 +108,9 @@ func (m Model) dataStatus() dataStatus {
 		highlightedName: m.navigator.selectedName(),
 		active:          m.activeRelation.set,
 		disconnected:    m.database == nil,
-		tablesLoading:   (m.loading || m.viewsLoading || m.materializedViewsLoading) && !m.navigator.hasRelations(),
+		tablesLoading:   (m.loading || m.viewsLoading || m.materializedViewsLoading || m.functionsLoading) && !m.navigator.hasObjects(),
 		tableLoadErr:    tableLoadErr,
-		noTables:        !m.loading && !m.viewsLoading && !m.materializedViewsLoading && !m.navigator.hasRelations(),
+		noTables:        !m.loading && !m.viewsLoading && !m.materializedViewsLoading && !m.functionsLoading && !m.navigator.hasObjects(),
 		spinner:         m.spinner(),
 	}
 }
@@ -142,6 +147,8 @@ func (m Model) renderModalOverlay(base string) string {
 		modal = m.indexesModal.view(m.layout, m.spinner())
 	case m.sqlScriptsModal != nil:
 		modal = m.sqlScriptsModal.view(m.layout)
+	case m.objectsModal != nil:
+		modal = m.objectsModal.view(m.layout.width)
 	default:
 		return base
 	}
@@ -174,14 +181,14 @@ func (m Model) footerText() string {
 		}
 		return "raw query  •  Ctrl+N new script  •  Ctrl+P execute  •  Ctrl+H saved scripts" + exportHelp + ddlHelp + "  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+S settings  •  Ctrl+T table data  •  Ctrl+L connections  •  q quit"
 	}
-	if (m.loading || m.viewsLoading || m.materializedViewsLoading) && !m.navigator.hasRelations() {
+	if (m.loading || m.viewsLoading || m.materializedViewsLoading || m.functionsLoading) && !m.navigator.hasObjects() {
 		return "loading database objects  •  q quit"
 	}
-	if m.tableLoadErr != nil && !m.navigator.hasRelations() {
+	if m.tableLoadErr != nil && !m.navigator.hasObjects() {
 		return "unable to load tables  •  q quit"
 	}
-	if !m.navigator.hasRelations() {
-		return "no public tables or views  •  q quit"
+	if !m.navigator.hasObjects() {
+		return "no database objects found  •  Ctrl+O select objects  •  q quit"
 	}
 	if len(m.navigator.visibleItems()) == 0 {
 		return "no matching database objects  •  Ctrl+F edit search  •  Esc clear search  •  q quit"
@@ -206,20 +213,25 @@ func (m Model) footerText() string {
 	if m.activeRelation.set && m.activeRelation.item.section == navigatorTables && len(m.data.page.Rows) > 0 && !m.data.loading && m.editRowModal == nil {
 		editHelp = "  •  e edit row"
 	}
-	sectionHelp := ""
-	if m.navigator.hasViewsSection() {
-		sectionHelp = "  •  ←/→ switch section"
-	}
 	activationHelp := ""
 	if m.focus == focusNavigator {
-		activationHelp = "  •  Enter load rows"
+		activationHelp = "  •  Enter "
+		if m.navigator.selectedIsFunction() {
+			activationHelp += "view function"
+		} else {
+			activationHelp += "load rows"
+		}
 	}
 	refreshHelp := ""
-	if m.panel == panelData && m.focus == focusData {
+	if m.panel == panelData && m.focus == focusData && !m.activeFunction.set {
 		refreshHelp = "  •  r refresh"
 	}
-	return fmt.Sprintf("Ctrl+F search relations%s%s%s%s%s%s  •  Ctrl+S settings  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  q quit",
-		rowStatus, activationHelp, refreshHelp, sectionHelp, tableHelp, editHelp)
+	functionHelp := ""
+	if m.activeFunction.set && m.panel == panelData && m.focus == focusData {
+		functionHelp = "  •  ↑/↓ or j/k scroll function"
+	}
+	return fmt.Sprintf("Ctrl+O objects  •  Ctrl+F search%s%s%s%s%s%s  •  Ctrl+S settings  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  q quit",
+		rowStatus, activationHelp, refreshHelp, functionHelp, tableHelp, editHelp)
 }
 
 func panelStyle(width, height int, focused bool) lipgloss.Style {

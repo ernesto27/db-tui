@@ -62,6 +62,18 @@ func TestUpdateKeyRouting(t *testing.T) {
 			},
 		},
 		{
+			name: "opens objects modal",
+			setup: func(model *Model) {
+				model.database = &fakeDatabase{name: "chinook", engine: db.EnginePostgreSQL}
+				model.navigator.setFunctionsAvailable(true)
+			},
+			message: keyPress('o', "", tea.ModCtrl),
+			assert: func(t *testing.T, got Model, _ tea.Cmd) {
+				require.NotNil(t, got.objectsModal)
+				assert.Contains(t, got.objectsModal.sections, navigatorFunctions)
+			},
+		},
+		{
 			name: "does not quit when query editor contains q",
 			setup: func(model *Model) {
 				model.panel = panelQuery

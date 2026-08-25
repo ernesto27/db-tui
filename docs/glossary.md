@@ -1,5 +1,24 @@
 # Glossary
 
+## Object selector
+
+The read-only category picker opened with `Ctrl+O`. It changes the object type
+displayed in the left navigator between tables, views, materialized views when
+supported, and stored functions when supported. Selecting a category does not
+activate an item or replace the right panel.
+
+## Function list
+
+The filtered left-navigator listing of stored functions for the selected
+object type. It shows only function names, while retaining the selected
+function's arguments, return type, language, and definition for inspection.
+
+## Active function
+
+The stored function most recently activated with `Enter` while the Functions
+object type is displayed. It owns the right panel's read-only, scrollable
+function-detail view until a row-browsable relation is activated.
+
 ## Connection script library
 
 The local collection of saved SQL scripts for one configured connection. Its

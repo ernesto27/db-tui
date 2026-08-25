@@ -65,8 +65,11 @@ type Model struct {
 	viewLoadErr              error
 	materializedViewsLoading bool
 	materializedViewLoadErr  error
+	functionsLoading         bool
+	functionLoadErr          error
 	navigator                navigatorModel
 	activeRelation           activeRelation
+	activeFunction           activeFunction
 	data                     dataModel
 	panel                    rightPanel
 	query                    queryModel
@@ -94,6 +97,7 @@ type Model struct {
 	renameRequest  uint64
 	indexesModal   *indexesModal
 	indexesRequest uint64
+	objectsModal   *objectsModal
 
 	editRowModal   *editRowModal
 	deleteRowModal *deleteRowModal
@@ -129,11 +133,15 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) loadDatabaseObjects() tea.Cmd {
-	return tea.Batch(
+	commands := []tea.Cmd{
 		loadTables(m.database, m.session),
 		loadViews(m.database, m.session),
 		loadMaterializedViews(m.database, m.session),
-	)
+	}
+	if m.navigator.functionsAvailable {
+		commands = append(commands, loadFunctions(m.database, functionSchema(m.database), m.session))
+	}
+	return tea.Batch(commands...)
 }
 
 // Close releases the current database session, if any.

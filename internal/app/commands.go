@@ -78,6 +78,12 @@ type materializedViewsLoadedMsg struct {
 	err               error
 }
 
+type functionsLoadedMsg struct {
+	functions []db.FunctionColumns
+	session   uint64
+	err       error
+}
+
 func loadSQLScripts(sqlScripts ListSqlScript, connectionName string, request uint64) tea.Cmd {
 	return func() tea.Msg {
 		scripts, err := sqlScripts.getList(connectionName)
@@ -214,6 +220,16 @@ func loadMaterializedViews(database db.Database, session uint64) tea.Cmd {
 			session:           session,
 			err:               err,
 		}
+	}
+}
+
+func loadFunctions(database db.Database, schema string, session uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		defer cancel()
+
+		functions, err := database.ListFunctions(ctx, schema)
+		return functionsLoadedMsg{functions: functions, session: session, err: err}
 	}
 }
 

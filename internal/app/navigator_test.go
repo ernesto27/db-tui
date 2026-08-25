@@ -64,23 +64,24 @@ func TestNavigatorVisibleTablesFiltersCaseInsensitiveSubstring(t *testing.T) {
 	assert.Empty(t, navigator.visibleTables())
 }
 
-func TestNavigatorMaterializedViewsSectionRequiresPostgreSQLCapability(t *testing.T) {
+func TestNavigatorObjectSectionsRequireEngineCapabilities(t *testing.T) {
 	navigator := newNavigatorModel()
 	layout := newAppLayout(100, 24)
 
-	assert.NotContains(t, navigator.view(navigatorStatus{}, layout, true), "MVIEWS")
-	assert.True(t, navigator.switchSection(1, layout.navigatorListRows))
-	assert.Equal(t, navigatorViews, navigator.section)
-	assert.False(t, navigator.switchSection(1, layout.navigatorListRows))
+	assert.False(t, navigator.selectSection(navigatorMaterializedViews, layout.navigatorListRows))
+	assert.False(t, navigator.selectSection(navigatorFunctions, layout.navigatorListRows))
 
 	navigator.setMaterializedViewsAvailable(true)
-	assert.Contains(t, navigator.view(navigatorStatus{}, layout, true), "MVIEWS")
-	assert.True(t, navigator.switchSection(1, layout.navigatorListRows))
+	assert.True(t, navigator.selectSection(navigatorMaterializedViews, layout.navigatorListRows))
 	assert.Equal(t, navigatorMaterializedViews, navigator.section)
+	assert.Contains(t, navigator.view(navigatorStatus{}, layout, true), "Materialized views")
 
 	navigator.setMaterializedViewsAvailable(false)
 	assert.Equal(t, navigatorViews, navigator.section)
-	assert.NotContains(t, navigator.view(navigatorStatus{}, layout, true), "MVIEWS")
+
+	navigator.setFunctionsAvailable(true)
+	assert.True(t, navigator.selectSection(navigatorFunctions, layout.navigatorListRows))
+	assert.Equal(t, navigatorFunctions, navigator.section)
 }
 
 func TestNavigatorNormalizeSelectionPreservesVisibleTable(t *testing.T) {

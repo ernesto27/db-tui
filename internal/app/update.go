@@ -49,6 +49,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.updateSQLScriptsModal(msg)
 		}
 	}
+	if m.objectsModal != nil {
+		return m, m.updateObjectsModal(msg)
+	}
 
 	if m.dumpModal != nil {
 		return m, m.updateDumpModal(msg)
@@ -107,7 +110,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case spinnerTickMsg:
-		if m.loading || m.viewsLoading || m.materializedViewsLoading || m.data.loading || m.query.loading ||
+		if m.loading || m.viewsLoading || m.materializedViewsLoading || m.functionsLoading || m.data.loading || m.query.loading ||
 			(m.ddlModal != nil && m.ddlModal.loading) ||
 			(m.columnsModal != nil && m.columnsModal.loading) ||
 			(m.dumpModal != nil && m.dumpModal.isRunning()) ||
@@ -151,6 +154,16 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 			m.navigator.normalizeSelection(1)
 		}
 		m.selectInitialRelation()
+		return nil, true
+	case functionsLoadedMsg:
+		if msg.session != m.session {
+			return nil, true
+		}
+		m.functionsLoading = false
+		m.functionLoadErr = msg.err
+		if msg.err == nil {
+			m.navigator.setFunctions(msg.functions)
+		}
 		return nil, true
 	case rowsLoadedMsg:
 		if msg.session != m.session ||
@@ -224,6 +237,7 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		m.navigator.ensureVisible(m.layout.navigatorListRows)
 		m.data.columnOffset = min(m.data.columnOffset, m.data.maxColumnOffset())
 		m.data.ensureSelectedVisible(m.layout)
+		m.activeFunction.clamp(m.layout)
 		m.query.resize(m.layout)
 		if m.ddlModal != nil {
 			m.ddlModal.clamp(m.layout)
@@ -430,18 +444,23 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tableLoadErr = nil
 		m.viewLoadErr = nil
 		m.materializedViewLoadErr = nil
+		m.functionLoadErr = nil
 		m.navigator.reset()
 		m.activeRelation = activeRelation{}
+		m.activeFunction = activeFunction{}
 		m.lastNavigatorClick = navigatorClick{}
 		m.navigator.setMaterializedViewsAvailable(supportsMaterializedViews(msg.database.Engine()))
+		m.navigator.setFunctionsAvailable(supportsFunctions(msg.database.Engine()))
 		m.data.reset()
 		m.query.reset(m.layout)
 		m.ddlModal = nil
 		m.columnsModal = nil
 		m.indexesModal = nil
+		m.objectsModal = nil
 		m.loading = true
 		m.viewsLoading = true
 		m.materializedViewsLoading = true
+		m.functionsLoading = m.navigator.functionsAvailable
 		m.session++
 		m.modal = nil
 		return m, tea.Batch(m.loadDatabaseObjects(), m.startSpinner())
@@ -454,6 +473,21 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func supportsMaterializedViews(engine string) bool {
 	return engine == db.EnginePostgreSQL || engine == db.EngineOracle
+}
+
+func supportsFunctions(engine string) bool {
+	return engine == db.EnginePostgreSQL || engine == db.EngineMySQL || engine == db.EngineOracle
+}
+
+func functionSchema(database db.Database) string {
+	switch database.Engine() {
+	case db.EnginePostgreSQL:
+		return "public"
+	case db.EngineMySQL:
+		return database.Name()
+	default:
+		return ""
+	}
 }
 
 func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -504,14 +538,18 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewLoadErr = nil
 			m.materializedViewsLoading = false
 			m.materializedViewLoadErr = nil
+			m.functionsLoading = false
+			m.functionLoadErr = nil
 			m.navigator.reset()
 			m.activeRelation = activeRelation{}
+			m.activeFunction = activeFunction{}
 			m.lastNavigatorClick = navigatorClick{}
 			m.data.reset()
 			m.query.reset(m.layout)
 			m.ddlModal = nil
 			m.columnsModal = nil
 			m.indexesModal = nil
+			m.objectsModal = nil
 			m.session++
 		} else if msg.index < m.activeConnectionIndex {
 			m.activeConnectionIndex--
@@ -569,6 +607,14 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.panel = panelData
 		m.focus = focusData
 		return nil
+	case key.Matches(msg, m.keys.objects):
+		if m.database == nil {
+			return nil
+		}
+		m.navigator.finishSearch()
+		modal := newObjectsModal(m.navigator)
+		m.objectsModal = &modal
+		return nil
 	case m.panel == panelQuery && key.Matches(msg, m.keys.sqlScripts):
 		if m.activeConnectionIndex < 0 || m.activeConnectionIndex >= len(m.config.Connections) {
 			return nil
@@ -617,7 +663,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 	case m.navigator.searching:
 		return m.updateNavigatorSearch(msg)
 	case m.panel == panelData && m.focus == focusNavigator && key.Matches(msg, m.keys.activate):
-		return m.activateHighlightedRelation()
+		return m.activateHighlightedItem()
 	case key.Matches(msg, m.keys.quit) && !(m.panel == panelQuery && !m.query.resultsFocused && msg.String() == "q"):
 		return tea.Quit
 	case key.Matches(msg, m.keys.export) && m.panel == panelQuery:
@@ -650,9 +696,6 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.query.editor = editor
 		return command
 	case key.Matches(msg, m.keys.focusLeft):
-		if m.focus == focusNavigator && m.navigator.switchSection(-1, m.layout.navigatorListRows) {
-			return nil
-		}
 		if m.focus == focusData && m.data.columnOffset > 0 {
 			m.data.scrollColumns(-1, m.layout)
 			return nil
@@ -661,12 +704,6 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case key.Matches(msg, m.keys.focusRight):
 		if m.focus == focusNavigator {
-			if m.navigator.hasViewsSection() {
-				if m.navigator.switchSection(1, m.layout.navigatorListRows) {
-					return nil
-				}
-				return nil
-			}
 			m.focus = focusData
 		} else {
 			m.data.scrollColumns(1, m.layout)
@@ -693,6 +730,10 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 			}
 			return nil
 		}
+		if m.activeFunction.set {
+			m.activeFunction.scroll(-1, m.layout)
+			return nil
+		}
 		request, load := m.data.moveUp(m.layout, m.config.PageSize())
 		if load {
 			return m.startRowLoad(request.offset, request.selectedRow)
@@ -703,6 +744,10 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 			if m.navigator.move(1, m.layout.navigatorListRows) {
 				return nil
 			}
+			return nil
+		}
+		if m.activeFunction.set {
+			m.activeFunction.scroll(1, m.layout)
 			return nil
 		}
 		request, load := m.data.moveDown(m.layout, m.config.PageSize())
@@ -769,7 +814,7 @@ func (m *Model) updateNavigatorSearch(msg tea.Msg) tea.Cmd {
 		switch keyMsg.String() {
 		case "enter":
 			m.navigator.finishSearch()
-			return m.activateHighlightedRelation()
+			return m.activateHighlightedItem()
 		case "esc":
 			m.navigator.cancelSearch(m.layout.navigatorListRows)
 			return nil
@@ -793,13 +838,16 @@ func (m *Model) updateMouseClick(msg tea.MouseClickMsg) tea.Cmd {
 			if m.panel != panelData {
 				return nil
 			}
-			return m.activateHighlightedRelation()
+			if item.section == navigatorFunctions {
+				return nil
+			}
+			return m.activateHighlightedItem()
 		}
 		m.lastNavigatorClick = navigatorClick{item: item, at: time.Now(), recorded: true}
 		return nil
 	}
 	m.lastNavigatorClick = navigatorClick{}
-	if m.panel == panelData && msg.Button == tea.MouseLeft && m.data.beginTextSelection(msg.X, msg.Y, m.layout, m.dataGridTop()) {
+	if m.panel == panelData && !m.activeFunction.set && msg.Button == tea.MouseLeft && m.data.beginTextSelection(msg.X, msg.Y, m.layout, m.dataGridTop()) {
 		m.focus = focusData
 		return nil
 	}
@@ -817,7 +865,7 @@ func (m *Model) updateMouseMotion(msg tea.MouseMotionMsg) tea.Cmd {
 }
 
 func (m *Model) updateMouseRelease(msg tea.MouseReleaseMsg) tea.Cmd {
-	if m.panel != panelData || !m.data.selection.Dragging() {
+	if m.panel != panelData || m.activeFunction.set || !m.data.selection.Dragging() {
 		return nil
 	}
 	// SGR mouse reports identify the released button, while the fallback
@@ -862,11 +910,19 @@ func (m *Model) updateMouseWheel(msg tea.MouseWheelMsg) tea.Cmd {
 	m.focus = focusData
 	switch msg.Button {
 	case tea.MouseWheelUp:
+		if m.activeFunction.set {
+			m.activeFunction.scroll(-1, m.layout)
+			return nil
+		}
 		request, load := m.data.moveUp(m.layout, m.config.PageSize())
 		if load {
 			return m.startRowLoad(request.offset, request.selectedRow)
 		}
 	case tea.MouseWheelDown:
+		if m.activeFunction.set {
+			m.activeFunction.scroll(1, m.layout)
+			return nil
+		}
 		request, load := m.data.moveDown(m.layout, m.config.PageSize())
 		if load {
 			return m.startRowLoad(request.offset, request.selectedRow)
@@ -875,14 +931,48 @@ func (m *Model) updateMouseWheel(msg tea.MouseWheelMsg) tea.Cmd {
 	return nil
 }
 
-func (m *Model) activateHighlightedRelation() tea.Cmd {
+func (m *Model) activateHighlightedItem() tea.Cmd {
 	item, ok := m.navigator.selectedItem()
-	if m.database == nil || !ok || (m.activeRelation.set && m.activeRelation.item == item) {
+	if m.database == nil || !ok {
 		return nil
 	}
+	if item.section == navigatorFunctions {
+		if m.activeFunction.set && m.activeFunction.function == item.function {
+			return nil
+		}
+		m.activeRelation = activeRelation{}
+		m.data.reset()
+		m.activeFunction.activate(item.function, m.layout)
+		m.focus = focusData
+		return nil
+	}
+	if m.activeRelation.set && m.activeRelation.item == item {
+		return nil
+	}
+	m.activeFunction = activeFunction{}
 	m.activeRelation.item = item
 	m.activeRelation.set = true
 	return m.startRowLoad(0, 0)
+}
+
+func (m *Model) updateObjectsModal(msg tea.Msg) tea.Cmd {
+	keyMsg, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return nil
+	}
+	switch keyMsg.String() {
+	case "esc":
+		m.objectsModal = nil
+	case "up", "k":
+		m.objectsModal.move(-1)
+	case "down", "j":
+		m.objectsModal.move(1)
+	case "enter":
+		m.navigator.selectSection(m.objectsModal.selectedSection(), m.layout.navigatorListRows)
+		m.objectsModal = nil
+		m.focus = focusNavigator
+	}
+	return nil
 }
 
 func (m *Model) startRowLoad(offset, selectedRow int) tea.Cmd {

@@ -47,14 +47,16 @@ type fakeDatabase struct {
 	engine string
 	host   string
 
-	tables     []db.Table
-	tablesErr  error
-	views      []db.View
-	viewsErr   error
-	columns    []db.Column
-	columnsErr error
-	indexes    []db.IndexColumns
-	indexesErr error
+	tables       []db.Table
+	tablesErr    error
+	views        []db.View
+	viewsErr     error
+	functions    []db.FunctionColumns
+	functionsErr error
+	columns      []db.Column
+	columnsErr   error
+	indexes      []db.IndexColumns
+	indexesErr   error
 
 	page    db.RowPage
 	pageErr error
@@ -68,36 +70,39 @@ type fakeDatabase struct {
 	exportErr      error
 	exportQueryErr error
 
-	listTablesCalls     int
-	listTablesDeadline  bool
-	listViewsCalls      int
-	listViewsDeadline   bool
-	listColumnsCalls    int
-	listColumnsTable    db.Table
-	listColumnsDeadline bool
-	listIndexesCalls    int
-	listIndexesTable    db.Table
-	listIndexesDeadline bool
-	getRowsCalls        int
-	getRowsTable        db.Table
-	getRowsRequest      db.PageRequest
-	getRowsDeadline     bool
-	executeCalls        int
-	executedSQL         string
-	executeDeadline     bool
-	tableDDLCalls       int
-	tableDDLTable       db.Table
-	tableDDLDeadline    bool
-	dumpCalls           int
-	dumpDeadline        bool
-	exportCalls         int
-	exportTable         db.Table
-	exportType          string
-	exportDeadline      bool
-	exportQueryCalls    int
-	exportedQuery       string
-	exportQueryDeadline bool
-	closeCalls          int
+	listTablesCalls       int
+	listTablesDeadline    bool
+	listViewsCalls        int
+	listViewsDeadline     bool
+	listFunctionsCalls    int
+	listFunctionsSchema   string
+	listFunctionsDeadline bool
+	listColumnsCalls      int
+	listColumnsTable      db.Table
+	listColumnsDeadline   bool
+	listIndexesCalls      int
+	listIndexesTable      db.Table
+	listIndexesDeadline   bool
+	getRowsCalls          int
+	getRowsTable          db.Table
+	getRowsRequest        db.PageRequest
+	getRowsDeadline       bool
+	executeCalls          int
+	executedSQL           string
+	executeDeadline       bool
+	tableDDLCalls         int
+	tableDDLTable         db.Table
+	tableDDLDeadline      bool
+	dumpCalls             int
+	dumpDeadline          bool
+	exportCalls           int
+	exportTable           db.Table
+	exportType            string
+	exportDeadline        bool
+	exportQueryCalls      int
+	exportedQuery         string
+	exportQueryDeadline   bool
+	closeCalls            int
 }
 
 func (f *fakeDatabase) Name() string {
@@ -128,8 +133,11 @@ func (f *fakeDatabase) ListMaterializedViews(context.Context) ([]db.Materialized
 	return []db.MaterializedView{}, nil
 }
 
-func (f *fakeDatabase) ListFunctions(context.Context, string) ([]db.FunctionColumns, error) {
-	return []db.FunctionColumns{}, nil
+func (f *fakeDatabase) ListFunctions(ctx context.Context, schema string) ([]db.FunctionColumns, error) {
+	f.listFunctionsCalls++
+	f.listFunctionsSchema = schema
+	_, f.listFunctionsDeadline = ctx.Deadline()
+	return f.functions, f.functionsErr
 }
 
 func (f *fakeDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {

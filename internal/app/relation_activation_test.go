@@ -108,6 +108,28 @@ func TestEnterActivatesEachRelationType(t *testing.T) {
 	}
 }
 
+func TestEnterActivatesFunctionDetails(t *testing.T) {
+	function := db.FunctionColumns{
+		Name:       "customer_total",
+		Arguments:  "customer_id integer",
+		ReturnType: "numeric",
+		Definition: "SELECT 1",
+	}
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook"}
+	model.navigator.setFunctionsAvailable(true)
+	model.navigator.section = navigatorFunctions
+	model.navigator.setFunctions([]db.FunctionColumns{function})
+
+	updated, command := updateModel(t, model, keyPress(tea.KeyEnter, "", 0))
+
+	assert.Nil(t, command)
+	assert.True(t, updated.activeFunction.set)
+	assert.Equal(t, function, updated.activeFunction.function)
+	assert.False(t, updated.activeRelation.set)
+	assert.Equal(t, focusData, updated.focus)
+}
+
 func TestEnterActivatesHighlightedRelation(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.database = &fakeDatabase{name: "chinook"}
