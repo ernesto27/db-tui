@@ -118,8 +118,7 @@ const listMaterializedViewsSQL = `SELECT matviewname AS materialized_view_name
   WHERE schemaname = 'public'
   ORDER BY matviewname`
 
-const listFunctions = `SELECT
-    namespace.nspname AS schema_name,
+const listFunctionsSQL = `SELECT
     routine.proname AS function_name,
     pg_get_function_identity_arguments(routine.oid) AS arguments,
     pg_get_function_result(routine.oid) AS returns,
@@ -129,7 +128,7 @@ const listFunctions = `SELECT
   JOIN pg_namespace AS namespace ON namespace.oid = routine.pronamespace
   JOIN pg_language AS language ON language.oid = routine.prolang
   WHERE routine.prokind = 'f'
-    AND namespace.nspname = 'public'
+    AND namespace.nspname = $1
   ORDER BY routine.proname`
 
 type postgresql struct {
@@ -252,9 +251,27 @@ func (p *postgresql) ListMaterializedViews(ctx context.Context) ([]db.Materializ
 	return materializedViews, nil
 }
 
-// ListFunctions is a placeholder for PostgreSQL function discovery.
-func (p *postgresql) ListFunctions(context.Context, string) ([]db.FuncionColumns, error) {
-	return []db.FuncionColumns{}, nil
+// ListFunctions returns functions in schema ordered by name.
+func (p *postgresql) ListFunctions(ctx context.Context, schema string) ([]db.FunctionColumns, error) {
+	rows, err := p.pool.Query(ctx, listFunctionsSQL, schema)
+	if err != nil {
+		return nil, fmt.Errorf("query PostgreSQL functions: %w", err)
+	}
+	defer rows.Close()
+
+	functionColumns := make([]db.FunctionColumns, 0)
+	for rows.Next() {
+		var function db.FunctionColumns
+		if err := rows.Scan(&function.Name, &function.Arguments, &function.ReturnType, &function.Language, &function.Definition); err != nil {
+			return nil, fmt.Errorf("scan PostgreSQL function: %w", err)
+		}
+		functionColumns = append(functionColumns, function)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate PostgreSQL functions: %w", err)
+	}
+
+	return functionColumns, nil
 }
 
 // ListColumns returns the columns defined by a public PostgreSQL table.

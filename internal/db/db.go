@@ -116,12 +116,12 @@ type Column struct {
 	IsPrimaryKey    bool
 }
 
-type FuncionColumns struct {
+type FunctionColumns struct {
 	Name       string
 	Arguments  string
 	ReturnType string
 	Language   string
-	Definitin  string
+	Definition string
 }
 
 // ValidatePrimaryKeyWhere verifies that whereColumns contains exactly a table's primary key.
@@ -178,6 +178,6 @@ type Database interface {
 	ListMaterializedViews(ctx context.Context) ([]MaterializedView, error)
 	UpdateRow(ctx context.Context, table Table, setColumns map[string]any, whereColumns map[string]any) error
 	DeleteRow(ctx context.Context, table Table, whereColumns map[string]any) error
-	ListFunctions(ctx context.Context, schema string) ([]FuncionColumns, error)
+	ListFunctions(ctx context.Context, schema string) ([]FunctionColumns, error)
 	Close()
 }

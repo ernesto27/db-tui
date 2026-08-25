@@ -32,6 +32,10 @@ Every new feature must include automated tests that verify its expected behavior
 
 Implement the requested change before running automated checks. Do not use test-first development or run incremental test commands unless the user explicitly asks; run the relevant automated verification once at the end. The user performs manual testing.
 
+## Change Approval
+
+Before making any edit or addition, show the proposed changes as a preview and wait for the user's explicit approval.
+
 ## Commit & Pull Request Guidelines
 
 Recent commits use concise imperative subjects (for example, `add basic view of tables`). Keep each commit scoped to one task. Pull requests should state intent, link relevant work, list verification commands, and include terminal screenshots for visible UI changes. Never commit passwords, credential-bearing DSNs, local config, logs, or generated binaries.

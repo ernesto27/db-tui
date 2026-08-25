@@ -71,6 +71,46 @@ const listIndexesSQL = `
 	WHERE index_info.table_name = :1
 	ORDER BY index_info.index_name, index_column.column_position`
 
+const listFunctionsSQL = `
+	SELECT
+		o.object_name AS function_name,
+		NVL(
+			(
+				SELECT LISTAGG(
+					NVL(a.in_out || ' ', '') ||
+					a.argument_name || ' ' || a.data_type,
+					', '
+				) WITHIN GROUP (ORDER BY a.sequence)
+				FROM user_arguments a
+				WHERE a.object_name = o.object_name
+					AND a.package_name IS NULL
+					AND a.position > 0
+					AND a.data_level = 0
+			),
+			''
+		) AS arguments,
+		(
+			SELECT a.data_type
+			FROM user_arguments a
+			WHERE a.object_name = o.object_name
+				AND a.package_name IS NULL
+				AND a.position = 0
+				AND a.data_level = 0
+		) AS return_type,
+		'PL/SQL' AS language,
+		(
+			SELECT XMLCAST(
+				XMLAGG(XMLELEMENT(e, s.text) ORDER BY s.line)
+				AS CLOB
+			)
+			FROM user_source s
+			WHERE s.name = o.object_name
+				AND s.type = 'FUNCTION'
+		) AS definition
+	FROM user_objects o
+	WHERE o.object_type = 'FUNCTION'
+	ORDER BY o.object_name;`
+
 type config struct {
 	host    string
 	service string
@@ -226,9 +266,27 @@ func (o *oracleDatabase) ListMaterializedViews(ctx context.Context) ([]db.Materi
 	return views, nil
 }
 
-// ListFunctions is a placeholder for Oracle function discovery.
-func (o *oracleDatabase) ListFunctions(context.Context, string) ([]db.FuncionColumns, error) {
-	return []db.FuncionColumns{}, nil
+// ListFunctions returns functions in the connected Oracle user's schema.
+func (o *oracleDatabase) ListFunctions(ctx context.Context, _ string) ([]db.FunctionColumns, error) {
+	rows, err := o.database.QueryContext(ctx, listFunctionsSQL)
+	if err != nil {
+		return nil, fmt.Errorf("query Oracle functions: %w", err)
+	}
+	defer rows.Close()
+
+	functionColumns := make([]db.FunctionColumns, 0)
+	for rows.Next() {
+		var function db.FunctionColumns
+		if err := rows.Scan(&function.Name, &function.Arguments, &function.ReturnType, &function.Language, &function.Definition); err != nil {
+			return nil, fmt.Errorf("scan Oracle function: %w", err)
+		}
+		functionColumns = append(functionColumns, function)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate Oracle functions: %w", err)
+	}
+
+	return functionColumns, nil
 }
 
 // ListColumns returns the columns defined by an Oracle table visible to the current user.

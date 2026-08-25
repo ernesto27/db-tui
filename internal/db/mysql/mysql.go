@@ -90,6 +90,36 @@ const listPrimaryKeyColumnsSQL = `
 		AND constraint_name = 'PRIMARY'
 	ORDER BY ordinal_position`
 
+const listFunctionsSQL = `
+	SELECT
+		r.ROUTINE_NAME AS function_name,
+		COALESCE(
+			GROUP_CONCAT(
+				CONCAT(p.PARAMETER_MODE, ' ', p.PARAMETER_NAME, ' ', p.DTD_IDENTIFIER)
+				ORDER BY p.ORDINAL_POSITION
+				SEPARATOR ', '
+			),
+			''
+		) AS arguments,
+		r.DTD_IDENTIFIER AS returns,
+		r.ROUTINE_BODY AS language,
+		COALESCE(r.ROUTINE_DEFINITION, '') AS definition
+	FROM INFORMATION_SCHEMA.ROUTINES AS r
+	LEFT JOIN INFORMATION_SCHEMA.PARAMETERS AS p
+		ON p.SPECIFIC_SCHEMA = r.ROUTINE_SCHEMA
+		AND p.SPECIFIC_NAME = r.SPECIFIC_NAME
+		AND p.ORDINAL_POSITION > 0
+	WHERE r.ROUTINE_TYPE = 'FUNCTION'
+		AND r.ROUTINE_SCHEMA = ?
+	GROUP BY
+		r.ROUTINE_SCHEMA,
+		r.ROUTINE_NAME,
+		r.SPECIFIC_NAME,
+		r.DTD_IDENTIFIER,
+		r.ROUTINE_BODY,
+		r.ROUTINE_DEFINITION
+	ORDER BY r.ROUTINE_NAME;`
+
 type mysqlDatabase struct {
 	database *sql.DB
 	logger   *logger.Logger
@@ -321,9 +351,26 @@ func (m *mysqlDatabase) ListMaterializedViews(context.Context) ([]db.Materialize
 	return []db.MaterializedView{}, nil
 }
 
-// ListFunctions is a placeholder for MySQL function discovery.
-func (m *mysqlDatabase) ListFunctions(context.Context, string) ([]db.FuncionColumns, error) {
-	return []db.FuncionColumns{}, nil
+func (m *mysqlDatabase) ListFunctions(ctx context.Context, schema string) ([]db.FunctionColumns, error) {
+	rows, err := m.database.QueryContext(ctx, listFunctionsSQL, schema)
+	if err != nil {
+		return nil, fmt.Errorf("query MySQL functions: %w", err)
+	}
+	defer rows.Close()
+
+	functionColumns := make([]db.FunctionColumns, 0)
+	for rows.Next() {
+		var function db.FunctionColumns
+		if err := rows.Scan(&function.Name, &function.Arguments, &function.ReturnType, &function.Language, &function.Definition); err != nil {
+			return nil, fmt.Errorf("scan MySQL function: %w", err)
+		}
+		functionColumns = append(functionColumns, function)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate MySQL functions: %w", err)
+	}
+
+	return functionColumns, nil
 }
 
 // GetRows returns an unordered page of rows from a MySQL table.

@@ -131,6 +131,61 @@ func TestListMaterializedViews(t *testing.T) {
 	}, materializedViews, "ListMaterializedViews()")
 }
 
+func TestListFunctions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	functions, err := database.ListFunctions(ctx, "public")
+	if !assert.NoError(t, err, "list functions") {
+		return
+	}
+
+	assert.Equal(t, []string{
+		"album_track_count",
+		"customer_full_name",
+		"customer_lifetime_spend",
+		"search_tracks",
+		"track_duration_seconds",
+	}, functionNames(functions), "ListFunctions() names")
+
+	expectedMetadata := map[string]struct {
+		arguments  string
+		returnType string
+	}{
+		"album_track_count":       {arguments: "album_id integer", returnType: "bigint"},
+		"customer_full_name":      {arguments: "customer_id integer", returnType: "text"},
+		"customer_lifetime_spend": {arguments: "customer_id integer", returnType: "numeric"},
+		"search_tracks":           {arguments: "search_text text"},
+		"track_duration_seconds":  {arguments: "track_id integer", returnType: "numeric"},
+	}
+	for _, function := range functions {
+		expected, ok := expectedMetadata[function.Name]
+		if !assert.True(t, ok, "unexpected function %q", function.Name) {
+			continue
+		}
+		assert.Equal(t, expected.arguments, function.Arguments, "%s arguments", function.Name)
+		if expected.returnType != "" {
+			assert.Equal(t, expected.returnType, function.ReturnType, "%s return type", function.Name)
+		}
+		assert.Equal(t, "sql", function.Language, "%s language", function.Name)
+		assert.Contains(t, function.Definition, "CREATE OR REPLACE FUNCTION public."+function.Name, "%s definition", function.Name)
+	}
+}
+
+func functionNames(functions []db.FunctionColumns) []string {
+	names := make([]string, len(functions))
+	for index, function := range functions {
+		names[index] = function.Name
+	}
+	return names
+}
+
 func TestListColumns(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

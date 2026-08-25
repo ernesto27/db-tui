@@ -154,6 +154,49 @@ func TestListViews(t *testing.T) {
 	}, views)
 }
 
+func TestListFunctions(t *testing.T) {
+	database := connectWorld(t)
+
+	functions, err := database.ListFunctions(context.Background(), "world")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"country_capital_name",
+		"country_city_count",
+		"country_official_language_count",
+		"country_population",
+		"country_population_density",
+	}, mysqlFunctionNames(functions))
+
+	expectedMetadata := map[string]struct {
+		arguments  string
+		returnType string
+	}{
+		"country_capital_name":            {arguments: "IN country_code char(3)", returnType: "varchar(35)"},
+		"country_city_count":              {arguments: "IN country_code char(3)", returnType: "int"},
+		"country_official_language_count": {arguments: "IN country_code char(3)", returnType: "int"},
+		"country_population":              {arguments: "IN country_code char(3)", returnType: "int"},
+		"country_population_density":      {arguments: "IN country_code char(3)", returnType: "decimal(14,2)"},
+	}
+	for _, function := range functions {
+		expected, ok := expectedMetadata[function.Name]
+		if !assert.True(t, ok, "unexpected function %q", function.Name) {
+			continue
+		}
+		assert.Equal(t, expected.arguments, function.Arguments, "%s arguments", function.Name)
+		assert.Equal(t, expected.returnType, function.ReturnType, "%s return type", function.Name)
+		assert.Equal(t, "SQL", function.Language, "%s language", function.Name)
+	}
+}
+
+func mysqlFunctionNames(functions []db.FunctionColumns) []string {
+	names := make([]string, len(functions))
+	for index, function := range functions {
+		names[index] = function.Name
+	}
+	return names
+}
+
 func TestListColumns(t *testing.T) {
 	database := connectWorld(t)
 

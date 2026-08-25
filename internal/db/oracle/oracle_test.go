@@ -119,6 +119,59 @@ func TestListMaterializedViews(t *testing.T) {
 	}, materializedViews, "ListMaterializedViews()")
 }
 
+func TestListFunctions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := oracle.Connect(ctx, freePDBDSN)
+	if !assert.NoError(t, err, "connect to local Compose Oracle") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	functions, err := database.ListFunctions(ctx, "")
+	if !assert.NoError(t, err, "list functions") {
+		return
+	}
+
+	assert.Equal(t, []string{
+		"CAPITAL_NAME_FOR_COUNTRY",
+		"CITY_COUNT_FOR_COUNTRY",
+		"COUNTRY_NAME_FOR_ID",
+		"COUNTRY_POPULATION_FOR_ID",
+		"POPULATION_FOR_REGION",
+	}, oracleFunctionNames(functions), "ListFunctions() names")
+
+	expectedMetadata := map[string]struct {
+		arguments  string
+		returnType string
+	}{
+		"CAPITAL_NAME_FOR_COUNTRY":  {arguments: "IN P_COUNTRY_ID VARCHAR2", returnType: "VARCHAR2"},
+		"CITY_COUNT_FOR_COUNTRY":    {arguments: "IN P_COUNTRY_ID VARCHAR2", returnType: "NUMBER"},
+		"COUNTRY_NAME_FOR_ID":       {arguments: "IN P_COUNTRY_ID VARCHAR2", returnType: "VARCHAR2"},
+		"COUNTRY_POPULATION_FOR_ID": {arguments: "IN P_COUNTRY_ID VARCHAR2", returnType: "NUMBER"},
+		"POPULATION_FOR_REGION":     {arguments: "IN P_REGION_ID VARCHAR2", returnType: "NUMBER"},
+	}
+	for _, function := range functions {
+		expected, ok := expectedMetadata[function.Name]
+		if !assert.True(t, ok, "unexpected function %q", function.Name) {
+			continue
+		}
+		assert.Equal(t, expected.arguments, function.Arguments, "%s arguments", function.Name)
+		assert.Equal(t, expected.returnType, function.ReturnType, "%s return type", function.Name)
+		assert.Equal(t, "PL/SQL", function.Language, "%s language", function.Name)
+		assert.NotEmpty(t, function.Definition, "%s definition", function.Name)
+	}
+}
+
+func oracleFunctionNames(functions []db.FunctionColumns) []string {
+	names := make([]string, len(functions))
+	for index, function := range functions {
+		names[index] = function.Name
+	}
+	return names
+}
+
 func TestListColumns(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
