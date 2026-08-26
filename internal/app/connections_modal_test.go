@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ernestoponce27/db-tui/internal/config"
 	"github.com/ernestoponce27/db-tui/internal/db"
@@ -108,4 +109,67 @@ func TestSQLiteConnectionSettingsRoundTripThroughDSN(t *testing.T) {
 	assert.Regexp(t, `^reporting\.db-\d+$`, connection.Name)
 	assert.Equal(t, "/data/reporting.db", connection.Settings.DSN)
 	assert.Equal(t, settings, restored)
+}
+
+func TestConnectionsModalSearchSelectsOriginalConnection(t *testing.T) {
+	modal := newConnectionsModal(config.Config{Connections: []config.Connection{
+		{Name: "Analytics", Engine: db.EnginePostgreSQL},
+		{Name: "Chinook", Engine: db.EnginePostgreSQL},
+		{Name: "Archive", Engine: db.EnginePostgreSQL},
+	}})
+
+	assert.True(t, modal.search.Focused())
+	assert.True(t, modal.searchFocused)
+	assert.Equal(t, "Search", modal.search.Placeholder)
+
+	for _, character := range "chin" {
+		modal, _ = modal.update(keyPress(character, string(character), 0))
+	}
+	assert.Equal(t, "chin", modal.search.Value())
+	assert.Len(t, modal.visibleConnections(), 1)
+	assert.Contains(t, modal.view(80), "Chinook")
+	assert.NotContains(t, modal.view(80), "Analytics")
+
+	_, command := modal.update(keyPress(tea.KeyEnter, "", 0))
+	require.NotNil(t, command)
+	selected, ok := command().(selectConnectionMsg)
+	require.True(t, ok)
+	assert.Equal(t, 1, selected.index)
+	assert.Equal(t, "Chinook", selected.connection.Name)
+
+	modal, _ = modal.update(keyPress(tea.KeyDown, "", 0))
+	assert.False(t, modal.searchFocused)
+	assert.False(t, modal.search.Focused())
+
+	modal, _ = modal.update(keyPress('f', "f", 0))
+	assert.True(t, modal.searchFocused)
+	assert.True(t, modal.search.Focused())
+	assert.Equal(t, "chin", modal.search.Value())
+
+	modal, _ = modal.update(keyPress(tea.KeyDown, "", 0))
+	_, command = modal.update(keyPress(tea.KeyEnter, "", 0))
+	require.NotNil(t, command)
+	selected, ok = command().(selectConnectionMsg)
+	require.True(t, ok)
+	assert.Equal(t, 1, selected.index)
+	assert.Equal(t, "Chinook", selected.connection.Name)
+}
+
+func TestConnectionsModalSearchHandlesNoMatches(t *testing.T) {
+	modal := newConnectionsModal(config.Config{Connections: []config.Connection{
+		{Name: "Chinook", Engine: db.EnginePostgreSQL},
+	}})
+
+	for _, character := range "missing" {
+		modal, _ = modal.update(keyPress(character, string(character), 0))
+	}
+	assert.Empty(t, modal.visibleConnections())
+	assert.Contains(t, modal.view(80), "No matching connections")
+
+	updated, command := modal.update(keyPress(tea.KeyDown, "", 0))
+	assert.True(t, updated.searchFocused)
+	assert.Nil(t, command)
+
+	_, command = updated.update(keyPress(tea.KeyEnter, "", 0))
+	assert.Nil(t, command)
 }

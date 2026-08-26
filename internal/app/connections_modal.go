@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
@@ -15,9 +16,16 @@ import (
 
 type connectionsModal struct {
 	connections        []config.Connection
+	search             textinput.Model
+	searchFocused      bool
 	selected           int
 	confirmingDeletion bool
 	deletionError      string
+}
+
+type visibleConnection struct {
+	index      int
+	connection config.Connection
 }
 
 type cancelConnectionsMsg struct{}
@@ -40,8 +48,15 @@ const (
 )
 
 func newConnectionsModal(appConfig config.Config) connectionsModal {
+	search := textinput.New()
+	search.Prompt = ""
+	search.Placeholder = "Search"
+	search.SetWidth(connectionModalInputWidth)
+	search.Focus()
 	return connectionsModal{
-		connections: appConfig.Connections,
+		connections:   appConfig.Connections,
+		search:        search,
+		searchFocused: true,
 	}
 }
 
@@ -102,14 +117,38 @@ func newConfigConnection(settings ConnectionSettings) config.Connection {
 	}
 }
 
+func (m connectionsModal) visibleConnections() []visibleConnection {
+	query := strings.ToLower(strings.TrimSpace(m.search.Value()))
+	connections := make([]visibleConnection, 0, len(m.connections))
+	for index, connection := range m.connections {
+		if query != "" && !strings.Contains(strings.ToLower(connection.Name), query) {
+			continue
+		}
+		connections = append(connections, visibleConnection{index: index, connection: connection})
+	}
+	return connections
+}
+
+func (m connectionsModal) selectedConnection() (visibleConnection, bool) {
+	connections := m.visibleConnections()
+	if m.selected < 0 || m.selected >= len(connections) {
+		return visibleConnection{}, false
+	}
+	return connections[m.selected], true
+}
+
 func (m connectionsModal) update(msg tea.Msg) (connectionsModal, tea.Cmd) {
 	if key, ok := msg.(tea.KeyPressMsg); ok {
 		if m.confirmingDeletion {
 			switch key.String() {
 			case "y":
-				connection := m.connections[m.selected]
+				connection, ok := m.selectedConnection()
+				if !ok {
+					m.confirmingDeletion = false
+					return m, nil
+				}
 				return m, func() tea.Msg {
-					return deleteConnectionMsg{index: m.selected, connection: connection}
+					return deleteConnectionMsg{index: connection.index, connection: connection.connection}
 				}
 			case "n", "esc":
 				m.confirmingDeletion = false
@@ -118,29 +157,63 @@ func (m connectionsModal) update(msg tea.Msg) (connectionsModal, tea.Cmd) {
 			return m, nil
 		}
 
-		switch key.String() {
-		case "up":
-			if len(m.connections) > 0 {
-				m.selected = max(0, m.selected-1)
+		if m.searchFocused {
+			switch key.String() {
+			case "enter":
+				connection, ok := m.selectedConnection()
+				if !ok {
+					return m, nil
+				}
+				return m, func() tea.Msg {
+					return selectConnectionMsg{index: connection.index, connection: connection.connection}
+				}
+			case "down":
+				if len(m.visibleConnections()) > 0 {
+					m.searchFocused = false
+					m.search.Blur()
+				}
+				return m, nil
+			case "esc":
+				return m, func() tea.Msg { return cancelConnectionsMsg{} }
 			}
+
+			previousQuery := m.search.Value()
+			var command tea.Cmd
+			m.search, command = m.search.Update(msg)
+			if m.search.Value() != previousQuery {
+				m.selected = 0
+			}
+			return m, command
+		}
+
+		switch key.String() {
+		case "f":
+			m.searchFocused = true
+			return m, m.search.Focus()
+		case "up":
+			if m.selected == 0 {
+				m.searchFocused = true
+				return m, m.search.Focus()
+			}
+			m.selected--
 		case "down":
-			if len(m.connections) > 0 {
-				m.selected = min(len(m.connections)-1, m.selected+1)
+			if connections := m.visibleConnections(); len(connections) > 0 {
+				m.selected = min(len(connections)-1, m.selected+1)
 			}
 		case "enter":
-			if len(m.connections) == 0 {
+			connection, ok := m.selectedConnection()
+			if !ok {
 				return m, nil
 			}
-			connection := m.connections[m.selected]
-			return m, func() tea.Msg { return selectConnectionMsg{index: m.selected, connection: connection} }
+			return m, func() tea.Msg { return selectConnectionMsg{index: connection.index, connection: connection.connection} }
 		case "ctrl+e":
-			if len(m.connections) == 0 {
+			connection, ok := m.selectedConnection()
+			if !ok {
 				return m, nil
 			}
-			connection := m.connections[m.selected]
-			return m, func() tea.Msg { return editConnectionMsg{index: m.selected, connection: connection} }
+			return m, func() tea.Msg { return editConnectionMsg{index: connection.index, connection: connection.connection} }
 		case "d":
-			if len(m.connections) == 0 {
+			if _, ok := m.selectedConnection(); !ok {
 				return m, nil
 			}
 			m.confirmingDeletion = true
@@ -165,9 +238,12 @@ func (m connectionsModal) view(width int) string {
 		"",
 	}
 	if m.confirmingDeletion {
-		connection := m.connections[m.selected]
+		connection, ok := m.selectedConnection()
+		if !ok {
+			return ""
+		}
 		lines = append(lines,
-			"Remove "+truncateLabel(connection.Name, modalWidth-8)+"?",
+			"Remove "+truncateLabel(connection.connection.Name, modalWidth-8)+"?",
 			"",
 			lipgloss.NewStyle().Foreground(colorTextMuted).Render("y confirm  •  n/Esc cancel"),
 		)
@@ -182,9 +258,17 @@ func (m connectionsModal) view(width int) string {
 			Render(strings.Join(lines, "\n"))
 	}
 
-	first := max(0, min(m.selected-visibleConnectionRows+1, len(m.connections)-visibleConnectionRows))
-	last := min(first+visibleConnectionRows, len(m.connections))
-	for index, connection := range m.connections[first:last] {
+	search := m.search
+	search.SetWidth(modalWidth - 6)
+	lines = append(lines, search.View(), "")
+	connections := m.visibleConnections()
+	if len(connections) == 0 {
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorTextMuted).Render("No matching connections"))
+	}
+	first := max(0, min(m.selected-visibleConnectionRows+1, len(connections)-visibleConnectionRows))
+	last := min(first+visibleConnectionRows, len(connections))
+	for index, item := range connections[first:last] {
+		connection := item.connection
 		name := truncateLabel(connection.Name, nameWidth)
 		engine := truncateLabel(connection.Engine, connectionEngineWidth)
 		if first+index == m.selected {
@@ -193,7 +277,7 @@ func (m connectionsModal) view(width int) string {
 		}
 		lines = append(lines, "  "+nameStyle.Render(name)+engineStyle.Render(engine))
 	}
-	lines = append(lines, "", lipgloss.NewStyle().Foreground(colorTextMuted).Render("↑/↓ move  •  Enter connect  •  Ctrl+E edit  •  d remove  •  Esc close"))
+	lines = append(lines, "", lipgloss.NewStyle().Foreground(colorTextMuted).Render("↑/↓ move  •  f search  •  Enter connect  •  Ctrl+E edit  •  d remove  •  Esc close"))
 
 	return lipgloss.NewStyle().
 		Width(modalWidth).
