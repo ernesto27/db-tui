@@ -75,6 +75,7 @@ func engineDisplayName(engine string) string {
 
 func (m Model) navigatorStatus() navigatorStatus {
 	return navigatorStatus{
+		databaseConneced:         m.database != nil,
 		databaseName:             m.connectedDatabaseName(),
 		tablesLoading:            m.loading,
 		tableLoadErr:             m.tableLoadErr,

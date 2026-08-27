@@ -52,6 +52,7 @@ type navigatorModel struct {
 }
 
 type navigatorStatus struct {
+	databaseConneced         bool
 	databaseName             string
 	tablesLoading            bool
 	tableLoadErr             error
@@ -233,9 +234,12 @@ func (m navigatorModel) itemAtMouse(msg tea.MouseClickMsg, layout appLayout) (in
 }
 
 func (m navigatorModel) view(status navigatorStatus, layout appLayout, focused bool) string {
-	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render("● " + sanitizeText(status.databaseName)), ""}
-	lines = append(lines, m.filter.View())
-	lines = append(lines, lipgloss.NewStyle().Bold(true).Foreground(colorTextMuted).Render(m.sectionTitle()))
+	lines := []string{}
+	if status.databaseConneced {
+		lines = append(lines, lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render("● "+sanitizeText(status.databaseName)), "")
+		lines = append(lines, m.filter.View())
+		lines = append(lines, lipgloss.NewStyle().Bold(true).Foreground(colorTextMuted).Render(m.sectionTitle()))
+	}
 
 	items := m.visibleItems()
 	switch {
@@ -246,8 +250,6 @@ func (m navigatorModel) view(status navigatorStatus, layout appLayout, focused b
 	case len(items) == 0:
 		if m.hasFilter() {
 			lines = append(lines, "No matching "+strings.ToLower(m.sectionTitle())+".")
-		} else {
-			lines = append(lines, "No "+strings.ToLower(m.sectionTitle())+" found.")
 		}
 	default:
 		cursor := m.cursor()
