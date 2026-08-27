@@ -39,3 +39,13 @@ Thumbs.db
 *~
 
 node_modules
+
+# Local teaching workspace
+/MISSION.md
+/RESOURCES.md
+/NOTES.md
+/GLOSSARY.md
+/learning-records/
+/lessons/
+/reference/
+/assets/
