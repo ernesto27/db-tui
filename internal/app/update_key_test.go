@@ -54,6 +54,7 @@ func TestUpdateKeyRouting(t *testing.T) {
 		},
 		{
 			name:    "starts navigator search",
+			setup:   func(model *Model) { model.database = &fakeDatabase{name: "chinook"} },
 			message: keyPress('f', "", tea.ModCtrl),
 			assert: func(t *testing.T, got Model, _ tea.Cmd) {
 				assert.Equal(t, focusNavigator, got.focus)

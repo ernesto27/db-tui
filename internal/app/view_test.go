@@ -27,6 +27,27 @@ func TestBaseViewShowsConnectedEngine(t *testing.T) {
 	assert.Contains(t, view.Content, "chinook  /  MySQL")
 }
 
+func TestBaseViewHidesNavigatorContentWithoutDatabase(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+
+	view := model.baseView()
+
+	assert.NotContains(t, view.Content, "● ")
+	assert.NotContains(t, view.Content, "Filter:")
+	assert.NotContains(t, view.Content, "Tables")
+}
+
+func TestBaseViewShowsNavigatorContentWithDatabase(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook"}
+
+	view := model.baseView()
+
+	assert.Contains(t, view.Content, "● chinook")
+	assert.Contains(t, view.Content, "Filter:")
+	assert.Contains(t, view.Content, "Tables")
+}
+
 func TestBaseViewShowsOracleEngine(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.database = &fakeDatabase{name: "FREEPDB1", engine: db.EngineOracle}

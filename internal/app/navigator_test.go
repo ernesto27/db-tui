@@ -74,7 +74,7 @@ func TestNavigatorObjectSectionsRequireEngineCapabilities(t *testing.T) {
 	navigator.setMaterializedViewsAvailable(true)
 	assert.True(t, navigator.selectSection(navigatorMaterializedViews, layout.navigatorListRows))
 	assert.Equal(t, navigatorMaterializedViews, navigator.section)
-	assert.Contains(t, navigator.view(navigatorStatus{}, layout, true), "Materialized views")
+	assert.Contains(t, navigator.view(navigatorStatus{databaseConneced: true}, layout, true), "Materialized views")
 
 	navigator.setMaterializedViewsAvailable(false)
 	assert.Equal(t, navigatorViews, navigator.section)
