@@ -19,7 +19,7 @@ const tableDDLSQL = `
 		)
 	FROM pg_catalog.pg_class c
 	JOIN pg_catalog.pg_namespace namespace ON namespace.oid = c.relnamespace
-	WHERE namespace.nspname = 'public' AND c.relname = $1`
+	WHERE namespace.nspname = $1 AND c.relname = $2`
 
 const tableDDLColumnsSQL = `
 	SELECT a.attname,
@@ -58,6 +58,7 @@ const tableDDLIndexesSQL = `
 	ORDER BY index_definition.indexrelid`
 
 type tableDDLMetadata struct {
+	schema      string
 	tableName   string
 	unsupported bool
 	columns     []ddlColumn
@@ -97,7 +98,7 @@ func (p *postgresql) TableDDL(ctx context.Context, table db.Table) (string, erro
 		return "", fmt.Errorf("set PostgreSQL DDL search path: %w", err)
 	}
 
-	metadata, err := p.loadTableDDL(ctx, tx, table.Name)
+	metadata, err := p.loadTableDDL(ctx, tx, table.Schema, table.Name)
 	if err != nil {
 		return "", err
 	}
@@ -111,17 +112,17 @@ func (p *postgresql) TableDDL(ctx context.Context, table db.Table) (string, erro
 	return sql, nil
 }
 
-func (p *postgresql) loadTableDDL(ctx context.Context, tx pgx.Tx, tableName string) (tableDDLMetadata, error) {
-	var metadata tableDDLMetadata
+func (p *postgresql) loadTableDDL(ctx context.Context, tx pgx.Tx, schema, tableName string) (tableDDLMetadata, error) {
+	metadata := tableDDLMetadata{schema: schema}
 	var oid uint32
 	var relationKind string
 	var partitioned, inherited bool
 	p.logger.Log(tableDDLSQL)
-	if err := tx.QueryRow(ctx, tableDDLSQL, tableName).Scan(&oid, &metadata.tableName, &relationKind, &partitioned, &inherited); err != nil {
+	if err := tx.QueryRow(ctx, tableDDLSQL, schema, tableName).Scan(&oid, &metadata.tableName, &relationKind, &partitioned, &inherited); err != nil {
 		return tableDDLMetadata{}, fmt.Errorf("find PostgreSQL table DDL: %w", err)
 	}
 	if relationKind != "r" || partitioned || inherited {
-		return tableDDLMetadata{unsupported: true}, nil
+		return tableDDLMetadata{schema: schema, unsupported: true}, nil
 	}
 
 	columns, err := p.loadDDLColumns(ctx, tx, oid)
@@ -248,7 +249,7 @@ func buildTableDDL(metadata tableDDLMetadata) (string, error) {
 		lines = append(lines, "    CONSTRAINT "+pgx.Identifier{constraint.Name}.Sanitize()+" "+constraint.Definition)
 	}
 
-	statements := []string{"CREATE TABLE " + publicTableIdentifier(metadata.tableName) + " (\n" + strings.Join(lines, ",\n") + "\n);"}
+	statements := []string{"CREATE TABLE " + tableIdentifier(metadata.schema, metadata.tableName) + " (\n" + strings.Join(lines, ",\n") + "\n);"}
 	for _, index := range metadata.indexes {
 		statements = append(statements, ensurePostgresSemicolon(index))
 	}
@@ -278,6 +279,6 @@ func ensurePostgresSemicolon(statement string) string {
 	return statement + ";"
 }
 
-func publicTableIdentifier(name string) string {
-	return "public." + pgx.Identifier{name}.Sanitize()
+func tableIdentifier(schema, name string) string {
+	return pgx.Identifier{schema, name}.Sanitize()
 }

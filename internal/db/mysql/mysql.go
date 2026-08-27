@@ -300,7 +300,7 @@ func (m *mysqlDatabase) Host() string {
 }
 
 // ListTables returns the base tables in the connected MySQL database.
-func (m *mysqlDatabase) ListTables(ctx context.Context) ([]db.Table, error) {
+func (m *mysqlDatabase) ListTables(ctx context.Context, _ string) ([]db.Table, error) {
 	m.logger.Log(listTablesSQL)
 	rows, err := m.database.QueryContext(ctx, listTablesSQL)
 	if err != nil {
@@ -322,8 +322,13 @@ func (m *mysqlDatabase) ListTables(ctx context.Context) ([]db.Table, error) {
 	return tables, nil
 }
 
+// ListSchemaObjectGroups is a placeholder because schema browsing is PostgreSQL-only.
+func (m *mysqlDatabase) ListSchemaObjectGroups(context.Context) ([]db.SchemaObjectGroup, error) {
+	return []db.SchemaObjectGroup{}, nil
+}
+
 // ListViews returns views in the connected MySQL database in alphabetical order.
-func (m *mysqlDatabase) ListViews(ctx context.Context) ([]db.View, error) {
+func (m *mysqlDatabase) ListViews(ctx context.Context, _ string) ([]db.View, error) {
 	m.logger.Log(listViewsSQL)
 	rows, err := m.database.QueryContext(ctx, listViewsSQL)
 	if err != nil {
@@ -347,7 +352,7 @@ func (m *mysqlDatabase) ListViews(ctx context.Context) ([]db.View, error) {
 }
 
 // ListMaterializedViews is a placeholder for MySQL materialized-view discovery.
-func (m *mysqlDatabase) ListMaterializedViews(context.Context) ([]db.MaterializedView, error) {
+func (m *mysqlDatabase) ListMaterializedViews(context.Context, string) ([]db.MaterializedView, error) {
 	return []db.MaterializedView{}, nil
 }
 

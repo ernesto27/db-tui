@@ -63,7 +63,7 @@ func (f editRowField) modified() bool {
 }
 
 type editRowModal struct {
-	tableName    string
+	table        db.Table
 	fields       []editRowField
 	selected     int
 	offset       int
@@ -98,10 +98,10 @@ func newEditRowModal(table db.Table, columns []db.Column, row []any) editRowModa
 		})
 	}
 	return editRowModal{
-		tableName: table.Name,
-		fields:    fields,
-		visible:   min(editRowDefaultVisible, max(1, len(fields))),
-		state:     editRowEditing,
+		table:   table,
+		fields:  fields,
+		visible: min(editRowDefaultVisible, max(1, len(fields))),
+		state:   editRowEditing,
 	}
 }
 
@@ -293,7 +293,7 @@ func (m editRowModal) prepareSave() (editRowModal, tea.Cmd) {
 func (m editRowModal) confirmSave() (editRowModal, tea.Cmd) {
 	m.state = editRowSaving
 	return m, func() tea.Msg {
-		return editRowSaveMsg{table: db.Table{Name: m.tableName}, setColumns: m.setColumns, whereColumns: m.whereColumns}
+		return editRowSaveMsg{table: m.table, setColumns: m.setColumns, whereColumns: m.whereColumns}
 	}
 }
 
@@ -363,7 +363,7 @@ func (m editRowModal) viewEditing(layout appLayout) string {
 	inputWidth := editRowInputWidth(contentWidth)
 
 	lines := []string{
-		s.title.Render("Edit row") + s.dim.Render("  ·  ") + s.accent.Render(sanitizeText(m.tableName)),
+		s.title.Render("Edit row") + s.dim.Render("  ·  ") + s.accent.Render(sanitizeText(m.table.Name)),
 		"",
 	}
 
@@ -396,7 +396,7 @@ func (m editRowModal) viewConfirmation(layout appLayout) string {
 	contentWidth := editRowContentWidth(layout.width)
 
 	lines := []string{
-		s.title.Render("Edit row") + s.dim.Render("  ·  ") + s.accent.Render(sanitizeText(m.tableName)),
+		s.title.Render("Edit row") + s.dim.Render("  ·  ") + s.accent.Render(sanitizeText(m.table.Name)),
 		"",
 		s.base.Render("Save changes to this row?"),
 		"",
@@ -450,7 +450,7 @@ func (m editRowModal) viewStatus(layout appLayout, message string, messageColor 
 	message = lipgloss.Wrap(sanitizeText(message), contentWidth, "")
 
 	lines := []string{
-		s.title.Render("Edit row") + s.dim.Render("  ·  ") + s.accent.Render(sanitizeText(m.tableName)),
+		s.title.Render("Edit row") + s.dim.Render("  ·  ") + s.accent.Render(sanitizeText(m.table.Name)),
 		"",
 		s.base.Foreground(messageColor).Render(message),
 	}

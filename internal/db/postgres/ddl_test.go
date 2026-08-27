@@ -8,6 +8,7 @@ import (
 
 func TestBuildTableDDL(t *testing.T) {
 	metadata := tableDDLMetadata{
+		schema:    "public",
 		tableName: "Album",
 		columns: []ddlColumn{
 			{Name: "AlbumId", Type: "int4", NotNull: true},
@@ -24,7 +25,7 @@ func TestBuildTableDDL(t *testing.T) {
 	got, err := buildTableDDL(metadata)
 
 	assert.NoError(t, err)
-	assert.Equal(t, `CREATE TABLE public."Album" (
+	assert.Equal(t, `CREATE TABLE "public"."Album" (
     "AlbumId" int4 NOT NULL,
     "Title" varchar(160) NOT NULL,
     "ArtistId" int4 NOT NULL,
@@ -43,6 +44,7 @@ func TestBuildTableDDLRejectsUnsupportedRelation(t *testing.T) {
 
 func TestBuildTableDDLIncludesColumnClauses(t *testing.T) {
 	got, err := buildTableDDL(tableDDLMetadata{
+		schema:    "public",
 		tableName: "ddl_review_demo",
 		columns: []ddlColumn{
 			{Name: "id", Type: "int4", NotNull: true, Default: `nextval('public.ddl_review_demo_id_seq'::regclass)`},

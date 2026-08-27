@@ -16725,5 +16725,38 @@ CREATE UNIQUE INDEX "UQ_SalesByCountry_Country"
 
 
 --
+-- Additional schemas for multi-schema navigation examples.
+--
+
+CREATE SCHEMA analytics;
+
+CREATE TABLE analytics."DailyRevenue" (
+    "RevenueDate" date PRIMARY KEY,
+    "InvoiceCount" integer NOT NULL,
+    "Revenue" numeric(10,2) NOT NULL
+);
+
+INSERT INTO analytics."DailyRevenue" VALUES
+    ('2024-01-01', 12, 34.87),
+    ('2024-01-02', 9, 25.91),
+    ('2024-01-03', 15, 41.83);
+
+CREATE SCHEMA audit;
+
+CREATE TABLE audit."Event" (
+    "EventId" integer PRIMARY KEY,
+    "OccurredAt" timestamp without time zone NOT NULL,
+    "Action" text NOT NULL,
+    "EntityType" text NOT NULL,
+    "EntityId" integer NOT NULL
+);
+
+INSERT INTO audit."Event" VALUES
+    (1, '2024-01-01 09:00:00', 'created', 'Invoice', 1),
+    (2, '2024-01-02 10:15:00', 'updated', 'Customer', 3),
+    (3, '2024-01-03 14:30:00', 'deleted', 'Playlist', 7);
+
+
+--
 -- PostgreSQL database dump complete
 --

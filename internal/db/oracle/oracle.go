@@ -198,7 +198,7 @@ func (o *oracleDatabase) Host() string {
 }
 
 // ListTables returns base tables visible to the current Oracle user.
-func (o *oracleDatabase) ListTables(ctx context.Context) ([]db.Table, error) {
+func (o *oracleDatabase) ListTables(ctx context.Context, _ string) ([]db.Table, error) {
 	o.logger.Log(listTablesSQL)
 	rows, err := o.database.QueryContext(ctx, listTablesSQL)
 	if err != nil {
@@ -220,8 +220,13 @@ func (o *oracleDatabase) ListTables(ctx context.Context) ([]db.Table, error) {
 	return tables, nil
 }
 
+// ListSchemaObjectGroups is a placeholder because schema browsing is PostgreSQL-only.
+func (o *oracleDatabase) ListSchemaObjectGroups(context.Context) ([]db.SchemaObjectGroup, error) {
+	return []db.SchemaObjectGroup{}, nil
+}
+
 // ListViews returns views visible to the current Oracle user.
-func (o *oracleDatabase) ListViews(ctx context.Context) ([]db.View, error) {
+func (o *oracleDatabase) ListViews(ctx context.Context, _ string) ([]db.View, error) {
 	o.logger.Log(listViewsSQL)
 	rows, err := o.database.QueryContext(ctx, listViewsSQL)
 	if err != nil {
@@ -244,7 +249,7 @@ func (o *oracleDatabase) ListViews(ctx context.Context) ([]db.View, error) {
 }
 
 // ListMaterializedViews returns materialized views visible to the current Oracle user.
-func (o *oracleDatabase) ListMaterializedViews(ctx context.Context) ([]db.MaterializedView, error) {
+func (o *oracleDatabase) ListMaterializedViews(ctx context.Context, _ string) ([]db.MaterializedView, error) {
 	o.logger.Log(listMaterializedViewsSQL)
 	rows, err := o.database.QueryContext(ctx, listMaterializedViewsSQL)
 	if err != nil {

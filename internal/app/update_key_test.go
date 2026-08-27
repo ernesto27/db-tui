@@ -69,8 +69,7 @@ func TestUpdateKeyRouting(t *testing.T) {
 			},
 			message: keyPress('o', "", tea.ModCtrl),
 			assert: func(t *testing.T, got Model, _ tea.Cmd) {
-				require.NotNil(t, got.objectsModal)
-				assert.Contains(t, got.objectsModal.sections, navigatorFunctions)
+				require.NotNil(t, got.databaseExplorerModal)
 			},
 		},
 		{

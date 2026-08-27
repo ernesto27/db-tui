@@ -300,16 +300,17 @@ func TestUpdateAppliesMatchingRowError(t *testing.T) {
 func TestUpdateAppliesOnlyCurrentTableDDLResult(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.session = 8
-	model.navigator.tables = []db.Table{{Name: "Album"}}
-	modal := newDDLModal("Album")
+	table := db.Table{Schema: "public", Name: "Album"}
+	model.navigator.tables = []db.Table{table}
+	modal := newDDLModal(table)
 	model.ddlModal = &modal
 	model.ddlRequest = 4
 
 	updated, command := updateModel(t, model, tableDDLLoadedMsg{
-		tableName: "Album",
-		sql:       "CREATE TABLE public.\"Album\" ();",
-		session:   8,
-		request:   4,
+		table:   table,
+		sql:     "CREATE TABLE public.\"Album\" ();",
+		session: 8,
+		request: 4,
 	})
 
 	assert.Nil(t, command)
@@ -318,15 +319,26 @@ func TestUpdateAppliesOnlyCurrentTableDDLResult(t *testing.T) {
 	assert.Equal(t, "CREATE TABLE public.\"Album\" ();", updated.ddlModal.sql)
 
 	stale, command := updateModel(t, updated, tableDDLLoadedMsg{
-		tableName: "Album",
-		sql:       "stale",
-		session:   8,
-		request:   3,
+		table:   table,
+		sql:     "stale",
+		session: 8,
+		request: 3,
 	})
 
 	assert.Nil(t, command)
 	require.NotNil(t, stale.ddlModal)
 	assert.Equal(t, "CREATE TABLE public.\"Album\" ();", stale.ddlModal.sql)
+
+	wrongSchema, command := updateModel(t, stale, tableDDLLoadedMsg{
+		table:   db.Table{Schema: "analytics", Name: "Album"},
+		sql:     "wrong schema",
+		session: 8,
+		request: 4,
+	})
+
+	assert.Nil(t, command)
+	require.NotNil(t, wrongSchema.ddlModal)
+	assert.Equal(t, "CREATE TABLE public.\"Album\" ();", wrongSchema.ddlModal.sql)
 }
 
 func TestUpdateAppliesOnlyCurrentColumnsResult(t *testing.T) {
@@ -532,6 +544,22 @@ func TestUpdateReplacesActiveDatabaseAfterCurrentConnectionAttempt(t *testing.T)
 	assert.Empty(t, updated.query.result.CommandTag)
 	assert.True(t, updated.loading)
 	assert.True(t, updated.spinnerRunning)
+}
+
+func TestUpdateStartsSchemaObjectDiscoveryForPostgreSQLConnection(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	modal := newConnectionModal(ConnectionSettings{})
+	modal.connecting = true
+	model.modal = &modal
+	model.connectionAttempt = 1
+
+	updated, command := updateModel(t, model, connectionFinishedMsg{
+		database: &fakeDatabase{name: "chinook", engine: db.EnginePostgreSQL},
+		attempt:  1,
+	})
+
+	require.NotNil(t, command)
+	assert.True(t, updated.schemaObjectGroupsLoading)
 }
 
 func TestUpdateEnablesMaterializedViewsForOracleConnection(t *testing.T) {

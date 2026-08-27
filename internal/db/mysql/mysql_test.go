@@ -113,7 +113,7 @@ func TestEnsureTrailingSemicolon(t *testing.T) {
 func TestListTables(t *testing.T) {
 	database := connectWorld(t)
 
-	tables, err := database.ListTables(context.Background())
+	tables, err := database.ListTables(context.Background(), "")
 
 	require.NoError(t, err)
 	assert.Equal(t, []db.Table{
@@ -127,7 +127,7 @@ func TestListTables(t *testing.T) {
 func TestListViews(t *testing.T) {
 	database := connectWorld(t)
 
-	views, err := database.ListViews(context.Background())
+	views, err := database.ListViews(context.Background(), "")
 
 	require.NoError(t, err)
 	assert.Equal(t, []db.View{

@@ -36,7 +36,7 @@ func TestFunctionSchemaUsesEngineScope(t *testing.T) {
 
 func TestObjectsModalSelectsFunctionNavigatorSection(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
-	model.database = &fakeDatabase{name: "chinook", engine: db.EnginePostgreSQL}
+	model.database = &fakeDatabase{name: "chinook", engine: db.EngineMySQL}
 	model.navigator.setFunctionsAvailable(true)
 
 	opened, _ := updateModel(t, model, keyPress('o', "", tea.ModCtrl))

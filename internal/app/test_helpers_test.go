@@ -66,43 +66,48 @@ type fakeDatabase struct {
 	ddl         string
 	ddlErr      error
 
-	dumpErr        error
-	exportErr      error
-	exportQueryErr error
+	dumpErr               error
+	exportErr             error
+	exportQueryErr        error
+	schemaObjectGroups    []db.SchemaObjectGroup
+	schemaObjectGroupsErr error
 
-	listTablesCalls       int
-	listTablesDeadline    bool
-	listViewsCalls        int
-	listViewsDeadline     bool
-	listFunctionsCalls    int
-	listFunctionsSchema   string
-	listFunctionsDeadline bool
-	listColumnsCalls      int
-	listColumnsTable      db.Table
-	listColumnsDeadline   bool
-	listIndexesCalls      int
-	listIndexesTable      db.Table
-	listIndexesDeadline   bool
-	getRowsCalls          int
-	getRowsTable          db.Table
-	getRowsRequest        db.PageRequest
-	getRowsDeadline       bool
-	executeCalls          int
-	executedSQL           string
-	executeDeadline       bool
-	tableDDLCalls         int
-	tableDDLTable         db.Table
-	tableDDLDeadline      bool
-	dumpCalls             int
-	dumpDeadline          bool
-	exportCalls           int
-	exportTable           db.Table
-	exportType            string
-	exportDeadline        bool
-	exportQueryCalls      int
-	exportedQuery         string
-	exportQueryDeadline   bool
-	closeCalls            int
+	listTablesCalls                int
+	listTablesSchema               string
+	listTablesDeadline             bool
+	listSchemaObjectGroupsCalls    int
+	listSchemaObjectGroupsDeadline bool
+	listViewsCalls                 int
+	listViewsDeadline              bool
+	listFunctionsCalls             int
+	listFunctionsSchema            string
+	listFunctionsDeadline          bool
+	listColumnsCalls               int
+	listColumnsTable               db.Table
+	listColumnsDeadline            bool
+	listIndexesCalls               int
+	listIndexesTable               db.Table
+	listIndexesDeadline            bool
+	getRowsCalls                   int
+	getRowsTable                   db.Table
+	getRowsRequest                 db.PageRequest
+	getRowsDeadline                bool
+	executeCalls                   int
+	executedSQL                    string
+	executeDeadline                bool
+	tableDDLCalls                  int
+	tableDDLTable                  db.Table
+	tableDDLDeadline               bool
+	dumpCalls                      int
+	dumpDeadline                   bool
+	exportCalls                    int
+	exportTable                    db.Table
+	exportType                     string
+	exportDeadline                 bool
+	exportQueryCalls               int
+	exportedQuery                  string
+	exportQueryDeadline            bool
+	closeCalls                     int
 }
 
 func (f *fakeDatabase) Name() string {
@@ -117,19 +122,26 @@ func (f *fakeDatabase) Host() string {
 	return f.host
 }
 
-func (f *fakeDatabase) ListTables(ctx context.Context) ([]db.Table, error) {
+func (f *fakeDatabase) ListTables(ctx context.Context, schema string) ([]db.Table, error) {
 	f.listTablesCalls++
+	f.listTablesSchema = schema
 	_, f.listTablesDeadline = ctx.Deadline()
 	return f.tables, f.tablesErr
 }
 
-func (f *fakeDatabase) ListViews(ctx context.Context) ([]db.View, error) {
+func (f *fakeDatabase) ListSchemaObjectGroups(ctx context.Context) ([]db.SchemaObjectGroup, error) {
+	f.listSchemaObjectGroupsCalls++
+	_, f.listSchemaObjectGroupsDeadline = ctx.Deadline()
+	return f.schemaObjectGroups, f.schemaObjectGroupsErr
+}
+
+func (f *fakeDatabase) ListViews(ctx context.Context, _ string) ([]db.View, error) {
 	f.listViewsCalls++
 	_, f.listViewsDeadline = ctx.Deadline()
 	return f.views, f.viewsErr
 }
 
-func (f *fakeDatabase) ListMaterializedViews(context.Context) ([]db.MaterializedView, error) {
+func (f *fakeDatabase) ListMaterializedViews(context.Context, string) ([]db.MaterializedView, error) {
 	return []db.MaterializedView{}, nil
 }
 

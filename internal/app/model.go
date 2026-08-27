@@ -59,22 +59,24 @@ type Model struct {
 	connectionAttempt      uint64
 	session                uint64
 
-	loading                  bool
-	tableLoadErr             error
-	viewsLoading             bool
-	viewLoadErr              error
-	materializedViewsLoading bool
-	materializedViewLoadErr  error
-	functionsLoading         bool
-	functionLoadErr          error
-	navigator                navigatorModel
-	activeRelation           activeRelation
-	activeFunction           activeFunction
-	data                     dataModel
-	panel                    rightPanel
-	query                    queryModel
-	sqlScriptsModal          *sqlScriptsModal
-	sqlScriptsRequest        uint64
+	loading                   bool
+	tableLoadErr              error
+	viewsLoading              bool
+	viewLoadErr               error
+	materializedViewsLoading  bool
+	materializedViewLoadErr   error
+	functionsLoading          bool
+	functionLoadErr           error
+	schemaObjectGroupsLoading bool
+	schemaObjectGroups        []db.SchemaObjectGroup
+	navigator                 navigatorModel
+	activeRelation            activeRelation
+	activeFunction            activeFunction
+	data                      dataModel
+	panel                     rightPanel
+	query                     queryModel
+	sqlScriptsModal           *sqlScriptsModal
+	sqlScriptsRequest         uint64
 
 	spinnerFrame       int
 	spinnerRunning     bool
@@ -87,17 +89,18 @@ type Model struct {
 
 	config config.Config
 
-	dumpModal      *dumpModal
-	exportModal    *exportModal
-	ddlModal       *ddlModal
-	ddlRequest     uint64
-	columnsModal   *columnsModal
-	columnsRequest uint64
-	actionsModal   *actionsModal
-	renameRequest  uint64
-	indexesModal   *indexesModal
-	indexesRequest uint64
-	objectsModal   *objectsModal
+	dumpModal             *dumpModal
+	exportModal           *exportModal
+	ddlModal              *ddlModal
+	ddlRequest            uint64
+	columnsModal          *columnsModal
+	columnsRequest        uint64
+	actionsModal          *actionsModal
+	renameRequest         uint64
+	indexesModal          *indexesModal
+	indexesRequest        uint64
+	objectsModal          *objectsModal
+	databaseExplorerModal *databaseExplorerModal
 
 	editRowModal   *editRowModal
 	deleteRowModal *deleteRowModal
@@ -133,10 +136,14 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) loadDatabaseObjects() tea.Cmd {
+	schema := functionSchema(m.database)
 	commands := []tea.Cmd{
-		loadTables(m.database, m.session),
-		loadViews(m.database, m.session),
-		loadMaterializedViews(m.database, m.session),
+		loadTables(m.database, schema, m.session),
+		loadViews(m.database, schema, m.session),
+		loadMaterializedViews(m.database, schema, m.session),
+	}
+	if m.database.Engine() == db.EnginePostgreSQL {
+		commands = append(commands, loadSchemaObjectGroups(m.database, m.session))
 	}
 	if m.navigator.functionsAvailable {
 		commands = append(commands, loadFunctions(m.database, functionSchema(m.database), m.session))

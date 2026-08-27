@@ -18,12 +18,27 @@ func TestLoadTables(t *testing.T) {
 		tablesErr: wantErr,
 	}
 
-	message, ok := loadTables(database, 7)().(tablesLoadedMsg)
+	message, ok := loadTables(database, "public", 7)().(tablesLoadedMsg)
 	require.True(t, ok)
 
 	assert.Equal(t, 1, database.listTablesCalls)
 	assert.True(t, database.listTablesDeadline)
 	assert.Equal(t, database.tables, message.tables)
+	assert.ErrorIs(t, message.err, wantErr)
+	assert.Equal(t, uint64(7), message.session)
+}
+
+func TestLoadSchemaObjectGroups(t *testing.T) {
+	wantErr := errors.New("list failed")
+	wantGroups := []db.SchemaObjectGroup{{Schema: "reporting", Type: db.SchemaObjectViews}}
+	database := &fakeDatabase{schemaObjectGroups: wantGroups, schemaObjectGroupsErr: wantErr}
+
+	message, ok := loadSchemaObjectGroups(database, 7)().(schemaObjectGroupsLoadedMsg)
+
+	require.True(t, ok)
+	assert.Equal(t, 1, database.listSchemaObjectGroupsCalls)
+	assert.True(t, database.listSchemaObjectGroupsDeadline)
+	assert.Equal(t, wantGroups, message.groups)
 	assert.ErrorIs(t, message.err, wantErr)
 	assert.Equal(t, uint64(7), message.session)
 }
@@ -135,13 +150,14 @@ func TestLoadTableDDL(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			message, ok := loadTableDDL(test.database, db.Table{Name: "Album"}, 7, 3)().(tableDDLLoadedMsg)
+			table := db.Table{Schema: "public", Name: "Album"}
+			message, ok := loadTableDDL(test.database, table, 7, 3)().(tableDDLLoadedMsg)
 			require.True(t, ok)
 
 			assert.Equal(t, 1, test.database.tableDDLCalls)
-			assert.Equal(t, db.Table{Name: "Album"}, test.database.tableDDLTable)
+			assert.Equal(t, table, test.database.tableDDLTable)
 			assert.True(t, test.database.tableDDLDeadline)
-			assert.Equal(t, "Album", message.tableName)
+			assert.Equal(t, table, message.table)
 			assert.Equal(t, test.wantSQL, message.sql)
 			assert.Equal(t, uint64(7), message.session)
 			assert.Equal(t, uint64(3), message.request)

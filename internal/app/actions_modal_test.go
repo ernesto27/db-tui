@@ -223,7 +223,7 @@ func TestSelectDDLClosesActionsAndOpensDDLModal(t *testing.T) {
 
 	assert.Nil(t, updated.actionsModal)
 	assert.NotNil(t, updated.ddlModal)
-	assert.Equal(t, "Album", updated.ddlModal.tableName)
+	assert.Equal(t, db.Table{Name: "Album"}, updated.ddlModal.table)
 	assert.True(t, updated.ddlModal.loading)
 }
 

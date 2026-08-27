@@ -27,12 +27,13 @@ type navigatorCursor struct {
 
 type navigatorItem struct {
 	name     string
+	schema   string
 	section  navigatorSection
 	function db.FunctionColumns
 }
 
 func (i navigatorItem) rowSource() db.Table {
-	return db.Table{Name: i.name}
+	return db.Table{Schema: i.schema, Name: i.name}
 }
 
 type navigatorModel struct {
@@ -42,6 +43,7 @@ type navigatorModel struct {
 	materializedViewsAvailable bool
 	functions                  []db.FunctionColumns
 	functionsAvailable         bool
+	schema                     string
 	section                    navigatorSection
 	cursors                    [navigatorSectionCount]navigatorCursor
 
@@ -126,7 +128,7 @@ func (m navigatorModel) selectedTable() (db.Table, bool) {
 	if !ok || item.section != navigatorTables {
 		return db.Table{}, false
 	}
-	return db.Table{Name: item.name}, true
+	return item.rowSource(), true
 }
 
 func (m navigatorModel) selectedName() string {
@@ -265,16 +267,21 @@ func (m navigatorModel) view(status navigatorStatus, layout appLayout, focused b
 }
 
 func (m navigatorModel) sectionTitle() string {
+	var title string
 	switch m.section {
 	case navigatorViews:
-		return "Views"
+		title = "Views"
 	case navigatorMaterializedViews:
-		return "Materialized views"
+		title = "Materialized views"
 	case navigatorFunctions:
-		return "Functions"
+		title = "Functions"
 	default:
-		return "Tables"
+		title = "Tables"
 	}
+	if m.schema == "" {
+		return title
+	}
+	return sanitizeText(m.schema) + " — " + title
 }
 
 func (m navigatorModel) sectionLoading(status navigatorStatus) bool {
@@ -341,6 +348,7 @@ func (m navigatorModel) visibleItems() []navigatorItem {
 		for index, view := range views {
 			items[index] = navigatorItem{
 				name:    view.Name,
+				schema:  m.schema,
 				section: navigatorViews,
 			}
 		}
@@ -352,6 +360,7 @@ func (m navigatorModel) visibleItems() []navigatorItem {
 		for index, view := range views {
 			items[index] = navigatorItem{
 				name:    view.Name,
+				schema:  m.schema,
 				section: navigatorMaterializedViews,
 			}
 		}
@@ -363,6 +372,7 @@ func (m navigatorModel) visibleItems() []navigatorItem {
 		for index, function := range functions {
 			items[index] = navigatorItem{
 				name:     function.Name,
+				schema:   m.schema,
 				section:  navigatorFunctions,
 				function: function,
 			}
@@ -375,6 +385,7 @@ func (m navigatorModel) visibleItems() []navigatorItem {
 		for index, table := range tables {
 			items[index] = navigatorItem{
 				name:    table.Name,
+				schema:  table.Schema,
 				section: navigatorTables,
 			}
 		}

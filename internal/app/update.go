@@ -49,6 +49,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.updateSQLScriptsModal(msg)
 		}
 	}
+	if m.databaseExplorerModal != nil {
+		return m, m.updateSchemaObjectsModal(msg)
+	}
 	if m.objectsModal != nil {
 		return m, m.updateObjectsModal(msg)
 	}
@@ -124,7 +127,7 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		m.spinnerRunning = false
 		return nil, true
 	case tablesLoadedMsg:
-		if msg.session != m.session {
+		if msg.session != m.session || (m.navigator.schema != "" && msg.schema != m.navigator.schema) {
 			return nil, true
 		}
 		m.loading = false
@@ -132,8 +135,15 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		m.navigator.setTables(msg.tables)
 		m.selectInitialRelation()
 		return nil, true
-	case viewsLoadedMsg:
+	case schemaObjectGroupsLoadedMsg:
 		if msg.session != m.session {
+			return nil, true
+		}
+		m.schemaObjectGroupsLoading = false
+		m.schemaObjectGroups = msg.groups
+		return nil, true
+	case viewsLoadedMsg:
+		if msg.session != m.session || (m.navigator.schema != "" && msg.schema != m.navigator.schema) {
 			return nil, true
 		}
 		m.viewsLoading = false
@@ -144,7 +154,7 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		m.selectInitialRelation()
 		return nil, true
 	case materializedViewsLoadedMsg:
-		if msg.session != m.session {
+		if msg.session != m.session || (m.navigator.schema != "" && msg.schema != m.navigator.schema) {
 			return nil, true
 		}
 		m.materializedViewsLoading = false
@@ -156,7 +166,7 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		m.selectInitialRelation()
 		return nil, true
 	case functionsLoadedMsg:
-		if msg.session != m.session {
+		if msg.session != m.session || (m.navigator.schema != "" && msg.schema != m.navigator.schema) {
 			return nil, true
 		}
 		m.functionsLoading = false
@@ -180,7 +190,7 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		return nil, true
 	case tableDDLLoadedMsg:
 		table, ok := m.navigator.selectedTable()
-		if msg.session != m.session || m.ddlModal == nil || msg.request != m.ddlRequest || !ok || table.Name != msg.tableName || m.ddlModal.tableName != msg.tableName {
+		if msg.session != m.session || m.ddlModal == nil || msg.request != m.ddlRequest || !ok || table != msg.table || m.ddlModal.table != msg.table {
 			return nil, true
 		}
 		m.ddlModal.finish(msg.sql, msg.err, m.layout)
@@ -253,6 +263,9 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		if m.sqlScriptsModal != nil {
 			m.sqlScriptsModal.clamp(m.layout)
+		}
+		if m.databaseExplorerModal != nil {
+			m.databaseExplorerModal.clamp(m.layout)
 		}
 		return nil, true
 	case renameRequestMsg:
@@ -445,6 +458,8 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewLoadErr = nil
 		m.materializedViewLoadErr = nil
 		m.functionLoadErr = nil
+		m.schemaObjectGroups = nil
+		m.schemaObjectGroupsLoading = msg.database.Engine() == db.EnginePostgreSQL
 		m.navigator.reset()
 		m.activeRelation = activeRelation{}
 		m.activeFunction = activeFunction{}
@@ -612,6 +627,11 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		m.navigator.finishSearch()
+		if m.database.Engine() == db.EnginePostgreSQL {
+			modal := newDatabaseExplorerModal(m.schemaObjectGroups)
+			m.databaseExplorerModal = &modal
+			return nil
+		}
 		modal := newObjectsModal(m.navigator)
 		m.objectsModal = &modal
 		return nil
@@ -799,7 +819,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		if m.database == nil || !ok || m.loading || m.data.loading || m.query.loading {
 			return nil
 		}
-		modal := newExportModal(table.Name)
+		modal := newExportModal(table)
 		m.exportModal = &modal
 		return nil
 	case m.panel == panelData && m.focus == focusData && !m.data.loading && key.Matches(msg, m.keys.refreshTable):
@@ -975,6 +995,49 @@ func (m *Model) updateObjectsModal(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
+func (m *Model) updateSchemaObjectsModal(msg tea.Msg) tea.Cmd {
+	keyMsg, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return nil
+	}
+	switch keyMsg.String() {
+	case "esc":
+		m.databaseExplorerModal = nil
+	case "up", "k":
+		m.databaseExplorerModal.move(-1, m.layout)
+	case "down", "j":
+		m.databaseExplorerModal.move(1, m.layout)
+	case "enter":
+		group := m.databaseExplorerModal.selectedGroup()
+		m.databaseExplorerModal = nil
+		m.navigator.schema = group.Schema
+		m.focus = focusNavigator
+		switch group.Type {
+		case db.SchemaObjectViews:
+			m.navigator.selectSection(navigatorViews, m.layout.navigatorListRows)
+			m.viewsLoading = true
+			m.viewLoadErr = nil
+			return loadViews(m.database, group.Schema, m.session)
+		case db.SchemaObjectMaterializedViews:
+			m.navigator.selectSection(navigatorMaterializedViews, m.layout.navigatorListRows)
+			m.materializedViewsLoading = true
+			m.materializedViewLoadErr = nil
+			return loadMaterializedViews(m.database, group.Schema, m.session)
+		case db.SchemaObjectFunctions:
+			m.navigator.selectSection(navigatorFunctions, m.layout.navigatorListRows)
+			m.functionsLoading = true
+			m.functionLoadErr = nil
+			return loadFunctions(m.database, group.Schema, m.session)
+		default:
+			m.navigator.selectSection(navigatorTables, m.layout.navigatorListRows)
+			m.loading = true
+			m.tableLoadErr = nil
+			return loadTables(m.database, group.Schema, m.session)
+		}
+	}
+	return nil
+}
+
 func (m *Model) startRowLoad(offset, selectedRow int) tea.Cmd {
 	if m.database == nil || !m.activeRelation.set {
 		return nil
@@ -1093,7 +1156,7 @@ func (m *Model) updateExportModal(msg tea.Msg) tea.Cmd {
 		switch keyMsg.String() {
 		case "enter":
 			m.exportModal.state = exportRunning
-			command := exportTable(m.database, db.Table{Name: m.exportModal.tableName}, m.exportModal.format, m.session)
+			command := exportTable(m.database, m.exportModal.table, m.exportModal.format, m.session)
 			if m.exportModal.source == exportQuerySource {
 				command = exportQuery(m.database, m.exportModal.query, m.session)
 			}
@@ -1144,7 +1207,7 @@ func (m *Model) updateActionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.actionsModal = nil
 		m.ddlRequest++
-		modal := newDDLModal(table.Name)
+		modal := newDDLModal(table)
 		m.ddlModal = &modal
 		return *m, tea.Batch(loadTableDDL(m.database, table, m.session, m.ddlRequest), m.startSpinner())
 	case selectColumnsActionMsg:
@@ -1280,7 +1343,7 @@ func (m *Model) openEditRowModal() tea.Cmd {
 		return nil
 	}
 	row := m.data.page.Rows[m.data.selected]
-	return loadEditRowColumns(m.database, db.Table{Name: m.activeRelation.item.name}, row, m.session)
+	return loadEditRowColumns(m.database, m.activeRelation.item.rowSource(), row, m.session)
 }
 
 func (m *Model) updateEditRowModal(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -1319,7 +1382,7 @@ func (m *Model) openDeleteRowModal() tea.Cmd {
 	}
 
 	modal := newDeleteRowModal(
-		db.Table{Name: m.activeRelation.item.name},
+		m.activeRelation.item.rowSource(),
 		whereColumns,
 	)
 	m.deleteRowModal = &modal

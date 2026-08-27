@@ -20,12 +20,20 @@ const (
 
 type tablesLoadedMsg struct {
 	tables  []db.Table
+	schema  string
+	session uint64
+	err     error
+}
+
+type schemaObjectGroupsLoadedMsg struct {
+	groups  []db.SchemaObjectGroup
 	session uint64
 	err     error
 }
 
 type viewsLoadedMsg struct {
 	views   []db.View
+	schema  string
 	session uint64
 	err     error
 }
@@ -41,11 +49,11 @@ type rowsLoadedMsg struct {
 }
 
 type tableDDLLoadedMsg struct {
-	tableName string
-	sql       string
-	session   uint64
-	request   uint64
-	err       error
+	table   db.Table
+	sql     string
+	session uint64
+	request uint64
+	err     error
 }
 
 type columnsLoadedMsg struct {
@@ -74,12 +82,14 @@ type queryFinishedMsg struct {
 
 type materializedViewsLoadedMsg struct {
 	materializedViews []db.MaterializedView
+	schema            string
 	session           uint64
 	err               error
 }
 
 type functionsLoadedMsg struct {
 	functions []db.FunctionColumns
+	schema    string
 	session   uint64
 	err       error
 }
@@ -112,23 +122,33 @@ func saveSQLScript(sqlScripts ListSqlScript, connectionName, fileName, content s
 	}
 }
 
-func loadTables(database db.Database, session uint64) tea.Cmd {
+func loadTables(database db.Database, schema string, session uint64) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
 		defer cancel()
 
-		tables, err := database.ListTables(ctx)
-		return tablesLoadedMsg{tables: tables, session: session, err: err}
+		tables, err := database.ListTables(ctx, schema)
+		return tablesLoadedMsg{tables: tables, schema: schema, session: session, err: err}
 	}
 }
 
-func loadViews(database db.Database, session uint64) tea.Cmd {
+func loadSchemaObjectGroups(database db.Database, session uint64) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
 		defer cancel()
 
-		views, err := database.ListViews(ctx)
-		return viewsLoadedMsg{views: views, session: session, err: err}
+		groups, err := database.ListSchemaObjectGroups(ctx)
+		return schemaObjectGroupsLoadedMsg{groups: groups, session: session, err: err}
+	}
+}
+
+func loadViews(database db.Database, schema string, session uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		defer cancel()
+
+		views, err := database.ListViews(ctx, schema)
+		return viewsLoadedMsg{views: views, schema: schema, session: session, err: err}
 	}
 }
 
@@ -167,11 +187,11 @@ func loadTableDDL(database db.Database, table db.Table, session, request uint64)
 
 		sql, err := database.TableDDL(ctx, table)
 		return tableDDLLoadedMsg{
-			tableName: table.Name,
-			sql:       sql,
-			session:   session,
-			request:   request,
-			err:       err,
+			table:   table,
+			sql:     sql,
+			session: session,
+			request: request,
+			err:     err,
 		}
 	}
 }
@@ -208,15 +228,16 @@ func loadIndexes(database db.Database, table db.Table, session, request uint64) 
 	}
 }
 
-func loadMaterializedViews(database db.Database, session uint64) tea.Cmd {
+func loadMaterializedViews(database db.Database, schema string, session uint64) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
 		defer cancel()
 
-		materializedViews, err := database.ListMaterializedViews(ctx)
+		materializedViews, err := database.ListMaterializedViews(ctx, schema)
 
 		return materializedViewsLoadedMsg{
 			materializedViews: materializedViews,
+			schema:            schema,
 			session:           session,
 			err:               err,
 		}
@@ -229,7 +250,7 @@ func loadFunctions(database db.Database, schema string, session uint64) tea.Cmd 
 		defer cancel()
 
 		functions, err := database.ListFunctions(ctx, schema)
-		return functionsLoadedMsg{functions: functions, session: session, err: err}
+		return functionsLoadedMsg{functions: functions, schema: schema, session: session, err: err}
 	}
 }
 

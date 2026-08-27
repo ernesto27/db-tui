@@ -13,7 +13,7 @@ import (
 
 func TestEditRowFieldDoesNotRenderDataType(t *testing.T) {
 	modal := newEditRowModal(
-		db.Table{Name: "Album"},
+		db.Table{Schema: "reporting", Name: "Album"},
 		[]db.Column{{Name: "AlbumId", DataType: "int4"}},
 		[]any{11},
 	)
@@ -29,8 +29,8 @@ func TestEditRowFailureWrapsFullErrorMessage(t *testing.T) {
 	message := "update PostgreSQL row: ERROR: invalid input syntax for type integer: \"not a number\" (SQLSTATE 22P02)"
 	layout := newAppLayout(64, 24)
 	modal := editRowModal{
-		tableName: "Album",
-		state:     editRowFailed,
+		table: db.Table{Name: "Album"},
+		state: editRowFailed,
 	}
 
 	view := ansi.Strip(modal.viewStatus(layout, message, colorError))
@@ -46,7 +46,7 @@ func TestEditRowFailureWrapsFullErrorMessage(t *testing.T) {
 
 func TestEditRowRequiresConfirmationBeforeSaving(t *testing.T) {
 	modal := newEditRowModal(
-		db.Table{Name: "Album"},
+		db.Table{Schema: "reporting", Name: "Album"},
 		[]db.Column{
 			{Name: "AlbumId", IsPrimaryKey: true},
 			{Name: "Title"},
@@ -75,7 +75,7 @@ func TestEditRowRequiresConfirmationBeforeSaving(t *testing.T) {
 	require.NotNil(t, command)
 	assert.Equal(t, editRowSaving, saving.state)
 	assert.Equal(t, editRowSaveMsg{
-		table:        db.Table{Name: "Album"},
+		table:        db.Table{Schema: "reporting", Name: "Album"},
 		setColumns:   map[string]any{"Title": "After"},
 		whereColumns: map[string]any{"AlbumId": 1},
 	}, command())

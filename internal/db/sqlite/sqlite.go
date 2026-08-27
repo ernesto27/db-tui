@@ -121,7 +121,7 @@ func (s *sqliteDatabase) Host() string {
 }
 
 // ListTables returns non-internal SQLite tables in alphabetical order.
-func (s *sqliteDatabase) ListTables(ctx context.Context) ([]db.Table, error) {
+func (s *sqliteDatabase) ListTables(ctx context.Context, _ string) ([]db.Table, error) {
 	s.logger.Log(listTablesSQL)
 	rows, err := s.database.QueryContext(ctx, listTablesSQL)
 	if err != nil {
@@ -143,8 +143,13 @@ func (s *sqliteDatabase) ListTables(ctx context.Context) ([]db.Table, error) {
 	return tables, nil
 }
 
+// ListSchemaObjectGroups is a placeholder because schema browsing is PostgreSQL-only.
+func (s *sqliteDatabase) ListSchemaObjectGroups(context.Context) ([]db.SchemaObjectGroup, error) {
+	return []db.SchemaObjectGroup{}, nil
+}
+
 // ListViews returns non-internal SQLite views in alphabetical order.
-func (s *sqliteDatabase) ListViews(ctx context.Context) ([]db.View, error) {
+func (s *sqliteDatabase) ListViews(ctx context.Context, _ string) ([]db.View, error) {
 	s.logger.Log(listViewsSQL)
 	rows, err := s.database.QueryContext(ctx, listViewsSQL)
 	if err != nil {
@@ -168,7 +173,7 @@ func (s *sqliteDatabase) ListViews(ctx context.Context) ([]db.View, error) {
 }
 
 // ListMaterializedViews is a placeholder for SQLite materialized-view discovery.
-func (s *sqliteDatabase) ListMaterializedViews(context.Context) ([]db.MaterializedView, error) {
+func (s *sqliteDatabase) ListMaterializedViews(context.Context, string) ([]db.MaterializedView, error) {
 	return []db.MaterializedView{}, nil
 }
 

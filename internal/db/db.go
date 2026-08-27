@@ -66,7 +66,8 @@ const (
 
 // Table identifies a table available in a database session.
 type Table struct {
-	Name string
+	Schema string
+	Name   string
 }
 
 // View identifies a view available in a database session.
@@ -77,6 +78,26 @@ type View struct {
 // MaterializedView identifies a materialized view available in a database session.
 type MaterializedView struct {
 	Name string
+}
+
+// SchemaObjectType identifies a category of objects in a database schema.
+type SchemaObjectType string
+
+const (
+	// SchemaObjectTables identifies base tables.
+	SchemaObjectTables SchemaObjectType = "tables"
+	// SchemaObjectViews identifies ordinary views.
+	SchemaObjectViews SchemaObjectType = "views"
+	// SchemaObjectMaterializedViews identifies materialized views.
+	SchemaObjectMaterializedViews SchemaObjectType = "materialized_views"
+	// SchemaObjectFunctions identifies functions.
+	SchemaObjectFunctions SchemaObjectType = "functions"
+)
+
+// SchemaObjectGroup identifies one category of objects available in a schema.
+type SchemaObjectGroup struct {
+	Schema string
+	Type   SchemaObjectType
 }
 
 // PageRequest identifies a bounded range of rows to return.
@@ -161,7 +182,8 @@ type Database interface {
 	Engine() string
 	// Host returns the configured network host, or an empty string for local databases.
 	Host() string
-	ListTables(ctx context.Context) ([]Table, error)
+	ListTables(ctx context.Context, schema string) ([]Table, error)
+	ListSchemaObjectGroups(ctx context.Context) ([]SchemaObjectGroup, error)
 	// GetRows returns an unordered page of rows from table.
 	GetRows(ctx context.Context, table Table, page PageRequest) (RowPage, error)
 	// TableDDL returns a fresh executable structural DDL script for table.
@@ -174,8 +196,8 @@ type Database interface {
 	ExportQuery(ctx context.Context, sql string) error
 	ListColumns(ctx context.Context, table Table) ([]Column, error)
 	ListIndexes(ctx context.Context, table Table) ([]IndexColumns, error)
-	ListViews(ctx context.Context) ([]View, error)
-	ListMaterializedViews(ctx context.Context) ([]MaterializedView, error)
+	ListViews(ctx context.Context, schema string) ([]View, error)
+	ListMaterializedViews(ctx context.Context, schema string) ([]MaterializedView, error)
 	UpdateRow(ctx context.Context, table Table, setColumns map[string]any, whereColumns map[string]any) error
 	DeleteRow(ctx context.Context, table Table, whereColumns map[string]any) error
 	ListFunctions(ctx context.Context, schema string) ([]FunctionColumns, error)

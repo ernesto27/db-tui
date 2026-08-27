@@ -5,15 +5,17 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/ernestoponce27/db-tui/internal/db"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestDDLModalWrapsAndScrollsSQL(t *testing.T) {
 	layout := newAppLayout(64, 16)
-	modal := newDDLModal("Album")
+	modal := newDDLModal(db.Table{Schema: "public", Name: "Album"})
 	modal.finish("CREATE TABLE public.\"Album\" (\n\t\"AlbumId\" int4 NOT NULL,\n\t\"Title\" varchar(160) NOT NULL\n);", nil, layout)
 
 	assert.Contains(t, modal.view(layout, "⠋"), "CREATE TABLE public.")
+	assert.Contains(t, modal.view(layout, "⠋"), "DDL · public.Album")
 	assert.Contains(t, modal.view(layout, "⠋"), "\"AlbumId\" int4 NOT NULL")
 	assert.Contains(t, modal.view(layout, "⠋"), "Esc close")
 

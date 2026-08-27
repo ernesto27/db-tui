@@ -14,7 +14,7 @@ import (
 // View implements tea.Model.
 func (m Model) View() tea.View {
 	view := m.baseView()
-	if m.modal != nil || m.connectionsModal != nil || m.settingsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.columnsModal != nil || m.indexesModal != nil || m.actionsModal != nil || m.editRowModal != nil || m.deleteRowModal != nil || m.sqlScriptsModal != nil || m.objectsModal != nil {
+	if m.modal != nil || m.connectionsModal != nil || m.settingsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.columnsModal != nil || m.indexesModal != nil || m.actionsModal != nil || m.editRowModal != nil || m.deleteRowModal != nil || m.sqlScriptsModal != nil || m.objectsModal != nil || m.databaseExplorerModal != nil {
 		view.Content = m.renderModalOverlay(view.Content)
 	}
 	return view
@@ -147,6 +147,8 @@ func (m Model) renderModalOverlay(base string) string {
 		modal = m.indexesModal.view(m.layout, m.spinner())
 	case m.sqlScriptsModal != nil:
 		modal = m.sqlScriptsModal.view(m.layout)
+	case m.databaseExplorerModal != nil:
+		modal = m.databaseExplorerModal.view(m.layout)
 	case m.objectsModal != nil:
 		modal = m.objectsModal.view(m.layout.width)
 	default:

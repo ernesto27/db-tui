@@ -17,12 +17,13 @@ func TestTableExportFormatPickerFlow(t *testing.T) {
 			model := New(config.Config{}, ConnectionSettings{}, nil)
 			database := &fakeDatabase{name: "chinook", engine: engine}
 			model.database = database
-			model.navigator.tables = []db.Table{{Name: "Album"}}
+			model.navigator.tables = []db.Table{{Schema: "reporting", Name: "Album"}}
 
 			updated, command := updateModel(t, model, keyPress('e', "", tea.ModCtrl))
 			assert.Nil(t, command)
 			require.NotNil(t, updated.exportModal)
 			assert.Equal(t, exportSelecting, updated.exportModal.state)
+			assert.Equal(t, db.Table{Schema: "reporting", Name: "Album"}, updated.exportModal.table)
 			assert.Equal(t, "Album", updated.exportModal.tableName)
 			assert.Equal(t, db.ExportTypeCSV, updated.exportModal.format)
 			pickerView := updated.exportModal.view(80, "⠋")
@@ -52,6 +53,7 @@ func TestTableExportFormatPickerFlow(t *testing.T) {
 			_, ok = batch[0]().(exportFinishedMsg)
 			require.True(t, ok)
 			assert.Equal(t, db.ExportTypeJSON, database.exportType)
+			assert.Equal(t, db.Table{Schema: "reporting", Name: "Album"}, database.exportTable)
 			assert.True(t, database.exportDeadline)
 
 			updated, command = updateModel(t, updated, exportFinishedMsg{session: updated.session})

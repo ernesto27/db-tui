@@ -4,19 +4,21 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+
+	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
 type ddlModal struct {
-	tableName string
-	loading   bool
-	sql       string
-	err       error
-	offset    int
-	copied    bool
+	table   db.Table
+	loading bool
+	sql     string
+	err     error
+	offset  int
+	copied  bool
 }
 
-func newDDLModal(tableName string) ddlModal {
-	return ddlModal{tableName: tableName, loading: true}
+func newDDLModal(table db.Table) ddlModal {
+	return ddlModal{table: table, loading: true}
 }
 
 func (m *ddlModal) finish(sql string, err error, layout appLayout) {
@@ -40,7 +42,7 @@ func (m *ddlModal) clamp(layout appLayout) {
 func (m ddlModal) view(layout appLayout, spinner string) string {
 	modalWidth := min(100, max(40, layout.width-8))
 	modalHeight := max(8, layout.height-6)
-	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("DDL · public." + sanitizeText(m.tableName)), ""}
+	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("DDL · " + sanitizeText(m.table.Schema) + "." + sanitizeText(m.table.Name)), ""}
 	switch {
 	case m.loading:
 		lines = append(lines, lipgloss.NewStyle().Foreground(colorAccent).Render(spinner+" Loading table DDL…"))

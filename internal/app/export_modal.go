@@ -28,16 +28,18 @@ const (
 type exportModal struct {
 	state     exportModalState
 	source    exportSource
+	table     db.Table
 	tableName string
 	query     string
 	format    string
 	err       error
 }
 
-func newExportModal(tableName string) exportModal {
+func newExportModal(table db.Table) exportModal {
 	return exportModal{
 		state:     exportSelecting,
-		tableName: tableName,
+		table:     table,
+		tableName: table.Name,
 		format:    db.ExportTypeCSV,
 	}
 }

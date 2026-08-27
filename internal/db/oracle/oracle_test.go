@@ -28,7 +28,7 @@ func TestListTables(t *testing.T) {
 	assert.Equal(t, db.EngineOracle, database.Engine(), "Database.Engine()")
 	assert.Equal(t, "127.0.0.1", database.Host(), "Database.Host()")
 
-	tables, err := database.ListTables(ctx)
+	tables, err := database.ListTables(ctx, "")
 	if !assert.NoError(t, err, "list tables") {
 		return
 	}
@@ -53,7 +53,7 @@ func TestListViews(t *testing.T) {
 	}
 	t.Cleanup(database.Close)
 
-	views, err := database.ListViews(ctx)
+	views, err := database.ListViews(ctx, "")
 	if !assert.NoError(t, err, "list views") {
 		return
 	}
@@ -91,7 +91,7 @@ func TestListMaterializedViews(t *testing.T) {
 	}
 	t.Cleanup(database.Close)
 
-	materializedViews, err := database.ListMaterializedViews(ctx)
+	materializedViews, err := database.ListMaterializedViews(ctx, "")
 	if !assert.NoError(t, err, "list materialized views") {
 		return
 	}

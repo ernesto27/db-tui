@@ -24,9 +24,37 @@ import (
 const listTablesSQL = `
 	SELECT table_name
 	FROM information_schema.tables
-	WHERE table_schema = 'public'
+	WHERE table_schema = $1
 		AND table_type = 'BASE TABLE'
 	ORDER BY table_name`
+
+const listSchemaObjectGroupsSQL = `
+	SELECT schema_name, object_type
+	FROM (
+		SELECT table_schema AS schema_name, 'tables' AS object_type
+		FROM information_schema.tables
+		WHERE table_type = 'BASE TABLE'
+		UNION
+		SELECT table_schema AS schema_name, 'views' AS object_type
+		FROM information_schema.views
+		UNION
+		SELECT schemaname AS schema_name, 'materialized_views' AS object_type
+		FROM pg_catalog.pg_matviews
+		UNION
+		SELECT namespace.nspname AS schema_name, 'functions' AS object_type
+		FROM pg_catalog.pg_proc AS routine
+		JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = routine.pronamespace
+		WHERE routine.prokind = 'f'
+	) AS object_groups
+	WHERE schema_name NOT IN ('information_schema', 'pg_catalog')
+		AND schema_name !~ '^pg_'
+	ORDER BY schema_name,
+		CASE object_type
+			WHEN 'tables' THEN 1
+			WHEN 'views' THEN 2
+			WHEN 'materialized_views' THEN 3
+			WHEN 'functions' THEN 4
+		END`
 
 const listColumnsSQL = `SELECT
 	      attribute.attname AS column_name,
@@ -83,8 +111,8 @@ const listColumnsSQL = `SELECT
 	      FROM pg_catalog.pg_constraint
 	      WHERE contype = 'p'
 	  ) AS pk ON pk.conrelid = attribute.attrelid AND pk.conkey_attnum = attribute.attnum
-	  WHERE relation_schema.nspname = 'public'
-	    AND relation.relname = $1
+	  WHERE relation_schema.nspname = $1
+	    AND relation.relname = $2
 	    AND attribute.attnum > 0
 	    AND NOT attribute.attisdropped
 	  ORDER BY attribute.attnum`
@@ -104,18 +132,18 @@ const listIndexColumnsSQL = `SELECT
 	JOIN pg_am AS access_method
 		ON access_method.oid = index_class.relam
 	CROSS JOIN LATERAL generate_series(1, index_info.indnkeyatts) AS key(position)
-	WHERE schema.nspname = 'public'
-		AND table_class.relname = $1
+	WHERE schema.nspname = $1
+		AND table_class.relname = $2
 	ORDER BY index_name, key.position`
 
 const listViewsSQL = `SELECT viewname AS view_name
 	FROM pg_catalog.pg_views
-	WHERE schemaname = 'public'
+	WHERE schemaname = $1
 	ORDER BY viewname`
 
 const listMaterializedViewsSQL = `SELECT matviewname AS materialized_view_name
   FROM pg_catalog.pg_matviews
-  WHERE schemaname = 'public'
+  WHERE schemaname = $1
   ORDER BY matviewname`
 
 const listFunctionsSQL = `SELECT
@@ -179,10 +207,36 @@ func (p *postgresql) Host() string {
 	return p.pool.Config().ConnConfig.Host
 }
 
-// ListTables returns the base tables in the connected database's public schema.
-func (p *postgresql) ListTables(ctx context.Context) ([]db.Table, error) {
+// ListSchemaObjectGroups returns the non-empty object categories in every visible schema.
+func (p *postgresql) ListSchemaObjectGroups(ctx context.Context) ([]db.SchemaObjectGroup, error) {
+	p.logger.Log(listSchemaObjectGroupsSQL)
+	rows, err := p.pool.Query(ctx, listSchemaObjectGroupsSQL)
+	if err != nil {
+		return nil, fmt.Errorf("query PostgreSQL schema object groups: %w", err)
+	}
+	defer rows.Close()
+
+	groups := make([]db.SchemaObjectGroup, 0)
+	for rows.Next() {
+		var group db.SchemaObjectGroup
+		var objectType string
+		if err := rows.Scan(&group.Schema, &objectType); err != nil {
+			return nil, fmt.Errorf("scan PostgreSQL schema object group: %w", err)
+		}
+		group.Type = db.SchemaObjectType(objectType)
+		groups = append(groups, group)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate PostgreSQL schema object groups: %w", err)
+	}
+
+	return groups, nil
+}
+
+// ListTables returns the base tables in schema.
+func (p *postgresql) ListTables(ctx context.Context, schema string) ([]db.Table, error) {
 	p.logger.Log(listTablesSQL)
-	rows, err := p.pool.Query(ctx, listTablesSQL)
+	rows, err := p.pool.Query(ctx, listTablesSQL, schema)
 	if err != nil {
 		return nil, fmt.Errorf("query PostgreSQL tables: %w", err)
 	}
@@ -190,11 +244,11 @@ func (p *postgresql) ListTables(ctx context.Context) ([]db.Table, error) {
 
 	tables := make([]db.Table, 0)
 	for rows.Next() {
-		var table db.Table
-		if err := rows.Scan(&table.Name); err != nil {
+		var name string
+		if err := rows.Scan(&name); err != nil {
 			return nil, fmt.Errorf("scan PostgreSQL table: %w", err)
 		}
-		tables = append(tables, table)
+		tables = append(tables, db.Table{Schema: schema, Name: name})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate PostgreSQL tables: %w", err)
@@ -203,10 +257,10 @@ func (p *postgresql) ListTables(ctx context.Context) ([]db.Table, error) {
 	return tables, nil
 }
 
-// ListViews returns ordinary public-schema PostgreSQL views in alphabetical order.
-func (p *postgresql) ListViews(ctx context.Context) ([]db.View, error) {
+// ListViews returns ordinary PostgreSQL views in schema in alphabetical order.
+func (p *postgresql) ListViews(ctx context.Context, schema string) ([]db.View, error) {
 	p.logger.Log(listViewsSQL)
-	rows, err := p.pool.Query(ctx, listViewsSQL)
+	rows, err := p.pool.Query(ctx, listViewsSQL, schema)
 	if err != nil {
 		return nil, fmt.Errorf("query PostgreSQL views: %w", err)
 	}
@@ -227,10 +281,10 @@ func (p *postgresql) ListViews(ctx context.Context) ([]db.View, error) {
 	return views, nil
 }
 
-// ListMaterializedViews is a placeholder for PostgreSQL materialized-view discovery.
-func (p *postgresql) ListMaterializedViews(ctx context.Context) ([]db.MaterializedView, error) {
+// ListMaterializedViews returns PostgreSQL materialized views in schema.
+func (p *postgresql) ListMaterializedViews(ctx context.Context, schema string) ([]db.MaterializedView, error) {
 	p.logger.Log(listMaterializedViewsSQL)
-	rows, err := p.pool.Query(ctx, listMaterializedViewsSQL)
+	rows, err := p.pool.Query(ctx, listMaterializedViewsSQL, schema)
 	if err != nil {
 		return nil, fmt.Errorf("query PostgreSQL materialized views: %w", err)
 	}
@@ -274,10 +328,10 @@ func (p *postgresql) ListFunctions(ctx context.Context, schema string) ([]db.Fun
 	return functionColumns, nil
 }
 
-// ListColumns returns the columns defined by a public PostgreSQL table.
+// ListColumns returns the columns defined by a PostgreSQL table.
 func (p *postgresql) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {
 	p.logger.Log(listColumnsSQL)
-	rows, err := p.pool.Query(ctx, listColumnsSQL, table.Name)
+	rows, err := p.pool.Query(ctx, listColumnsSQL, table.Schema, table.Name)
 	if err != nil {
 		return nil, fmt.Errorf("query PostgreSQL columns: %w", err)
 	}
@@ -323,10 +377,10 @@ func (p *postgresql) ListColumns(ctx context.Context, table db.Table) ([]db.Colu
 	return columns, nil
 }
 
-// ListIndexes returns every indexed column of a public PostgreSQL table.
+// ListIndexes returns every indexed column of a PostgreSQL table.
 func (p *postgresql) ListIndexes(ctx context.Context, table db.Table) ([]db.IndexColumns, error) {
 	p.logger.Log(listIndexColumnsSQL)
-	rows, err := p.pool.Query(ctx, listIndexColumnsSQL, table.Name)
+	rows, err := p.pool.Query(ctx, listIndexColumnsSQL, table.Schema, table.Name)
 	if err != nil {
 		return nil, fmt.Errorf("query PostgreSQL Index columns: %w", err)
 	}
@@ -378,7 +432,7 @@ func (p *postgresql) getRows(ctx context.Context, table db.Table, page *db.PageR
 		}
 	}
 
-	tableName := pgx.Identifier{"public", table.Name}.Sanitize()
+	tableName := pgx.Identifier{table.Schema, table.Name}.Sanitize()
 	query := fmt.Sprintf("SELECT * FROM %s", tableName)
 	args := make([]any, 0, 2)
 	if page != nil {
@@ -614,7 +668,7 @@ func dockerContainerIDForPort(ctx context.Context, port int) (string, error) {
 }
 
 func (p *postgresql) UpdateRow(ctx context.Context, table db.Table, setColumns map[string]any, whereColumns map[string]any) error {
-	tableIdent := pgx.Identifier{"public", table.Name}.Sanitize()
+	tableIdent := pgx.Identifier{table.Schema, table.Name}.Sanitize()
 
 	setClauses := make([]string, 0, len(setColumns))
 	args := make([]any, 0, len(setColumns)+len(whereColumns))
@@ -665,7 +719,7 @@ func (p *postgresql) UpdateRow(ctx context.Context, table db.Table, setColumns m
 }
 
 func (p *postgresql) DeleteRow(ctx context.Context, table db.Table, whereColumns map[string]any) error {
-	tableIdent := pgx.Identifier{"public", table.Name}.Sanitize()
+	tableIdent := pgx.Identifier{table.Schema, table.Name}.Sanitize()
 
 	columns, err := p.ListColumns(ctx, table)
 	if err != nil {
