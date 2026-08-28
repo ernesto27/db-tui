@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -65,6 +66,54 @@ func TestBaseViewOmitsHostSeparatorWhenHostIsEmpty(t *testing.T) {
 
 	assert.Contains(t, view.Content, "chinook.db  /  SQLite")
 	assert.NotContains(t, view.Content, "SQLite  /  ")
+}
+
+func TestBaseViewShowsTestingEnvironment(t *testing.T) {
+	environment := config.ConnectionEnvironmentTesting
+	model := New(config.Config{Connections: []config.Connection{{Environment: environment}}}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook"}
+	model.activeConnectionIndex = 0
+
+	view := model.baseView()
+
+	assert.Contains(t, view.Content, strings.ToUpper(string(environment)))
+	assert.Equal(t, colorTestingHeaderBackground, headerBackgroundForEnvironment(model.activeConnectionEnvironment()))
+}
+
+func TestBaseViewShowsProductionEnvironment(t *testing.T) {
+	environment := config.ConnectionEnvironmentProduction
+	model := New(config.Config{Connections: []config.Connection{{Environment: environment}}}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook"}
+	model.activeConnectionIndex = 0
+
+	view := model.baseView()
+
+	assert.Contains(t, view.Content, strings.ToUpper(string(environment)))
+	assert.Equal(t, colorProductionHeaderBackground, headerBackgroundForEnvironment(model.activeConnectionEnvironment()))
+}
+
+func TestBaseViewShowsUnrecognizedEnvironmentLabel(t *testing.T) {
+	environment := config.ConnectionEnvironmentTesting + config.ConnectionEnvironmentProduction
+	model := New(config.Config{Connections: []config.Connection{{Environment: environment}}}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook"}
+	model.activeConnectionIndex = 0
+
+	view := model.baseView()
+
+	assert.Contains(t, view.Content, strings.ToUpper(string(environment)))
+	assert.Equal(t, colorHeaderBackground, headerBackgroundForEnvironment(model.activeConnectionEnvironment()))
+}
+
+func TestBaseViewKeepsDefaultHeaderForUnclassifiedConnection(t *testing.T) {
+	model := New(config.Config{Connections: []config.Connection{{}}}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook"}
+	model.activeConnectionIndex = 0
+
+	view := model.baseView()
+
+	assert.NotContains(t, view.Content, strings.ToUpper(string(config.ConnectionEnvironmentTesting)))
+	assert.NotContains(t, view.Content, strings.ToUpper(string(config.ConnectionEnvironmentProduction)))
+	assert.Equal(t, colorHeaderBackground, headerBackgroundForEnvironment(model.activeConnectionEnvironment()))
 }
 
 func TestFooterTextDescribesTabNavigation(t *testing.T) {

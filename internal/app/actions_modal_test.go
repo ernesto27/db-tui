@@ -36,6 +36,15 @@ func TestActionsModalRenameOnlyWhenNoTableSelected(t *testing.T) {
 	assert.Contains(t, view, "Rename connection \"Local\"")
 }
 
+func TestActionsModalShowsEnvironmentActionForSavedConnection(t *testing.T) {
+	modal := newActionsModal("", "Local")
+	modal.environmentAvailable = true
+
+	view := modal.view(80)
+
+	assert.Contains(t, view, "Set connection environment")
+}
+
 func TestActionsModalKeyboardNavigation(t *testing.T) {
 	modal := newActionsModal("Album", "Local")
 
@@ -86,6 +95,18 @@ func TestActionsModalEnterSelectsRenameWhenDDLNotAvailable(t *testing.T) {
 
 	msg := command()
 	_, ok := msg.(selectRenameActionMsg)
+	assert.True(t, ok)
+}
+
+func TestActionsModalEnterSelectsEnvironmentAction(t *testing.T) {
+	modal := newActionsModal("", "Local")
+	modal.environmentAvailable = true
+	modal.selected = 1
+
+	_, command := modal.update(keyPress(tea.KeyEnter, "", 0))
+	require.NotNil(t, command)
+
+	_, ok := command().(selectEnvironmentActionMsg)
 	assert.True(t, ok)
 }
 
@@ -183,6 +204,7 @@ func TestCtrlGOpensActionsModalWithoutTable(t *testing.T) {
 
 	assert.NotNil(t, updated.actionsModal)
 	assert.Empty(t, updated.actionsModal.tableName)
+	assert.True(t, updated.actionsModal.environmentAvailable)
 }
 
 func TestCtrlGNoOpWithoutActiveConnectionAndNoTable(t *testing.T) {
@@ -207,6 +229,7 @@ func TestCtrlGDDLOnlyWithoutActiveConnection(t *testing.T) {
 	assert.True(t, updated.actionsModal.ddlAvailable)
 	assert.True(t, updated.actionsModal.columnsAvailable)
 	assert.False(t, updated.actionsModal.renameAvailable)
+	assert.False(t, updated.actionsModal.environmentAvailable)
 }
 
 func TestSelectDDLClosesActionsAndOpensDDLModal(t *testing.T) {
@@ -387,4 +410,105 @@ func TestRenameFailedDismissesWithEnterOrEsc(t *testing.T) {
 		updated, _ := modal.update(key)
 		assert.Equal(t, actionsSelecting, updated.state)
 	}
+}
+
+func TestEnvironmentPickerSelectsProduction(t *testing.T) {
+	modal := newActionsModal("", "Local")
+	environment := newEnvironmentModal("")
+	modal.environment = &environment
+
+	modal, _ = modal.update(keyPress(tea.KeyDown, "", 0))
+	modal, _ = modal.update(keyPress(tea.KeyDown, "", 0))
+	_, command := modal.update(keyPress(tea.KeyEnter, "", 0))
+	require.NotNil(t, command)
+
+	msg, ok := command().(submitEnvironmentMsg)
+	require.True(t, ok)
+	assert.Equal(t, config.ConnectionEnvironmentProduction, msg.environment)
+}
+
+func TestEnvironmentPickerEscReturnsToActions(t *testing.T) {
+	modal := newActionsModal("", "Local")
+	environment := newEnvironmentModal("")
+	modal.environment = &environment
+
+	updated, _ := modal.update(keyPress(tea.KeyEscape, "", 0))
+
+	assert.Nil(t, updated.environment)
+}
+
+func TestEnvironmentSaveUpdatesActiveConnection(t *testing.T) {
+	model := New(config.Config{Connections: []config.Connection{{Name: "Local", Engine: "postgres"}}}, ConnectionSettings{}, nil)
+	model.activeConnectionIndex = 0
+	modal := newActionsModal("", "Local")
+	modal.environmentAvailable = true
+	environment := newEnvironmentModal("")
+	modal.environment = &environment
+	model.actionsModal = &modal
+
+	next, command := model.updateActionsModal(submitEnvironmentMsg{environment: config.ConnectionEnvironmentProduction})
+	updated, ok := next.(Model)
+	require.True(t, ok)
+	require.NotNil(t, command)
+	assert.Empty(t, updated.config.Connections[0].Environment)
+	assert.True(t, updated.actionsModal.environment.saving)
+
+	savedConfig := updated.config
+	savedConfig.Connections = append([]config.Connection(nil), savedConfig.Connections...)
+	savedConfig.Connections[0].Environment = config.ConnectionEnvironmentProduction
+	updated, _ = updateModel(t, updated, environmentSaveMsg{
+		request: updated.environmentRequest,
+		index:   0,
+		config:  savedConfig,
+	})
+
+	assert.Equal(t, config.ConnectionEnvironmentProduction, updated.config.Connections[0].Environment)
+	assert.True(t, updated.actionsModal.environment.succeeded)
+}
+
+func TestEnvironmentSaveFailureRetainsPreviousEnvironment(t *testing.T) {
+	model := New(config.Config{Connections: []config.Connection{{
+		Name:        "Local",
+		Engine:      "postgres",
+		Environment: config.ConnectionEnvironmentTesting,
+	}}}, ConnectionSettings{}, nil)
+	model.activeConnectionIndex = 0
+	model.environmentRequest = 1
+	modal := newActionsModal("", "Local")
+	environment := newEnvironmentModal(config.ConnectionEnvironmentTesting)
+	environment.saving = true
+	modal.environment = &environment
+	model.actionsModal = &modal
+
+	updated, _ := updateModel(t, model, environmentSaveMsg{
+		request: 1,
+		index:   0,
+		err:     assert.AnError,
+	})
+
+	assert.Equal(t, config.ConnectionEnvironmentTesting, updated.config.Connections[0].Environment)
+	assert.Contains(t, updated.actionsModal.environment.err, "save connection environment")
+}
+
+func TestEnvironmentSaveIgnoresStaleCompletion(t *testing.T) {
+	model := New(config.Config{Connections: []config.Connection{{Name: "Local", Engine: "postgres"}}}, ConnectionSettings{}, nil)
+	model.activeConnectionIndex = 0
+	model.environmentRequest = 2
+	modal := newActionsModal("", "Local")
+	environment := newEnvironmentModal("")
+	environment.saving = true
+	modal.environment = &environment
+	model.actionsModal = &modal
+	staleConfig := model.config
+	staleConfig.Connections = append([]config.Connection(nil), staleConfig.Connections...)
+	staleConfig.Connections[0].Environment = config.ConnectionEnvironmentProduction
+
+	updated, _ := updateModel(t, model, environmentSaveMsg{
+		request: 1,
+		index:   0,
+		config:  staleConfig,
+	})
+
+	assert.Empty(t, updated.config.Connections[0].Environment)
+	assert.True(t, updated.actionsModal.environment.saving)
 }

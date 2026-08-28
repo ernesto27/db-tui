@@ -2,11 +2,13 @@ package app
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/ernestoponce27/db-tui/internal/config"
 	"github.com/ernestoponce27/db-tui/internal/db"
 	"github.com/ernestoponce27/db-tui/internal/version"
 )
@@ -23,11 +25,15 @@ func (m Model) View() tea.View {
 func (m Model) baseView() tea.View {
 	appVersion := version.Version()
 	headerTitle := fmt.Sprintf("db-tui v%s", appVersion)
+	environment := m.activeConnectionEnvironment()
 	if databaseName := m.connectedDatabaseName(); databaseName != "" {
 		segments := []string{
 			headerTitle,
 			sanitizeText(databaseName),
 			engineDisplayName(m.database.Engine()),
+		}
+		if environment != "" {
+			segments = append([]string{headerTitle, strings.ToUpper(string(environment))}, segments[1:]...)
 		}
 		if host := m.database.Host(); host != "" {
 			segments = append(segments, host)
@@ -35,7 +41,7 @@ func (m Model) baseView() tea.View {
 		headerTitle = strings.Join(segments, "  /  ")
 	}
 	header := lipgloss.NewStyle().Width(m.layout.width).Padding(0, 1).Bold(true).
-		Foreground(colorTitle).Background(colorHeaderBackground).
+		Foreground(colorTitle).Background(headerBackgroundForEnvironment(environment)).
 		Render(headerTitle)
 	rightPanel := m.data.view(m.dataStatus(), m.layout, m.focus == focusData)
 	if m.activeFunction.set {
@@ -56,6 +62,24 @@ func (m Model) baseView() tea.View {
 	view.MouseMode = tea.MouseModeCellMotion
 	view.WindowTitle = "db-tui"
 	return view
+}
+
+func (m Model) activeConnectionEnvironment() config.ConnectionEnvironment {
+	if m.activeConnectionIndex < 0 || m.activeConnectionIndex >= len(m.config.Connections) {
+		return ""
+	}
+	return m.config.Connections[m.activeConnectionIndex].Environment
+}
+
+func headerBackgroundForEnvironment(environment config.ConnectionEnvironment) color.Color {
+	switch environment {
+	case config.ConnectionEnvironmentTesting:
+		return colorTestingHeaderBackground
+	case config.ConnectionEnvironmentProduction:
+		return colorProductionHeaderBackground
+	default:
+		return colorHeaderBackground
+	}
 }
 
 func engineDisplayName(engine string) string {

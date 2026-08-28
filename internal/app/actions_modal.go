@@ -6,6 +6,8 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/ernestoponce27/db-tui/internal/config"
 )
 
 type actionsModalState uint8
@@ -18,6 +20,13 @@ const (
 	actionsRenameFailed
 )
 
+type environmentModal struct {
+	selected  int
+	saving    bool
+	succeeded bool
+	err       string
+}
+
 type actionsModal struct {
 	state       actionsModalState
 	tableName   string
@@ -25,20 +34,26 @@ type actionsModal struct {
 	selected    int
 	renameInput textinput.Model
 	renameError string
+	environment *environmentModal
 	// action availability
-	ddlAvailable     bool
-	columnsAvailable bool
-	indexesAvailable bool
-	renameAvailable  bool
+	ddlAvailable         bool
+	columnsAvailable     bool
+	indexesAvailable     bool
+	renameAvailable      bool
+	environmentAvailable bool
 }
 
 type selectDDLActionMsg struct{}
 type selectColumnsActionMsg struct{}
 type selectIndexesActionMsg struct{}
 type selectRenameActionMsg struct{}
+type selectEnvironmentActionMsg struct{}
 type cancelActionsMsg struct{}
 type submitRenameMsg struct {
 	newName string
+}
+type submitEnvironmentMsg struct {
+	environment config.ConnectionEnvironment
 }
 
 func newActionsModal(tableName, connName string) actionsModal {
@@ -62,6 +77,9 @@ func (m actionsModal) update(msg tea.Msg) (actionsModal, tea.Cmd) {
 	key, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return m, nil
+	}
+	if m.environment != nil {
+		return m.updateEnvironment(key)
 	}
 
 	switch m.state {
@@ -113,6 +131,9 @@ func (m actionsModal) actionCount() int {
 	if m.renameAvailable {
 		count++
 	}
+	if m.environmentAvailable {
+		count++
+	}
 	return count
 }
 
@@ -140,6 +161,42 @@ func (m actionsModal) selectAction() (actionsModal, tea.Cmd) {
 		if m.selected == idx {
 			return m, func() tea.Msg { return selectRenameActionMsg{} }
 		}
+		idx++
+	}
+	if m.environmentAvailable {
+		if m.selected == idx {
+			return m, func() tea.Msg { return selectEnvironmentActionMsg{} }
+		}
+	}
+	return m, nil
+}
+
+func (m actionsModal) updateEnvironment(key tea.KeyPressMsg) (actionsModal, tea.Cmd) {
+	if m.environment.saving {
+		return m, nil
+	}
+	if m.environment.succeeded || m.environment.err != "" {
+		switch key.String() {
+		case "enter", "esc":
+			m.environment = nil
+		}
+		return m, nil
+	}
+
+	switch key.String() {
+	case "up", "k":
+		if m.environment.selected > 0 {
+			m.environment.selected--
+		}
+	case "down", "j":
+		if m.environment.selected < len(connectionEnvironmentOptions)-1 {
+			m.environment.selected++
+		}
+	case "enter":
+		environment := connectionEnvironmentOptions[m.environment.selected].environment
+		return m, func() tea.Msg { return submitEnvironmentMsg{environment: environment} }
+	case "esc":
+		m.environment = nil
 	}
 	return m, nil
 }
@@ -176,6 +233,10 @@ func (m actionsModal) submitRename() (actionsModal, tea.Cmd) {
 }
 
 func (m actionsModal) view(width int) string {
+	if m.environment != nil {
+		return m.environment.view(width)
+	}
+
 	switch m.state {
 	case actionsSelecting:
 		return m.viewSelecting(width)
@@ -242,6 +303,16 @@ func (m actionsModal) viewSelecting(width int) string {
 			style = selectedStyle
 		}
 		lines = append(lines, prefix+style.Render("Rename connection \""+sanitizeText(m.connName)+"\""))
+		idx++
+	}
+	if m.environmentAvailable {
+		prefix := "  "
+		style := normalStyle
+		if m.selected == idx {
+			prefix = "> "
+			style = selectedStyle
+		}
+		lines = append(lines, prefix+style.Render("Set connection environment…"))
 	}
 
 	lines = append(lines, "", lipgloss.NewStyle().Foreground(colorTextMuted).Render("↑/↓ or j/k move  •  Enter select  •  Esc close"))
@@ -320,6 +391,118 @@ func (m actionsModal) viewRenameFailed(width int) string {
 		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Rename connection"),
 		"",
 		lipgloss.NewStyle().Foreground(colorError).Render("✕ " + sanitizeText(m.renameError)),
+		"",
+		lipgloss.NewStyle().Foreground(colorTextMuted).Render("Enter or Esc continue"),
+	}
+	return lipgloss.NewStyle().
+		Width(modalWidth).
+		Padding(1, 2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorBorderActive).
+		Background(colorModalBackground).
+		Render(strings.Join(lines, "\n"))
+}
+
+type connectionEnvironmentOption struct {
+	environment config.ConnectionEnvironment
+	label       string
+}
+
+var connectionEnvironmentOptions = []connectionEnvironmentOption{
+	{label: "No environment color"},
+	{environment: config.ConnectionEnvironmentTesting, label: "Testing — green header"},
+	{environment: config.ConnectionEnvironmentProduction, label: "Production — red header"},
+}
+
+func newEnvironmentModal(environment config.ConnectionEnvironment) environmentModal {
+	modal := environmentModal{}
+	for index, option := range connectionEnvironmentOptions {
+		if option.environment == environment {
+			modal.selected = index
+			break
+		}
+	}
+	return modal
+}
+
+func (m environmentModal) view(width int) string {
+	if m.saving {
+		return m.viewSaving(width)
+	}
+	if m.succeeded {
+		return m.viewSuccess(width)
+	}
+	if m.err != "" {
+		return m.viewFailed(width)
+	}
+	return m.viewSelecting(width)
+}
+
+func (m environmentModal) viewSelecting(width int) string {
+	modalWidth := min(56, max(40, width-8))
+	lines := []string{
+		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Set connection environment"),
+		"",
+	}
+	for index, option := range connectionEnvironmentOptions {
+		prefix := "  "
+		style := lipgloss.NewStyle().Foreground(colorTextMuted)
+		if m.selected == index {
+			prefix = "> "
+			style = lipgloss.NewStyle().Foreground(colorTitle).Bold(true)
+		}
+		lines = append(lines, prefix+style.Render(option.label))
+	}
+	lines = append(lines, "", lipgloss.NewStyle().Foreground(colorTextMuted).Render("↑/↓ or j/k move  •  Enter select  •  Esc back"))
+	return lipgloss.NewStyle().
+		Width(modalWidth).
+		Padding(1, 2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorBorderActive).
+		Background(colorModalBackground).
+		Render(strings.Join(lines, "\n"))
+}
+
+func (m environmentModal) viewSaving(width int) string {
+	modalWidth := min(56, max(40, width-8))
+	lines := []string{
+		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Set connection environment"),
+		"",
+		lipgloss.NewStyle().Foreground(colorAccent).Render("Saving…"),
+	}
+	return lipgloss.NewStyle().
+		Width(modalWidth).
+		Padding(1, 2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorBorderActive).
+		Background(colorModalBackground).
+		Render(strings.Join(lines, "\n"))
+}
+
+func (m environmentModal) viewSuccess(width int) string {
+	modalWidth := min(56, max(40, width-8))
+	lines := []string{
+		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Set connection environment"),
+		"",
+		lipgloss.NewStyle().Foreground(colorAccent).Render("✓ Connection environment updated"),
+		"",
+		lipgloss.NewStyle().Foreground(colorTextMuted).Render("Enter or Esc continue"),
+	}
+	return lipgloss.NewStyle().
+		Width(modalWidth).
+		Padding(1, 2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorBorderActive).
+		Background(colorModalBackground).
+		Render(strings.Join(lines, "\n"))
+}
+
+func (m environmentModal) viewFailed(width int) string {
+	modalWidth := min(56, max(40, width-8))
+	lines := []string{
+		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Set connection environment"),
+		"",
+		lipgloss.NewStyle().Foreground(colorError).Render("✕ " + sanitizeText(m.err)),
 		"",
 		lipgloss.NewStyle().Foreground(colorTextMuted).Render("Enter or Esc continue"),
 	}

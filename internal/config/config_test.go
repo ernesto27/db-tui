@@ -75,6 +75,18 @@ func TestLoadPreservesMaxPageSizeAboveDefault(t *testing.T) {
 	assert.Equal(t, 250, config.MaxPageSize)
 }
 
+func TestLoadPreservesConnectionEnvironment(t *testing.T) {
+	path := useTemporaryHome(t)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), configDirectoryMode))
+	require.NoError(t, os.WriteFile(path, []byte(`{"connections":[{"name":"production","engine":"postgres","settings":{},"environment":"production"}]}`), 0o600))
+
+	config, err := Load()
+
+	require.NoError(t, err)
+	require.Len(t, config.Connections, 1)
+	assert.Equal(t, ConnectionEnvironmentProduction, config.Connections[0].Environment)
+}
+
 func TestSavePreservesMaxPageSizeAboveDefault(t *testing.T) {
 	path := useTemporaryHome(t)
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), configDirectoryMode))
@@ -146,6 +158,30 @@ func TestConfigSave(t *testing.T) {
 		"connections": [
 			{"name":"local","engine":"postgres","settings":{"hostname":"127.0.0.1","database":"chinook","username":"updated_user","password":"","port":"5433","dsn":""},"status":false}
 		]
+	}`, db.MaxPageSize), string(contents))
+}
+
+func TestConfigSavePersistsConnectionEnvironment(t *testing.T) {
+	path := useTemporaryHome(t)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), configDirectoryMode))
+	config := Config{Connections: []Connection{{
+		Name:        "testing",
+		Engine:      "postgres",
+		Environment: ConnectionEnvironmentTesting,
+	}}}
+
+	require.NoError(t, config.Save())
+	contents, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.JSONEq(t, fmt.Sprintf(`{
+		"maxPageSize": %d,
+		"connections": [{
+			"name":"testing",
+			"engine":"postgres",
+			"settings":{"hostname":"","database":"","username":"","password":"","port":"","dsn":""},
+			"environment":"testing",
+			"status":false
+		}]
 	}`, db.MaxPageSize), string(contents))
 }
 

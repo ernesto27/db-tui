@@ -284,6 +284,22 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		m.actionsModal.connName = msg.config.Connections[msg.index].Name
 		m.actionsModal.state = actionsRenameSuccess
 		return nil, true
+	case environmentSaveMsg:
+		if msg.request != m.environmentRequest || msg.index != m.activeConnectionIndex {
+			return nil, true
+		}
+		if m.actionsModal == nil || m.actionsModal.environment == nil || !m.actionsModal.environment.saving {
+			return nil, true
+		}
+		if msg.err != nil {
+			m.actionsModal.environment.saving = false
+			m.actionsModal.environment.err = "save connection environment: " + msg.err.Error()
+			return nil, true
+		}
+		m.config = msg.config
+		m.actionsModal.environment.saving = false
+		m.actionsModal.environment.succeeded = true
+		return nil, true
 	case dumpFinishedMsg:
 		if msg.session != m.session || m.dumpModal == nil {
 			return nil, true
@@ -662,6 +678,9 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		modal := newActionsModal(tableName, connName)
 		modal.indexesAvailable = tableName != ""
+		if m.activeConnectionIndex >= 0 && m.activeConnectionIndex < len(m.config.Connections) {
+			modal.environmentAvailable = true
+		}
 		m.actionsModal = &modal
 		return nil
 	case key.Matches(msg, m.keys.tableSearch):
@@ -1241,6 +1260,27 @@ func (m *Model) updateActionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.actionsModal.renameInput.SetValue(m.config.Connections[m.activeConnectionIndex].Name)
 		m.actionsModal.renameInput.CursorEnd()
 		return *m, m.actionsModal.renameInput.Focus()
+	case selectEnvironmentActionMsg:
+		if m.activeConnectionIndex < 0 || m.activeConnectionIndex >= len(m.config.Connections) {
+			m.actionsModal = nil
+			return *m, nil
+		}
+		environment := newEnvironmentModal(m.config.Connections[m.activeConnectionIndex].Environment)
+		m.actionsModal.environment = &environment
+		return *m, nil
+	case submitEnvironmentMsg:
+		if m.activeConnectionIndex < 0 || m.activeConnectionIndex >= len(m.config.Connections) {
+			m.actionsModal = nil
+			return *m, nil
+		}
+		m.environmentRequest++
+		request := m.environmentRequest
+		index := m.activeConnectionIndex
+		cloned := m.config
+		cloned.Connections = slices.Clone(m.config.Connections)
+		cloned.Connections[index].Environment = msg.environment
+		m.actionsModal.environment.saving = true
+		return *m, saveConnectionEnvironment(cloned, request, index)
 	default:
 		modal, command := m.actionsModal.update(msg)
 		m.actionsModal = &modal

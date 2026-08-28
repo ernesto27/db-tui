@@ -26,11 +26,19 @@ type Settings struct {
 	DSN      string `json:"dsn"`
 }
 
+type ConnectionEnvironment string
+
+const (
+	ConnectionEnvironmentTesting    ConnectionEnvironment = "testing"
+	ConnectionEnvironmentProduction ConnectionEnvironment = "production"
+)
+
 type Connection struct {
-	Name     string   `json:"name"`
-	Engine   string   `json:"engine"`
-	Settings Settings `json:"settings"`
-	Status   bool     `json:"status"`
+	Name        string                `json:"name"`
+	Engine      string                `json:"engine"`
+	Settings    Settings              `json:"settings"`
+	Environment ConnectionEnvironment `json:"environment,omitempty"`
+	Status      bool                  `json:"status"`
 }
 
 // Config contains db-tui connection settings.

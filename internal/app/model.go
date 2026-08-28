@@ -97,6 +97,7 @@ type Model struct {
 	columnsRequest        uint64
 	actionsModal          *actionsModal
 	renameRequest         uint64
+	environmentRequest    uint64
 	indexesModal          *indexesModal
 	indexesRequest        uint64
 	objectsModal          *objectsModal

@@ -130,12 +130,31 @@ type renameRequestMsg struct {
 	err     error
 }
 
+type environmentSaveMsg struct {
+	request uint64
+	index   int
+	config  config.Config
+	err     error
+}
+
 // saveConnectionName persists the renamed connection via Config.Save.
 func saveConnectionName(cfg config.Config, renameRequest uint64, index int) tea.Cmd {
 	return func() tea.Msg {
 		err := cfg.Save()
 		return renameRequestMsg{
 			request: renameRequest,
+			index:   index,
+			config:  cfg,
+			err:     err,
+		}
+	}
+}
+
+func saveConnectionEnvironment(cfg config.Config, environmentRequest uint64, index int) tea.Cmd {
+	return func() tea.Msg {
+		err := cfg.Save()
+		return environmentSaveMsg{
+			request: environmentRequest,
 			index:   index,
 			config:  cfg,
 			err:     err,
