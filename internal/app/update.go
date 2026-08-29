@@ -92,6 +92,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.updateNavigatorSearch(msg)
 		}
 		if m.panel == panelQuery && !m.query.resultsFocused {
+			m.query.clearSelectionBeforeEditorUpdate()
 			editor, command := m.query.editor.Update(msg)
 			m.query.editor = editor
 			return m, command
@@ -731,6 +732,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 	case m.panel == panelQuery && m.query.resultsFocused:
 		return nil
 	case m.panel == panelQuery:
+		m.query.clearSelectionBeforeEditorUpdate()
 		editor, command := m.query.editor.Update(msg)
 		m.query.editor = editor
 		return command
@@ -886,6 +888,10 @@ func (m *Model) updateMouseClick(msg tea.MouseClickMsg) tea.Cmd {
 		return nil
 	}
 	m.lastNavigatorClick = navigatorClick{}
+	if m.panel == panelQuery && msg.Button == tea.MouseLeft && m.query.beginSelection(msg.X, msg.Y, m.layout) {
+		m.focus = focusData
+		return m.query.focusEditor()
+	}
 	if m.panel == panelData && !m.activeFunction.set && msg.Button == tea.MouseLeft && m.data.beginTextSelection(msg.X, msg.Y, m.layout, m.dataGridTop()) {
 		m.focus = focusData
 		return nil
@@ -897,6 +903,11 @@ func (m *Model) updateMouseClick(msg tea.MouseClickMsg) tea.Cmd {
 }
 
 func (m *Model) updateMouseMotion(msg tea.MouseMotionMsg) tea.Cmd {
+	if m.panel == panelQuery && m.query.selection.dragging() {
+		m.query.extendSelection(msg.X, msg.Y, m.layout)
+		m.focus = focusData
+		return nil
+	}
 	if m.panel == panelData && m.data.extendTextSelection(msg.X, msg.Y, m.layout, m.dataGridTop()) {
 		m.focus = focusData
 	}
@@ -904,6 +915,12 @@ func (m *Model) updateMouseMotion(msg tea.MouseMotionMsg) tea.Cmd {
 }
 
 func (m *Model) updateMouseRelease(msg tea.MouseReleaseMsg) tea.Cmd {
+	if m.panel == panelQuery && m.query.selection.dragging() {
+		if msg.Button == tea.MouseLeft || msg.Button == tea.MouseNone {
+			m.query.finishSelection(msg.X, msg.Y, m.layout)
+		}
+		return nil
+	}
 	if m.panel != panelData || m.activeFunction.set || !m.data.selection.Dragging() {
 		return nil
 	}
@@ -1068,12 +1085,13 @@ func (m *Model) startRowLoad(offset, selectedRow int) tea.Cmd {
 }
 
 func (m *Model) startQuery() tea.Cmd {
-	if m.database == nil || m.query.loading || strings.TrimSpace(m.query.editor.Value()) == "" {
+	sql := m.query.executableSQL()
+	if m.database == nil || m.query.loading || strings.TrimSpace(sql) == "" {
 		return nil
 	}
-	request := m.query.beginExecute(m.query.editor.Value())
+	request := m.query.beginExecute(sql)
 	session := m.session
-	commands := []tea.Cmd{executeQuery(m.database, m.query.editor.Value(), session, request), m.startSpinner()}
+	commands := []tea.Cmd{executeQuery(m.database, sql, session, request), m.startSpinner()}
 	if m.activeConnectionIndex >= 0 && m.activeConnectionIndex < len(m.config.Connections) {
 		connectionName := m.config.Connections[m.activeConnectionIndex].Name
 		fileName := m.query.loadedScriptName
@@ -1105,6 +1123,7 @@ func (m *Model) updateSQLScriptsModal(msg tea.Msg) tea.Cmd {
 		}
 		script := m.sqlScriptsModal.scripts[m.sqlScriptsModal.selected]
 		m.query.editor.SetValue(script.content)
+		m.query.selection.clear()
 		m.query.loadedScriptName = script.name
 		m.query.saveWarning = ""
 		m.sqlScriptsModal = nil

@@ -21,6 +21,7 @@ const (
 
 type queryModel struct {
 	editor            textarea.Model
+	selection         sqlSelection
 	result            db.QueryResult
 	loading           bool
 	err               error
@@ -114,7 +115,7 @@ func (m queryModel) view(layout appLayout, focused, connected bool, spinner stri
 	}
 	heading := lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render(headingText)
 	result := m.resultView(layout, connected, spinner)
-	sections := []string{heading, m.editor.View(), ""}
+	sections := []string{heading, m.editorView(layout), ""}
 	if m.saveWarning != "" {
 		sections = append(sections, lipgloss.NewStyle().Foreground(colorError).Render("⚠ SQL script was not saved: "+sanitizeText(m.saveWarning)), "")
 	}
