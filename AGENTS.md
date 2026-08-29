@@ -1,5 +1,13 @@
 # Repository Guidelines
 
+## Architecture Reference
+
+Before planning or changing code, read `ARCHITECTURE.md`.
+Treat it as the source of truth for package boundaries, runtime flow, state
+ownership, database-adapter contracts, and shared engineering conventions.
+When a change alters those architectural rules, update `ARCHITECTURE.md` in
+the same approved change.
+
 ## Project Structure & Module Organization
 
 `db-tui` is a Go terminal database client built with Bubble Tea. Keep production code within these package boundaries:
@@ -7,9 +15,13 @@
 - `cmd/db-tui/`: executable wiring and program startup only.
 - `internal/app/`: root Bubble Tea model, messages, updates, and terminal views.
 - `internal/db/`: driver-neutral types and the `Database` interface.
-- `internal/db/postgres/`: pgx-backed PostgreSQL connection, introspection, and row retrieval.
-- `internal/querylog/`: safe, synchronized SQL query logging.
-- `docker/postgres/init/`: Chinook demo-database initialization SQL.
+- `internal/db/{postgres,mysql,oracle,sqlite}/`: engine-specific connection,
+  introspection, query, export, and row-operation adapters.
+- `internal/config/`: private per-user connection and application settings.
+- `internal/{csvexport,jsonexport}/`: engine-neutral export serialization.
+- `internal/logger/`: safe, synchronized SQL and application logging.
+- `internal/version/`: embedded application version metadata.
+- `docker/`: local, reproducible database fixtures and initialization data.
 - `scripts/validate.sh`: repository formatting, vetting, and test checks.
 
 Keep dependencies directed inward: `cmd` may wire concrete dependencies; `app` depends on `db`; database adapters implement `db` and must not import `app`. Add reusable UI code only when it has a real consumer.

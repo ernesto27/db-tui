@@ -1,154 +1,26 @@
-[x] - option to multiple connections to postgresql
-[x] - key to remove connection
-[x] - support to mysql engine
-[x] - export data in csv
-[x] - section to run raw queries
-[x] - search tables
-[x] - option to dump all database file
-[x] - add sqlite support
-[x] - export to json data
-[] - when there is no data after enter ,  back to navigation tables
-[x] - add configure option limit query
-[x] - option to copy from TUI text
-[x] - create colors file update UI
-[x] - search in modal databases
-[] - when select a new connection focus on table list
-[] - update connection data does not save in file
-[] - Create conventions-architecthre file
-[] - when press scape in modal of ctrl+g go back modal list
-[] - when remove a table in raw query do a refresh table
-[] - prevent data-panel flicker while refreshing table rows
-[] - in raw query show execution time, rows affected
-[] - when show ddl i want to be able to copy
-[] - update skills explain changes to show diagrams at first
-[x] - support oracle database
-[] - Oracle Data Pump dump, import, and restore support
-[x] - show host connection in some place of TUI
+[] - suuport engine sql server
+[] - support engine mongodb
+[x] - option to set color connections
+[ ] Replace placeholder Database methods with explicit optional capability interfaces.
+[ ] Add configurable TLS/SSL settings for PostgreSQL, MySQL, Oracle, and future server adapters.
+[] test connection to remote database - mysql , postgresql
+[ ] Add DuckDB support for local files and in-memory databases.
+[ ] Add SSH tunnel configuration for connections behind bastion hosts.
 
+QUERY WORKFLOW
+[ ] Add SQL autocomplete for keywords, schemas, tables, views, functions, and columns.
+[ ] Add SQL syntax highlighting with engine-specific dialects.
+[ ] Execute only selected SQL when text is selected.
+[ ] Add cancellation for long-running queries.
+[ ] Add a read-only safety mode and confirmation before destructive statements.
 
+CLI
+[ ] Add a non-interactive CLI mode for executing SQL and exporting results.
 
-
-# Three-release product roadmap
-
-Target: make db-tui useful for personal daily work while giving it the
-discoverability and safety expected from a public developer tool.
-
-Direction: foundation first.
-
-## Release 1: Schema Inspector
-
-- Inspect columns, types, nullability, and defaults.
-- Show primary keys, foreign keys, and indexes.
-- View table DDL.
-- Jump between related tables.
-- Add a schema/details panel beside table data.
-
-This release is read-only and extends the existing navigator and
-driver-neutral database interface.
-
-## Release 2: Query Workspace
-
-- Keep query history for the current connection.
-- Save and name queries.
-- Search query history.
-- Open and save SQL files.
-- Show query execution duration and affected-row count.
-- Support PostgreSQL and MySQL EXPLAIN output.
-
-This release turns the raw-query panel into a practical daily workspace.
-
-## Release 3: Safe Data Editing
-
-- Edit a single cell or row.
-- Insert and delete rows.
-- Preview generated SQL before execution.
-- Require primary keys when targeting updates and deletes.
-- Provide transaction mode with commit and rollback.
-- Clearly distinguish modified, committed, and failed rows.
-
-This release builds on schema metadata and prioritizes safe, explicit writes.
-
-Product progression: Explore -> Query -> Modify.
-
-
-
- 1. Keyboard routing in internal/app/update.go:252
-
-     Add table-driven cases such as:
-      - TestUpdateKeyOpensConnectionModal
-      - TestUpdateKeyOpensConnectionsModal
-      - TestUpdateKeySwitchesToQueryPanel
-      - TestUpdateKeySwitchesToDataPanel
-      - TestUpdateKeyStartsNavigatorSearch
-      - TestUpdateKeyDoesNotQuitWhenQueryEditorContainsQ
-      - TestUpdateKeyIgnoresDumpWithoutDatabase
-
-  2. Saved-connections modal in internal/app/connections_modal.go
-
-     Highest-value cases:
-      - Up/down selection stays within bounds.
-      - Enter emits the selected connection message.
-      - Edit emits the correct connection.
-      - Delete requires confirmation.
-      - Escape cancels deletion.
-      - Empty connection list safely ignores actions.
-      - Deleting the active connection closes the database and resets model state.
-      - Conversion between stored connections and connection settings round-trips correctly.
-
-  3. Connection modal behavior in internal/app/connection_modal.go
-
-     Test:
-      - Tab and Shift+Tab wrap through fields.
-      - Escape cancels.
-      - Enter submits valid settings.
-      - Input is ignored while connecting.
-      - connectionSettings() returns the entered values.
-      - Password is masked in the rendered view.
-      - Validation and connector errors appear in the view.
-
-  4. Navigator search lifecycle in internal/app/update.go:384
-
-     Test:
-      - Starting search focuses the filter.
-      - Typing updates visible tables.
-      - Enter accepts the filter.
-      - Escape restores the previous filter.
-      - Changing the selected table starts a row load.
-      - Filtering without changing the selection does not reload rows.
-
-  5. Mouse and wheel routing
-
-     Test:
-      - Clicking a table selects it and loads rows.
-      - Clicking data/query areas changes focus.
-      - Wheel events go only to the focused panel.
-      - Duplicate wheel events inside the debounce window are ignored.
-      - Wheel events after the debounce window are accepted.
-
-  6. Semantic view tests
-
-     Avoid full-screen snapshots. Assert meaningful text and Bubble Tea view properties:
-      - Disconnected screen shows connection instructions.
-      - Loading state shows loading text.
-      - Empty database, empty query result, and error states render correctly.
-      - Query command tags appear.
-      - Password values never appear.
-      - View() enables alternate screen, mouse mode, and the correct title.
-
-  7. Model lifecycle
-
-     Add:
-      - TestModelInitWithoutDatabase
-      - TestModelInitLoadsTables
-      - TestModelCloseClosesDatabase
-      - TestModelCloseWithoutDatabase
-
-  8. Paging and grid edge cases
-
-     Add:
-      - Horizontal column scrolling clamps at both ends.
-      - Ragged rows do not panic.
-      - Missing values render as NULL.
-      - Wide Unicode cells calculate widths correctly.
-      - Very narrow terminal sizes do not produce negative dimensions.
-      - Page navigation preserves or clamps the selected row.
+NON-RELATIONAL EXPANSION
+[ ] Design a data-source interface that does not force documents into relational table and row types.
+[ ] Prototype MongoDB connection, database, collection, and document browsing.
+[ ] Add MongoDB JSON query and aggregation-pipeline execution.
+[ ] Add schema sampling for MongoDB collections.
+[ ] Add guarded MongoDB document insert, update, and delete operations.
+[ ] Decide whether MongoDB belongs in the main application or an adapter/plugin package.
