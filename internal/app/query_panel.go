@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -17,6 +18,8 @@ const (
 	querySectionHeightDivisor   = 2
 	querySectionMinimumHeight   = 3
 	querySectionReservedRows    = 2
+	queryExecutingText          = "Query executing: "
+	queryCancelControlText      = "[Cancel]"
 )
 
 type queryModel struct {
@@ -33,6 +36,7 @@ type queryModel struct {
 	resultsFocused     bool
 	executionDuration  time.Duration
 	executionStartedAt time.Time
+	cancel             context.CancelFunc
 }
 
 func newQueryModel(layout appLayout) queryModel {
@@ -49,6 +53,7 @@ func newQueryModel(layout appLayout) queryModel {
 }
 
 func (m *queryModel) reset(layout appLayout) {
+	m.cancelExecution()
 	request := m.request
 	*m = newQueryModel(layout)
 	m.request = request
@@ -75,6 +80,7 @@ func (m *queryModel) beginExecute(sql string) uint64 {
 }
 
 func (m *queryModel) finishExecute(result db.QueryResult, duration time.Duration, err error) {
+	m.cancelExecution()
 	m.loading = false
 	m.result = result
 	m.err = err
@@ -83,6 +89,13 @@ func (m *queryModel) finishExecute(result db.QueryResult, duration time.Duration
 	m.resultsFocused = len(result.Rows) > 0
 	if m.resultsFocused {
 		m.editor.Blur()
+	}
+}
+
+func (m *queryModel) cancelExecution() {
+	if m.cancel != nil {
+		m.cancel()
+		m.cancel = nil
 	}
 }
 
@@ -112,6 +125,16 @@ func (m queryModel) executionTimeText() string {
 	return "Execution time: " + m.executionDuration.String()
 }
 
+func (m queryModel) cancelControlContains(x, y int, layout appLayout) bool {
+	if !m.loading {
+		return false
+	}
+
+	controlX := layout.data.x + 2 + len(queryExecutingText) + len(m.executionDuration.String()) + 2
+	controlY := layout.data.y + querySectionHeight(layout) + 1
+	return x >= controlX && x < controlX+len(queryCancelControlText) && y == controlY
+}
+
 func (m queryModel) view(layout appLayout, focused, connected bool) string {
 	headingText := "RAW QUERY"
 	if m.resultsFocused {
@@ -133,7 +156,8 @@ func (m queryModel) resultView(layout appLayout, connected bool) string {
 	case !connected:
 		return "A database connection is required to run SQL."
 	case m.loading:
-		return "Query executing: " + m.executionDuration.String()
+		cancelControl := lipgloss.NewStyle().Foreground(colorTextInactive).Render(queryCancelControlText)
+		return queryExecutingText + m.executionDuration.String() + "  " + cancelControl
 	case m.err != nil:
 		return "Query failed  •  " + m.executionTimeText() +
 			":\n" + sanitizeText(m.err.Error())

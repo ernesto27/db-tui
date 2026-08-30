@@ -154,6 +154,7 @@ func (m Model) loadDatabaseObjects() tea.Cmd {
 
 // Close releases the current database session, if any.
 func (m Model) Close() {
+	m.query.cancelExecution()
 	if m.database != nil {
 		m.database.Close()
 	}

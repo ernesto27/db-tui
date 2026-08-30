@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"time"
@@ -473,6 +474,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pendingConnectionIndex = -1
 		}
 
+		m.query.cancelExecution()
 		if m.database != nil {
 			m.database.Close()
 		}
@@ -565,6 +567,7 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.config = updatedConfig
 		m.connectionsModal = nil
 		if msg.index == m.activeConnectionIndex {
+			m.query.cancelExecution()
 			if m.database != nil {
 				m.database.Close()
 				m.database = nil
@@ -895,6 +898,12 @@ func (m *Model) updateMouseClick(msg tea.MouseClickMsg) tea.Cmd {
 		return nil
 	}
 	m.lastNavigatorClick = navigatorClick{}
+	if m.panel == panelQuery && msg.Button == tea.MouseLeft && m.query.cancelControlContains(msg.X, msg.Y, m.layout) {
+		if m.query.cancel != nil {
+			m.query.cancel()
+		}
+		return nil
+	}
 	if m.panel == panelQuery && msg.Button == tea.MouseLeft && m.query.beginSelection(msg.X, msg.Y, m.layout) {
 		m.focus = focusData
 		return m.query.focusEditor()
@@ -1096,9 +1105,12 @@ func (m *Model) startQuery() tea.Cmd {
 	if m.database == nil || m.query.loading || strings.TrimSpace(sql) == "" {
 		return nil
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), queryExecutionTimeout)
 	request := m.query.beginExecute(sql)
+	m.query.cancel = cancel
 	session := m.session
-	commands := []tea.Cmd{executeQuery(m.database, sql, session, request), queryElapsedTick(session, request, m.query.executionStartedAt)}
+	commands := []tea.Cmd{executeQuery(ctx, m.database, sql, session, request), queryElapsedTick(session, request, m.query.executionStartedAt)}
 	if m.activeConnectionIndex >= 0 && m.activeConnectionIndex < len(m.config.Connections) {
 		connectionName := m.config.Connections[m.activeConnectionIndex].Name
 		fileName := m.query.loadedScriptName

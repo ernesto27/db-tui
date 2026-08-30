@@ -469,6 +469,35 @@ func TestConnectReturnsErrorForUnreachableDatabase(t *testing.T) {
 	assert.Error(t, err, "Connect() to an unreachable database")
 }
 
+func TestExecuteCancelsRunningQuery(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	queryCtx, cancelQuery := context.WithCancel(context.Background())
+	defer cancelQuery()
+	cancelTimer := time.AfterFunc(250*time.Millisecond, cancelQuery)
+	defer cancelTimer.Stop()
+
+	started := time.Now()
+	_, err = database.Execute(queryCtx, `WITH delay AS MATERIALIZED (
+		SELECT pg_sleep(10)
+	)
+	SELECT t.*
+	FROM "Track" AS t
+	CROSS JOIN delay
+	ORDER BY t."TrackId"
+	LIMIT 100;`)
+
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Less(t, time.Since(started), 2*time.Second, "canceled query should not wait for pg_sleep")
+}
+
 func TestDumpCreatesSQLFile(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -254,6 +254,28 @@ func TestDumpReturnsUnsupportedError(t *testing.T) {
 	assert.EqualError(t, database.Dump(ctx), "Oracle dumps are not supported; use Data Pump outside db-tui")
 }
 
+func TestExecuteCancelsRunningQuery(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := oracle.Connect(ctx, freePDBDSN)
+	if !assert.NoError(t, err, "connect to local Compose Oracle") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	queryCtx, cancelQuery := context.WithCancel(context.Background())
+	defer cancelQuery()
+	cancelTimer := time.AfterFunc(250*time.Millisecond, cancelQuery)
+	defer cancelTimer.Stop()
+
+	started := time.Now()
+	_, err = database.Execute(queryCtx, "BEGIN LOOP NULL; END LOOP; END;")
+
+	assert.ErrorContains(t, err, "ORA-01013")
+	assert.Less(t, time.Since(started), 2*time.Second, "canceled query should not finish the PL/SQL loop")
+}
+
 func TestExport(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

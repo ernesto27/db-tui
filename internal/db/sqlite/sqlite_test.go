@@ -3,10 +3,12 @@ package sqlite
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ernestoponce27/db-tui/internal/db"
 	"github.com/stretchr/testify/assert"
@@ -202,6 +204,26 @@ func TestExecute(t *testing.T) {
 	assert.Empty(t, result.Columns)
 	assert.Empty(t, result.Rows)
 	assert.Equal(t, "CREATE TABLE", result.CommandTag)
+}
+
+func TestExecuteCancelsRunningQuery(t *testing.T) {
+	database := connectEmployee(t)
+	queryCtx, cancelQuery := context.WithCancel(context.Background())
+	defer cancelQuery()
+	cancelTimer := time.AfterFunc(250*time.Millisecond, cancelQuery)
+	defer cancelTimer.Stop()
+
+	started := time.Now()
+	_, err := database.Execute(queryCtx, `WITH RECURSIVE counter(value) AS (
+		SELECT 1
+		UNION ALL
+		SELECT value + 1 FROM counter WHERE value < 1000000000
+	)
+	SELECT MAX(value) FROM counter`)
+
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "interrupted"))
+	assert.Less(t, time.Since(started), 2*time.Second, "canceled query should not finish the recursive CTE")
 }
 
 func TestUpdateRow(t *testing.T) {

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -95,6 +96,11 @@ type fakeDatabase struct {
 	executeCalls                   int
 	executedSQL                    string
 	executeDeadline                bool
+	blockExecuteUntilCanceled      bool
+	executeStarted                 chan struct{}
+	executeContext                 context.Context
+	executeCanceled                bool
+	closeSawCanceledQuery          bool
 	tableDDLCalls                  int
 	tableDDLTable                  db.Table
 	tableDDLDeadline               bool
@@ -185,6 +191,13 @@ func (f *fakeDatabase) Execute(
 	f.executeCalls++
 	f.executedSQL = sql
 	_, f.executeDeadline = ctx.Deadline()
+	if f.blockExecuteUntilCanceled {
+		f.executeContext = ctx
+		close(f.executeStarted)
+		<-ctx.Done()
+		f.executeCanceled = true
+		return db.QueryResult{}, ctx.Err()
+	}
 	return f.queryResult, f.queryErr
 }
 
@@ -226,6 +239,7 @@ func (f *fakeDatabase) DeleteRow(ctx context.Context, table db.Table, whereColum
 
 func (f *fakeDatabase) Close() {
 	f.closeCalls++
+	f.closeSawCanceledQuery = f.executeContext != nil && errors.Is(f.executeContext.Err(), context.Canceled)
 }
 
 func keyPress(code rune, text string, mod tea.KeyMod) tea.KeyPressMsg {
