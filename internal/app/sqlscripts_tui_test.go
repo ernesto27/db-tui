@@ -177,7 +177,7 @@ func TestRawQueryScriptSaveFailureDoesNotBlockExecution(t *testing.T) {
 	assert.Equal(t, 1, database.executeCalls)
 	assert.Equal(t, "SELECT 1;", database.executedSQL)
 	assert.Equal(t, "SELECT 1", updated.query.result.CommandTag)
-	assert.Contains(t, updated.query.view(updated.layout, true, true, ""), "SQL script was not saved")
+	assert.Contains(t, updated.query.view(updated.layout, true, true), "SQL script was not saved")
 }
 
 func TestConnectionRenameMovesSQLScriptsLibrary(t *testing.T) {

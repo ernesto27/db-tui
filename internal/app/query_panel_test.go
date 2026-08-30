@@ -125,9 +125,18 @@ func TestQueryResultViewIncludesExecutionTime(t *testing.T) {
 			query.err = test.err
 			query.executionDuration = 1250 * time.Millisecond
 
-			assert.Contains(t, query.resultView(layout, true, ""), test.want)
+			assert.Contains(t, query.resultView(layout, true), test.want)
 		})
 	}
+}
+
+func TestQueryResultViewShowsElapsedTimeWhileLoading(t *testing.T) {
+	layout := newAppLayout(100, 24)
+	query := newQueryModel(layout)
+	query.loading = true
+	query.executionDuration = 2 * time.Second
+
+	assert.Contains(t, query.resultView(layout, true), "Query executing: 2s")
 }
 
 func TestQueryScrollResultsClamps(t *testing.T) {
@@ -191,7 +200,7 @@ func TestModelStartQueryBeginsExecution(t *testing.T) {
 	assert.NotNil(t, command)
 	assert.True(t, model.query.loading)
 	assert.Equal(t, uint64(1), model.query.request)
-	assert.True(t, model.spinnerRunning)
+	assert.False(t, model.spinnerRunning)
 }
 
 func TestModelStartQueryIgnoresSubmissionWhileExecuting(t *testing.T) {

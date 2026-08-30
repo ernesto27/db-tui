@@ -113,8 +113,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
+
+	case queryElapsedTickMsg:
+		if msg.session != m.session || msg.request != m.query.request || !m.query.loading {
+			return nil, true
+		}
+		m.query.executionDuration = msg.elapsed
+		return queryElapsedTick(msg.session, msg.request, m.query.executionStartedAt), true
 	case spinnerTickMsg:
-		if m.loading || m.viewsLoading || m.materializedViewsLoading || m.functionsLoading || m.data.loading || m.query.loading ||
+		if m.loading || m.viewsLoading || m.materializedViewsLoading || m.functionsLoading || m.data.loading ||
 			(m.ddlModal != nil && m.ddlModal.loading) ||
 			(m.columnsModal != nil && m.columnsModal.loading) ||
 			(m.dumpModal != nil && m.dumpModal.isRunning()) ||
@@ -1091,7 +1098,7 @@ func (m *Model) startQuery() tea.Cmd {
 	}
 	request := m.query.beginExecute(sql)
 	session := m.session
-	commands := []tea.Cmd{executeQuery(m.database, sql, session, request), m.startSpinner()}
+	commands := []tea.Cmd{executeQuery(m.database, sql, session, request), queryElapsedTick(session, request, m.query.executionStartedAt)}
 	if m.activeConnectionIndex >= 0 && m.activeConnectionIndex < len(m.config.Connections) {
 		connectionName := m.config.Connections[m.activeConnectionIndex].Name
 		fileName := m.query.loadedScriptName

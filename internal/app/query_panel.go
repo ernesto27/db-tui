@@ -14,24 +14,25 @@ import (
 
 const (
 	queryPanelHorizontalPadding = 1
-	querySectionHeightDivisor   = 4
+	querySectionHeightDivisor   = 2
 	querySectionMinimumHeight   = 3
 	querySectionReservedRows    = 2
 )
 
 type queryModel struct {
-	editor            textarea.Model
-	selection         sqlSelection
-	result            db.QueryResult
-	loading           bool
-	err               error
-	request           uint64
-	lastExecutedSQL   string
-	loadedScriptName  string
-	saveWarning       string
-	viewport          int
-	resultsFocused    bool
-	executionDuration time.Duration
+	editor             textarea.Model
+	selection          sqlSelection
+	result             db.QueryResult
+	loading            bool
+	err                error
+	request            uint64
+	lastExecutedSQL    string
+	loadedScriptName   string
+	saveWarning        string
+	viewport           int
+	resultsFocused     bool
+	executionDuration  time.Duration
+	executionStartedAt time.Time
 }
 
 func newQueryModel(layout appLayout) queryModel {
@@ -48,7 +49,9 @@ func newQueryModel(layout appLayout) queryModel {
 }
 
 func (m *queryModel) reset(layout appLayout) {
+	request := m.request
 	*m = newQueryModel(layout)
+	m.request = request
 }
 
 func (m *queryModel) resize(layout appLayout) {
@@ -66,6 +69,7 @@ func (m *queryModel) beginExecute(sql string) uint64 {
 	m.lastExecutedSQL = sql
 	m.request++
 	m.executionDuration = 0
+	m.executionStartedAt = time.Now()
 	m.saveWarning = ""
 	return m.request
 }
@@ -108,13 +112,13 @@ func (m queryModel) executionTimeText() string {
 	return "Execution time: " + m.executionDuration.String()
 }
 
-func (m queryModel) view(layout appLayout, focused, connected bool, spinner string) string {
+func (m queryModel) view(layout appLayout, focused, connected bool) string {
 	headingText := "RAW QUERY"
 	if m.resultsFocused {
 		headingText += "  •  results focused"
 	}
 	heading := lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render(headingText)
-	result := m.resultView(layout, connected, spinner)
+	result := m.resultView(layout, connected)
 	sections := []string{heading, m.editorView(layout), ""}
 	if m.saveWarning != "" {
 		sections = append(sections, lipgloss.NewStyle().Foreground(colorError).Render("⚠ SQL script was not saved: "+sanitizeText(m.saveWarning)), "")
@@ -124,12 +128,12 @@ func (m queryModel) view(layout appLayout, focused, connected bool, spinner stri
 	return queryPanelStyle(layout.data.width, layout.data.height, focused).Render(content)
 }
 
-func (m queryModel) resultView(layout appLayout, connected bool, spinner string) string {
+func (m queryModel) resultView(layout appLayout, connected bool) string {
 	switch {
 	case !connected:
 		return "A database connection is required to run SQL."
 	case m.loading:
-		return spinner + " Query executing…"
+		return "Query executing: " + m.executionDuration.String()
 	case m.err != nil:
 		return "Query failed  •  " + m.executionTimeText() +
 			":\n" + sanitizeText(m.err.Error())
