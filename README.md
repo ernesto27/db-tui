@@ -1,85 +1,90 @@
 # db-tui
 
-`db-tui` is a keyboard-driven terminal database client written in Go with Bubble Tea. It supports PostgreSQL, MySQL, and SQLite for browsing database objects, writing SQL, inspecting bounded query results, and creating database dumps.
+A keyboard-first terminal client for PostgreSQL, MySQL, Oracle, and SQLite.
 
-## Requirements
+## Install
 
-- Go 1.26 or newer
-- A PostgreSQL or MySQL server, or a local SQLite database file
-- `pg_dump`, `mysqldump`, or `sqlite3` when using the corresponding dump command
-
-## Development
-
-Run the current test suite:
+db-tui currently provides a Linux x86_64 installer:
 
 ```sh
-go test ./...
+curl -fsSL https://raw.githubusercontent.com/ernesto27/db-tui/main/scripts/install.sh | bash
 ```
 
-SQLite adapter tests use the checked-in Employee fixture at
-`docker/sqlite/employee.db`. Tests open it read-only; no database is
-downloaded or modified at test time.
-
-## Application version
-
-The version shown in the TUI header is defined in
-[`internal/version/version.json`](internal/version/version.json). Update its
-`version` value, then rebuild db-tui for the change to take effect.
-
-Project direction and implementation work are documented in [PLAN.md](PLAN.md) and [TASKS.md](TASKS.md).
-
-## Local PostgreSQL
-
-Start the local Chinook demo database:
+Then start the app:
 
 ```sh
-docker compose up -d
-docker compose ps
+db-tui
 ```
 
-It listens only on `127.0.0.1:5433`. Connect with either command:
+## Get started
 
-```sh
-docker compose exec postgres psql -U db_tui -d chinook
-psql 'postgres://db_tui@localhost:5433/chinook?sslmode=disable'
-```
+1. Start `db-tui`.
+2. Press `Ctrl+N` to create a connection.
+3. Choose the database engine with Left/Right.
+4. Enter the connection details, or provide an engine-specific DSN.
+5. Press `Enter` to test, save, and open the connection.
+6. Browse database objects, select a table, then press `Enter` to load its rows.
 
-The Chinook dump is in `docker/postgres/init/001_chinook.sql`. PostgreSQL runs files in that directory only when its `postgres-data` volume is empty. Run `docker compose down` to stop the service. To remove the database and import the dump again, run `docker compose down -v` before starting it again. This development service uses trust authentication and binds to localhost only.
+Saved connections are available with `Ctrl+L`.
 
-## Database connections
+SQLite connections use a local database-file path, such as
+`/data/reporting.db`. PostgreSQL, MySQL, and Oracle can use either the form
+fields or an engine-specific DSN.
 
-On startup, db-tui creates `$HOME/.config/db-tui/config.json` when necessary. Press `Ctrl+N` to create a connection or `Ctrl+L` to open saved connections. Select PostgreSQL, MySQL, or SQLite with Left/Right while the Engine field is focused. Server engines accept the individual connection fields or an engine-specific DSN; SQLite accepts a local database-file path only, stored in the existing `dsn` setting.
+## Features
 
-PostgreSQL accepts URL DSNs:
+- Save and switch between PostgreSQL, MySQL, Oracle, and SQLite connections.
+- Browse tables, views, materialized views, and functions when supported by
+  the connected database.
+- Filter database objects and inspect table data in bounded pages.
+- View table DDL, columns, and indexes.
+- Edit or delete a selected row when its table has a usable primary key.
+- Write and execute SQL in the raw-query panel.
+- Save and reopen SQL scripts for each connection.
+- Export a table or successful query results as CSV or JSON.
+- Create timestamped SQL dumps for PostgreSQL, MySQL, and SQLite.
+- Rename saved connections and set their environment label.
 
-```text
-postgres://user:password@host:5432/database
-```
+## Keyboard reference
 
-MySQL accepts both the native `go-sql-driver/mysql` form and URL form:
+### Global
 
-```text
-user:password@tcp(host:3306)/database?parseTime=true
-mysql://user:password@host:3306/database?parseTime=true
-```
+| Key | Action |
+| --- | --- |
+| `Ctrl+N` | Create a connection; in the raw-query panel, start a new script |
+| `Ctrl+L` | Open saved connections |
+| `Ctrl+R` | Open the raw-query panel |
+| `Ctrl+T` | Return to table data |
+| `Ctrl+O` | Choose the database object category |
+| `Ctrl+F` | Filter database objects |
+| `Ctrl+G` | Open actions for the selected table or connection |
+| `Ctrl+S` | Change the maximum page size |
+| `Ctrl+D` | Create a database dump |
+| `Ctrl+E` | Export the selected table or query results |
+| `Tab` | Switch focus between visible panels |
+| `q` or `Ctrl+C` | Quit (`q` types a character while the SQL editor has focus) |
 
-SQLite uses the pure-Go `modernc.org/sqlite` driver, so connecting does not
-require CGO or a system SQLite library. Enter a local path such as:
+### Browse tables and data
 
-```text
-docker/sqlite/employee.db
-/data/reporting.db
-```
+| Key | Action |
+| --- | --- |
+| `Up` / `Down` or `k` / `j` | Move through objects or rows |
+| `Left` / `Right` | Move focus between the object list and data; scroll data columns |
+| `PgUp` / `PgDown` | Move one page |
+| `Home` / `End` | First / last visible database object |
+| `Enter` | Load the selected table or view a selected function |
+| `r` | Refresh the current table data |
+| `e` | Edit the selected row |
+| `d` | Delete the selected row (confirmation required) |
+| Mouse wheel | Scroll table data or query results |
 
-The `sqlite3` executable is required only when using the SQLite database dump
-command; browsing, queries, DDL, and CSV/JSON exports do not require it.
+### Raw SQL
 
-When a DSN is provided it takes precedence over the individual fields. The app tests the connection before saving it and immediately switches to the successful connection. Connection failures stay in the modal and preserve the entered values.
-
-Press `Ctrl+R` to open the raw SQL panel. Enter a statement for the connected database and press `Ctrl+P` to run it; plain Enter adds a new line. After a query runs, its results receive focus and can be scrolled with Up/Down, j/k, PgUp/PgDown, or the mouse wheel. Press Tab to switch between results and the editor. Query results display at most 100 rows. Press `Ctrl+T` to return to the selected table's data view. Press `Ctrl+G` to open a read-only DDL modal for the selected table from either panel. In the table-data view, Tab cycles focus between the table list, the table filter, and the data list; Ctrl+F opens the filter directly.
-
-Passwords are stored as plaintext in the connection fields or DSN. The configuration file is private to the current user (`0600`), but it is not encrypted. Do not commit passwords or credential-bearing database URLs.
-
-## License
-
-Licensed under the [MIT License](LICENSE).
+| Key | Action |
+| --- | --- |
+| `Ctrl+P` | Execute the SQL in the editor |
+| `Ctrl+N` | Clear the editor and start a new script |
+| `Ctrl+H` | Open saved scripts for the current connection |
+| `Ctrl+E` | Export successful query results as CSV or JSON |
+| `Tab` | Switch between the editor and results |
+| `Up` / `Down`, `k` / `j`, `PgUp` / `PgDown` | Scroll results when results have focus |
