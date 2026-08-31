@@ -254,10 +254,8 @@ func loadFunctions(database db.Database, schema string, session uint64) tea.Cmd 
 	}
 }
 
-func executeQuery(database db.Database, sql string, session, request uint64) tea.Cmd {
+func executeQuery(ctx context.Context, database db.Database, sql string, session, request uint64) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), queryExecutionTimeout)
-		defer cancel()
 
 		started := time.Now()
 		result, err := database.Execute(ctx, sql)

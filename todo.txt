@@ -10,8 +10,9 @@
 QUERY WORKFLOW
 [ ] Add SQL autocomplete for keywords, schemas, tables, views, functions, and columns.
 [ ] Add SQL syntax highlighting with engine-specific dialects.
-[ ] Execute only selected SQL when text is selected.
-[ ] Add cancellation for long-running queries.
+[x] Execute only selected SQL when text is selected.
+[x] - show time of execution query
+[x] Add cancellation for long-running queries.
 [ ] Add a read-only safety mode and confirmation before destructive statements.
 
 CLI

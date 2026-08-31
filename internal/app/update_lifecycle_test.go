@@ -439,6 +439,71 @@ func TestUpdateIgnoresStaleQueryResult(t *testing.T) {
 	}
 }
 
+func TestUpdateAdvancesRunningQueryElapsedTime(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.session = 5
+	model.query.loading = true
+	model.query.request = 11
+
+	updated, command := updateModel(t, model, queryElapsedTickMsg{
+		session: 5,
+		request: 11,
+		elapsed: 2 * time.Second,
+	})
+
+	assert.Equal(t, 2*time.Second, updated.query.executionDuration)
+	assert.NotNil(t, command)
+}
+
+func TestUpdateIgnoresStaleQueryElapsedTick(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.session = 5
+	model.query.loading = true
+	model.query.request = 11
+	model.query.executionDuration = time.Second
+
+	updated, command := updateModel(t, model, queryElapsedTickMsg{
+		session: 4,
+		request: 11,
+		elapsed: 2 * time.Second,
+	})
+
+	assert.Nil(t, command)
+	assert.Equal(t, time.Second, updated.query.executionDuration)
+}
+
+func TestQueryResetRejectsMessagesFromPreviousExecution(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook"}
+	model.session = 5
+	model.query.loading = true
+	model.query.request = 1
+
+	model.query.reset(model.layout)
+	model.query.editor.SetValue("SELECT 2")
+	require.NotNil(t, model.startQuery())
+	assert.Equal(t, uint64(2), model.query.request)
+
+	updated, command := updateModel(t, model, queryElapsedTickMsg{
+		session: 5,
+		request: 1,
+		elapsed: time.Second,
+	})
+	assert.Nil(t, command)
+	assert.True(t, updated.query.loading)
+	assert.Zero(t, updated.query.executionDuration)
+
+	updated, command = updateModel(t, updated, queryFinishedMsg{
+		result:  db.QueryResult{CommandTag: "SELECT 1"},
+		session: 5,
+		request: 1,
+		elapsed: time.Second,
+	})
+	assert.Nil(t, command)
+	assert.True(t, updated.query.loading)
+	assert.Empty(t, updated.query.result.CommandTag)
+}
+
 func TestUpdateAppliesMatchingQueryResult(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.session = 5
@@ -671,6 +736,18 @@ func TestUpdateAdvancesSpinnerWhileWorkIsLoading(t *testing.T) {
 
 func TestUpdateStopsSpinnerWhenWorkFinishes(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.spinnerRunning = true
+
+	updated, command := updateModel(t, model, spinnerTickMsg{})
+
+	assert.Nil(t, command)
+	assert.False(t, updated.spinnerRunning)
+	assert.Zero(t, updated.spinnerFrame)
+}
+
+func TestUpdateStopsSpinnerWhileOnlyQueryIsLoading(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.query.loading = true
 	model.spinnerRunning = true
 
 	updated, command := updateModel(t, model, spinnerTickMsg{})

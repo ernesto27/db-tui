@@ -1,11 +1,14 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ernestoponce27/db-tui/internal/config"
 	"github.com/ernestoponce27/db-tui/internal/db"
@@ -125,8 +128,163 @@ func TestQueryResultViewIncludesExecutionTime(t *testing.T) {
 			query.err = test.err
 			query.executionDuration = 1250 * time.Millisecond
 
-			assert.Contains(t, query.resultView(layout, true, ""), test.want)
+			assert.Contains(t, query.resultView(layout, true), test.want)
 		})
+	}
+}
+
+func TestQueryResultViewShowsElapsedTimeWhileLoading(t *testing.T) {
+	layout := newAppLayout(100, 24)
+	query := newQueryModel(layout)
+	query.loading = true
+	query.executionDuration = 2 * time.Second
+
+	result := query.resultView(layout, true)
+	assert.Contains(t, result, "Query executing: 2s")
+	assert.Contains(t, result, queryCancelControlText)
+}
+
+func TestQueryCancelControlClickCallsCancel(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.panel = panelQuery
+	model.query.loading = true
+	model.query.executionDuration = 2 * time.Second
+	canceled := false
+	model.query.cancel = func() { canceled = true }
+
+	controlX := model.layout.data.x + 2 + len(queryExecutingText) + len(model.query.executionDuration.String()) + 2
+	controlY := model.layout.data.y + querySectionHeight(model.layout) + 1
+	updated, command := updateModel(t, model, tea.MouseClickMsg{X: controlX, Y: controlY, Button: tea.MouseLeft})
+
+	assert.Nil(t, command)
+	assert.True(t, updated.query.loading)
+	assert.True(t, canceled)
+}
+
+func TestQueryCancelControlCancelsExecutingQueryContext(t *testing.T) {
+	database := newBlockingFakeDatabase()
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = database
+	model.panel = panelQuery
+	model.query.editor.SetValue("SELECT SLEEP(10)")
+
+	command := model.startQuery()
+	require.NotNil(t, command)
+	batch, ok := command().(tea.BatchMsg)
+	require.True(t, ok)
+	require.NotEmpty(t, batch)
+
+	controlX := model.layout.data.x + 2 + len(queryExecutingText) + len(model.query.executionDuration.String()) + 2
+	controlY := model.layout.data.y + querySectionHeight(model.layout) + 1
+	updated, clickCommand := updateModel(t, model, tea.MouseClickMsg{X: controlX, Y: controlY, Button: tea.MouseLeft})
+
+	assert.Nil(t, clickCommand)
+	finished, ok := batch[0]().(queryFinishedMsg)
+	require.True(t, ok)
+	assert.ErrorIs(t, finished.err, context.Canceled)
+	assert.True(t, database.executeCanceled)
+
+	updated, _ = updateModel(t, updated, finished)
+	assert.False(t, updated.query.loading)
+	assert.Nil(t, updated.query.cancel)
+}
+
+func TestModelCloseCancelsActiveQueryBeforeClosingDatabase(t *testing.T) {
+	database := newBlockingFakeDatabase()
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = database
+	model.panel = panelQuery
+	model.query.editor.SetValue("SELECT SLEEP(10)")
+
+	finished := startCancelableQuery(t, &model, database)
+	model.Close()
+
+	assert.True(t, database.closeSawCanceledQuery)
+	assertCanceledQueryFinished(t, finished)
+}
+
+func TestConnectionReplacementCancelsActiveQueryBeforeClosingDatabase(t *testing.T) {
+	oldDatabase := newBlockingFakeDatabase()
+	newDatabase := &fakeDatabase{name: "new", engine: db.EnginePostgreSQL}
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = oldDatabase
+	model.panel = panelQuery
+	model.query.editor.SetValue("SELECT SLEEP(10)")
+	modal := newConnectionModal(ConnectionSettings{})
+	modal.connecting = true
+	model.modal = &modal
+	model.connectionAttempt = 1
+
+	finished := startCancelableQuery(t, &model, oldDatabase)
+	updated, _ := updateModel(t, model, connectionFinishedMsg{
+		database: newDatabase,
+		attempt:  1,
+	})
+
+	assert.True(t, oldDatabase.closeSawCanceledQuery)
+	assert.Same(t, newDatabase, updated.database)
+	assertCanceledQueryFinished(t, finished)
+}
+
+func TestDeletingActiveConnectionCancelsQueryBeforeClosingDatabase(t *testing.T) {
+	appConfig := config.Config{Connections: []config.Connection{{Name: "active", Engine: db.EnginePostgreSQL}}}
+	database := newBlockingFakeDatabase()
+	model := New(appConfig, ConnectionSettings{}, nil)
+	model.database = database
+	model.activeConnectionIndex = 0
+	model.panel = panelQuery
+	model.query.editor.SetValue("SELECT SLEEP(10)")
+	connectionsModal := newConnectionsModal(appConfig)
+	model.connectionsModal = &connectionsModal
+
+	finished := startCancelableQuery(t, &model, database)
+	updated, _ := updateModel(t, model, deleteConnectionMsg{index: 0, connection: appConfig.Connections[0]})
+
+	assert.True(t, database.closeSawCanceledQuery)
+	assert.Nil(t, updated.database)
+	assertCanceledQueryFinished(t, finished)
+}
+
+func newBlockingFakeDatabase() *fakeDatabase {
+	return &fakeDatabase{
+		name:                      "chinook",
+		blockExecuteUntilCanceled: true,
+		executeStarted:            make(chan struct{}),
+	}
+}
+
+func startCancelableQuery(t *testing.T, model *Model, database *fakeDatabase) <-chan tea.Msg {
+	t.Helper()
+
+	command := model.startQuery()
+	require.NotNil(t, command)
+	batch, ok := command().(tea.BatchMsg)
+	require.True(t, ok)
+	require.NotEmpty(t, batch)
+
+	finished := make(chan tea.Msg, 1)
+	go func() {
+		finished <- batch[0]()
+	}()
+
+	select {
+	case <-database.executeStarted:
+	case <-time.After(time.Second):
+		t.Fatal("query did not begin execution")
+	}
+	return finished
+}
+
+func assertCanceledQueryFinished(t *testing.T, finished <-chan tea.Msg) {
+	t.Helper()
+
+	select {
+	case message := <-finished:
+		queryFinished, ok := message.(queryFinishedMsg)
+		require.True(t, ok)
+		assert.ErrorIs(t, queryFinished.err, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("query did not finish after cancellation")
 	}
 }
 
@@ -191,7 +349,7 @@ func TestModelStartQueryBeginsExecution(t *testing.T) {
 	assert.NotNil(t, command)
 	assert.True(t, model.query.loading)
 	assert.Equal(t, uint64(1), model.query.request)
-	assert.True(t, model.spinnerRunning)
+	assert.False(t, model.spinnerRunning)
 }
 
 func TestModelStartQueryIgnoresSubmissionWhileExecuting(t *testing.T) {

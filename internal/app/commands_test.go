@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -239,7 +240,10 @@ func TestExecuteQuery(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), queryExecutionTimeout)
+			defer cancel()
 			message, ok := executeQuery(
+				ctx,
 				test.database,
 				test.sql,
 				test.session,

@@ -369,6 +369,19 @@ func TestExecute(t *testing.T) {
 
 		assert.ErrorContains(t, err, "execute MySQL query")
 	})
+
+	t.Run("cancels a running query", func(t *testing.T) {
+		queryCtx, cancelQuery := context.WithCancel(context.Background())
+		defer cancelQuery()
+		cancelTimer := time.AfterFunc(250*time.Millisecond, cancelQuery)
+		defer cancelTimer.Stop()
+
+		started := time.Now()
+		_, err := database.Execute(queryCtx, "SELECT SLEEP(10)")
+
+		assert.ErrorIs(t, err, context.Canceled)
+		assert.Less(t, time.Since(started), 2*time.Second, "canceled query should not wait for SLEEP")
+	})
 }
 
 func TestUpdateRow(t *testing.T) {
