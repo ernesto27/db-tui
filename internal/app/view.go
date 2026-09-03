@@ -16,7 +16,7 @@ import (
 // View implements tea.Model.
 func (m Model) View() tea.View {
 	view := m.baseView()
-	if m.modal != nil || m.connectionsModal != nil || m.settingsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.columnsModal != nil || m.indexesModal != nil || m.actionsModal != nil || m.editRowModal != nil || m.deleteRowModal != nil || m.sqlScriptsModal != nil || m.objectsModal != nil || m.databaseExplorerModal != nil {
+	if m.modal != nil || m.connectionsModal != nil || m.settingsModal != nil || m.shortcutsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.columnsModal != nil || m.indexesModal != nil || m.actionsModal != nil || m.editRowModal != nil || m.deleteRowModal != nil || m.sqlScriptsModal != nil || m.objectsModal != nil || m.databaseExplorerModal != nil {
 		view.Content = m.renderModalOverlay(view.Content)
 	}
 	return view
@@ -154,6 +154,8 @@ func (m Model) renderModalOverlay(base string) string {
 		modal = m.connectionsModal.view(m.layout.width)
 	case m.settingsModal != nil:
 		modal = m.settingsModal.view(m.layout.width)
+	case m.shortcutsModal != nil:
+		modal = m.shortcutsModal.view(m.layout)
 	case m.dumpModal != nil:
 		modal = m.dumpModal.view(m.layout.width, m.spinner())
 	case m.exportModal != nil:
@@ -192,9 +194,9 @@ func (m Model) renderModalOverlay(base string) string {
 func (m Model) footerText() string {
 	if m.database == nil {
 		if m.panel == panelQuery {
-			return "raw query  •  connection required  •  Ctrl+S settings  •  Ctrl+T table data  •  Ctrl+N new connection  •  Ctrl+L open connections  •  q quit"
+			return "raw query  •  connection required  •  Ctrl+S settings  •  Ctrl+T table data  •  Ctrl+N new connection  •  Ctrl+L open connections  •  Ctrl+K shortcuts  •  q quit"
 		}
-		return "Ctrl+S settings  •  Ctrl+N new connection  •  Ctrl+L open connections  •  Ctrl+R raw query  •  q quit"
+		return "Ctrl+S settings  •  Ctrl+N new connection  •  Ctrl+L open connections  •  Ctrl+R raw query  •  Ctrl+K shortcuts  •  q quit"
 	}
 	if m.panel == panelQuery {
 		exportHelp := ""
@@ -206,19 +208,19 @@ func (m Model) footerText() string {
 		if !m.navigator.selectedIsView() && (tableSelected || (m.activeConnectionIndex >= 0 && m.activeConnectionIndex < len(m.config.Connections))) {
 			ddlHelp = "  •  Ctrl+G actions"
 		}
-		return "raw query  •  Ctrl+N new script  •  Ctrl+P execute  •  Ctrl+H saved scripts" + exportHelp + ddlHelp + "  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+S settings  •  Ctrl+T table data  •  Ctrl+L connections  •  q quit"
+		return "raw query  •  Ctrl+N new script  •  Ctrl+P execute  •  Ctrl+H saved scripts" + exportHelp + ddlHelp + "  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+S settings  •  Ctrl+T table data  •  Ctrl+L connections  •  Ctrl+K shortcuts  •  q quit"
 	}
 	if (m.loading || m.viewsLoading || m.materializedViewsLoading || m.functionsLoading) && !m.navigator.hasObjects() {
-		return "loading database objects  •  q quit"
+		return "loading database objects  •  Ctrl+K shortcuts  •  q quit"
 	}
 	if m.tableLoadErr != nil && !m.navigator.hasObjects() {
-		return "unable to load tables  •  q quit"
+		return "unable to load tables  •  Ctrl+K shortcuts  •  q quit"
 	}
 	if !m.navigator.hasObjects() {
-		return "no database objects found  •  Ctrl+O select objects  •  q quit"
+		return "no database objects found  •  Ctrl+O select objects  •  Ctrl+K shortcuts  •  q quit"
 	}
 	if len(m.navigator.visibleItems()) == 0 {
-		return "no matching database objects  •  Ctrl+F edit search  •  Esc clear search  •  q quit"
+		return "no matching database objects  •  Ctrl+F edit search  •  Esc clear search  •  Ctrl+K shortcuts  •  q quit"
 	}
 
 	rowStatus := ""
@@ -257,7 +259,7 @@ func (m Model) footerText() string {
 	if m.activeFunction.set && m.panel == panelData && m.focus == focusData {
 		functionHelp = "  •  ↑/↓ or j/k scroll function"
 	}
-	return fmt.Sprintf("Ctrl+O objects  •  Ctrl+F search%s%s%s%s%s%s  •  Ctrl+S settings  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  q quit",
+	return fmt.Sprintf("Ctrl+O objects  •  Ctrl+F search%s%s%s%s%s%s  •  Ctrl+S settings  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  Ctrl+K shortcuts  •  q quit",
 		rowStatus, activationHelp, refreshHelp, functionHelp, tableHelp, editHelp)
 }
 

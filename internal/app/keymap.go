@@ -3,6 +3,7 @@ package app
 import "charm.land/bubbles/v2/key"
 
 type keyMap struct {
+	shortcuts     key.Binding
 	connections   key.Binding
 	newConnection key.Binding
 	query         key.Binding
@@ -33,6 +34,7 @@ type keyMap struct {
 
 func defaultKeyMap() keyMap {
 	return keyMap{
+		shortcuts:     key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("ctrl+k", "keyboard shortcuts")),
 		connections:   key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "connections")),
 		newConnection: key.NewBinding(key.WithKeys("ctrl+n"), key.WithHelp("ctrl+n", "new connection")),
 		query:         key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("ctrl+r", "raw query")),
