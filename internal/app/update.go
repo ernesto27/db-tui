@@ -18,6 +18,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, command
 	}
 
+	if m.shortcutsModal != nil {
+		return m, m.updateShortcutsModal(msg)
+	}
+
 	if m.modal != nil {
 		switch msg.(type) {
 		case tea.MouseClickMsg, tea.MouseReleaseMsg, tea.MouseWheelMsg, tea.MouseMotionMsg:
@@ -275,6 +279,9 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		if m.databaseExplorerModal != nil {
 			m.databaseExplorerModal.clamp(m.layout)
+		}
+		if m.shortcutsModal != nil {
+			m.shortcutsModal.clamp(m.layout)
 		}
 		return nil, true
 	case renameRequestMsg:
@@ -622,6 +629,10 @@ func (m Model) updateSettingsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 	m.lastNavigatorClick = navigatorClick{}
 	switch {
+	case key.Matches(msg, m.keys.shortcuts):
+		modal := newShortcutsModal(m.layout)
+		m.shortcutsModal = &modal
+		return nil
 	case key.Matches(msg, m.keys.settings):
 		modal := newSettingsModal(m.config.PageSize())
 		m.settingsModal = &modal

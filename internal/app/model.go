@@ -54,6 +54,7 @@ type Model struct {
 	modal                  *connectionModal
 	connectionsModal       *connectionsModal
 	settingsModal          *settingsModal
+	shortcutsModal         *shortcutsModal
 	editingConnection      int
 	creatingConnection     bool
 	connectionAttempt      uint64
