@@ -13,9 +13,8 @@ import (
 )
 
 const (
-	tableLoadTimeout      = 5 * time.Second
-	dumpTimeout           = 30 * time.Minute
-	queryExecutionTimeout = 20 * time.Minute
+	tableLoadTimeout = 5 * time.Second
+	dumpTimeout      = 30 * time.Minute
 )
 
 type tablesLoadedMsg struct {
@@ -173,10 +172,11 @@ func loadRows(database db.Database, relation navigatorItem, offset, selectedRow,
 	}
 }
 
-func saveSettings(appConfig config.Config, maxPageSize int) tea.Cmd {
+func saveSettings(appConfig config.Config, maxPageSize, queryTimeoutSeconds int) tea.Cmd {
 	return func() tea.Msg {
 		appConfig.MaxPageSize = maxPageSize
-		return settingsSavedMsg{maxPageSize: maxPageSize, err: appConfig.Save()}
+		appConfig.QueryTimeoutSeconds = queryTimeoutSeconds
+		return settingsSavedMsg{maxPageSize: maxPageSize, queryTimeoutSeconds: queryTimeoutSeconds, err: appConfig.Save()}
 	}
 }
 

@@ -5,11 +5,18 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ernestoponce27/db-tui/internal/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestQueryTimeoutUsesConfiguredSeconds(t *testing.T) {
+	assert.Equal(t, 45*time.Second, (Config{QueryTimeoutSeconds: 45}).QueryTimeout())
+	assert.Equal(t, 20*time.Minute, (Config{}).QueryTimeout())
+	assert.Equal(t, 20*time.Minute, (Config{QueryTimeoutSeconds: 0}).QueryTimeout())
+}
 
 func TestLoad(t *testing.T) {
 	tests := []struct {
