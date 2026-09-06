@@ -92,6 +92,37 @@ BEGIN
 END;
 GO
 
+-- A schema whose only object is an indexed view. Schema object discovery must
+-- still report a "views" group for it, otherwise the view is unreachable from
+-- the database explorer.
+IF SCHEMA_ID(N'reporting') IS NULL
+BEGIN
+    EXEC(N'CREATE SCHEMA reporting');
+END;
+GO
+
+CREATE OR ALTER VIEW reporting.city_totals
+WITH SCHEMABINDING
+AS
+SELECT
+    city.country_code,
+    COUNT_BIG(*) AS city_count
+FROM dbo.cities AS city
+GROUP BY city.country_code;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE object_id = OBJECT_ID(N'reporting.city_totals')
+        AND index_id = 1
+)
+BEGIN
+    CREATE UNIQUE CLUSTERED INDEX CIX_city_totals
+        ON reporting.city_totals (country_code);
+END;
+GO
+
 CREATE OR ALTER FUNCTION dbo.city_count()
 RETURNS INT
 AS

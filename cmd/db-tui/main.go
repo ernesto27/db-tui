@@ -16,6 +16,7 @@ import (
 	"github.com/ernestoponce27/db-tui/internal/db/oracle"
 	"github.com/ernestoponce27/db-tui/internal/db/postgres"
 	"github.com/ernestoponce27/db-tui/internal/db/sqlite"
+	"github.com/ernestoponce27/db-tui/internal/db/sqlserver"
 )
 
 func main() {
@@ -45,6 +46,8 @@ func connectDatabase(ctx context.Context, engine, dsn string) (db.Database, erro
 		return oracle.Connect(ctx, dsn)
 	case db.EngineSQLite:
 		return sqlite.Connect(ctx, dsn)
+	case db.EngineSQLServer:
+		return sqlserver.Connect(ctx, dsn)
 	default:
 		return nil, fmt.Errorf("unsupported database engine %q", engine)
 	}

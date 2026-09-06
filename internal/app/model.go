@@ -144,7 +144,7 @@ func (m Model) loadDatabaseObjects() tea.Cmd {
 		loadViews(m.database, schema, m.session),
 		loadMaterializedViews(m.database, schema, m.session),
 	}
-	if m.database.Engine() == db.EnginePostgreSQL {
+	if supportsSchemaObjectGroups(m.database.Engine()) {
 		commands = append(commands, loadSchemaObjectGroups(m.database, m.session))
 	}
 	if m.navigator.functionsAvailable {

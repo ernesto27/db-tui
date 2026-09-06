@@ -36,6 +36,36 @@ func TestConnectionSettingsConnectionDSN(t *testing.T) {
 			want: "mysql://db_tui:secret@127.0.0.1:3306/chinook",
 		},
 		{
+			name: "SQL Server sends the database as a query parameter",
+			settings: ConnectionSettings{
+				Engine:       db.EngineSQLServer,
+				Host:         "127.0.0.1",
+				Port:         1434,
+				DatabaseName: "db_tui",
+				Username:     "sa",
+				Password:     "secret",
+			},
+			// A path segment would be read as an instance name, silently
+			// connecting to the server's default database instead.
+			want: "sqlserver://sa:secret@127.0.0.1:1434?database=db_tui",
+		},
+		{
+			name: "SQL Server without a password",
+			settings: ConnectionSettings{
+				Engine:       db.EngineSQLServer,
+				Host:         "127.0.0.1",
+				Port:         1433,
+				DatabaseName: "db_tui",
+				Username:     "sa",
+			},
+			want: "sqlserver://sa@127.0.0.1:1433?database=db_tui",
+		},
+		{
+			name:     "SQL Server explicit DSN takes precedence",
+			settings: ConnectionSettings{Engine: db.EngineSQLServer, DSN: " sqlserver://saved?database=db_tui "},
+			want:     "sqlserver://saved?database=db_tui",
+		},
+		{
 			name: "valid fields",
 			settings: ConnectionSettings{
 				Engine:       db.EnginePostgreSQL,

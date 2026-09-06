@@ -18,8 +18,6 @@ import (
 	"github.com/microsoft/go-mssqldb/msdsn"
 )
 
-var errNotImplemented = errors.New("SQL Server support is not implemented")
-
 const sqlServerBackupDirectory = "/var/opt/mssql/data"
 
 const listTablesSQL = `
@@ -40,17 +38,14 @@ const listSchemaObjectGroupsSQL = `
 
 		UNION
 
+		-- Indexed views are ordinary views to this application: SQL Server has
+		-- no materialized views, and ListViews returns them, so excluding them
+		-- here would hide every view in a schema whose views are all indexed.
 		SELECT schema_info.name AS schema_name, 'views' AS object_type
 		FROM sys.views AS view_info
 		JOIN sys.schemas AS schema_info
 			ON schema_info.schema_id = view_info.schema_id
 		WHERE view_info.is_ms_shipped = 0
-			AND NOT EXISTS (
-				SELECT 1
-				FROM sys.indexes AS index_info
-				WHERE index_info.object_id = view_info.object_id
-					AND index_info.index_id = 1
-			)
 
 		UNION
 
@@ -250,7 +245,7 @@ func (s *sqlserverDatabase) Name() string {
 }
 
 func (s *sqlserverDatabase) Engine() string {
-	return db.EngineSqlServer
+	return db.EngineSQLServer
 }
 
 func (s *sqlserverDatabase) Host() string {
@@ -498,7 +493,7 @@ func dockerContainerIDForPort(ctx context.Context, port string) (string, error) 
 	ids := strings.Fields(string(output))
 	switch len(ids) {
 	case 0:
-		return "", fmt.Errorf("not found")
+		return "", fmt.Errorf("no Docker container publishes port %s; SQL Server dump requires the server to run in a local Docker container", port)
 	case 1:
 		return ids[0], nil
 	default:
@@ -662,8 +657,11 @@ func (s *sqlserverDatabase) ListViews(ctx context.Context, schema string) ([]db.
 	return views, nil
 }
 
+// ListMaterializedViews always reports no materialized views. SQL Server has
+// indexed views rather than materialized views, so the application excludes it
+// from the materialized-view navigator section and never calls this method.
 func (s *sqlserverDatabase) ListMaterializedViews(context.Context, string) ([]db.MaterializedView, error) {
-	return nil, errNotImplemented
+	return nil, nil
 }
 
 func (s *sqlserverDatabase) UpdateRow(ctx context.Context, table db.Table, setColumns, whereColumns map[string]any) error {
@@ -804,4 +802,9 @@ func (s *sqlserverDatabase) ListFunctions(ctx context.Context, schema string) ([
 	return functionColumns, nil
 }
 
-func (s *sqlserverDatabase) Close() {}
+// Close releases all connections held by the database.
+func (s *sqlserverDatabase) Close() {
+	if s.database != nil {
+		_ = s.database.Close()
+	}
+}

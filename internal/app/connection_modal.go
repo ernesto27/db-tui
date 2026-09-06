@@ -26,7 +26,7 @@ const (
 
 const connectionModalInputWidth = 42
 
-var connectionEngines = []string{db.EnginePostgreSQL, db.EngineMySQL, db.EngineOracle, db.EngineSQLite}
+var connectionEngines = []string{db.EnginePostgreSQL, db.EngineMySQL, db.EngineOracle, db.EngineSQLite, db.EngineSQLServer}
 
 type connectionModal struct {
 	inputs      [connectionInputCount]textinput.Model
@@ -193,6 +193,10 @@ func (m *connectionModal) setDSNPlaceholder() {
 		m.inputs[dsnInput].Placeholder = "oracle://user:password@host:1521/service"
 		return
 	}
+	if m.engine() == db.EngineSQLServer {
+		m.inputs[dsnInput].Placeholder = "sqlserver://user:password@host:1433?database=name"
+		return
+	}
 	m.inputs[dsnInput].Placeholder = "engine-specific DSN"
 }
 
@@ -205,6 +209,9 @@ func defaultPortForEngine(engine string) string {
 	}
 	if engine == db.EngineSQLite {
 		return ""
+	}
+	if engine == db.EngineSQLServer {
+		return "1433"
 	}
 	return "5432"
 }

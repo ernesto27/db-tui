@@ -19,7 +19,7 @@ import (
 func TestListTables(t *testing.T) {
 	ctx, database := connectLocalSQLServer(t)
 	assert.Equal(t, "db_tui", database.Name(), "Database.Name()")
-	assert.Equal(t, db.EngineSqlServer, database.Engine(), "Database.Engine()")
+	assert.Equal(t, db.EngineSQLServer, database.Engine(), "Database.Engine()")
 
 	tables, err := database.ListTables(ctx, "dbo")
 	require.NoError(t, err)
@@ -127,6 +127,22 @@ func TestListSchemaObjectGroups(t *testing.T) {
 		assert.NotEqual(t, "sys", group.Schema)
 		assert.NotEqual(t, "INFORMATION_SCHEMA", group.Schema)
 	}
+}
+
+func TestListSchemaObjectGroupsIncludesIndexedViewOnlySchema(t *testing.T) {
+	ctx, database := connectLocalSQLServer(t)
+
+	// reporting.city_totals is an indexed view and the only object in its
+	// schema. Excluding indexed views from discovery would leave the schema
+	// with no groups at all, making the view unreachable in the explorer.
+	views, err := database.ListViews(ctx, "reporting")
+	require.NoError(t, err)
+	assert.Equal(t, []db.View{{Name: "city_totals"}}, views)
+
+	groups, err := database.ListSchemaObjectGroups(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, groups, db.SchemaObjectGroup{Schema: "reporting", Type: db.SchemaObjectViews})
+	assert.NotContains(t, groups, db.SchemaObjectGroup{Schema: "reporting", Type: db.SchemaObjectTables})
 }
 
 func TestGetRows(t *testing.T) {

@@ -32,6 +32,7 @@ func TestFunctionSchemaUsesEngineScope(t *testing.T) {
 	assert.Equal(t, "public", functionSchema(&fakeDatabase{engine: db.EnginePostgreSQL}))
 	assert.Equal(t, "chinook", functionSchema(&fakeDatabase{name: "chinook", engine: db.EngineMySQL}))
 	assert.Empty(t, functionSchema(&fakeDatabase{engine: db.EngineOracle}))
+	assert.Equal(t, "dbo", functionSchema(&fakeDatabase{name: "db_tui", engine: db.EngineSQLServer}))
 }
 
 func TestObjectsModalSelectsFunctionNavigatorSection(t *testing.T) {

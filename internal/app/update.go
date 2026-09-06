@@ -492,7 +492,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.materializedViewLoadErr = nil
 		m.functionLoadErr = nil
 		m.schemaObjectGroups = nil
-		m.schemaObjectGroupsLoading = msg.database.Engine() == db.EnginePostgreSQL
+		m.schemaObjectGroupsLoading = supportsSchemaObjectGroups(msg.database.Engine())
 		m.navigator.reset()
 		m.activeRelation = activeRelation{}
 		m.activeFunction = activeFunction{}
@@ -524,15 +524,26 @@ func supportsMaterializedViews(engine string) bool {
 }
 
 func supportsFunctions(engine string) bool {
-	return engine == db.EnginePostgreSQL || engine == db.EngineMySQL || engine == db.EngineOracle
+	return engine == db.EnginePostgreSQL || engine == db.EngineMySQL ||
+		engine == db.EngineOracle || engine == db.EngineSQLServer
 }
 
+// supportsSchemaObjectGroups reports whether an engine exposes objects grouped
+// by schema, which the database explorer browses instead of the flat object
+// list.
+func supportsSchemaObjectGroups(engine string) bool {
+	return engine == db.EnginePostgreSQL || engine == db.EngineSQLServer
+}
+
+// functionSchema returns the schema whose objects load when a session opens.
 func functionSchema(database db.Database) string {
 	switch database.Engine() {
 	case db.EnginePostgreSQL:
 		return "public"
 	case db.EngineMySQL:
 		return database.Name()
+	case db.EngineSQLServer:
+		return "dbo"
 	default:
 		return ""
 	}
@@ -665,7 +676,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		m.navigator.finishSearch()
-		if m.database.Engine() == db.EnginePostgreSQL {
+		if supportsSchemaObjectGroups(m.database.Engine()) {
 			modal := newDatabaseExplorerModal(m.schemaObjectGroups)
 			m.databaseExplorerModal = &modal
 			return nil

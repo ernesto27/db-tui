@@ -78,6 +78,66 @@ This fallback must run in a transaction. Commit only when exactly one row is
 affected. Roll back and return an error when zero rows match or when multiple
 identical rows match, so the TUI never deletes an ambiguous row.
 
+# Row deletion always sends every column as the WHERE clause
+
+Deleting any row from the data panel fails with:
+
+```text
+cannot delete <engine> row without its complete primary key
+```
+
+This affects every engine, not one adapter. It was observed on SQL Server and
+reproduced identically on PostgreSQL against `public."Album"`.
+
+## Cause
+
+`openDeleteRowModal` in `internal/app/update.go` builds `whereColumns` from
+every column of the selected row:
+
+```go
+for index, name := range m.data.page.Columns {
+    if index < len(row) {
+        whereColumns[name] = row[index]
+    }
+}
+```
+
+Each adapter then calls `db.ValidatePrimaryKeyWhere`, which requires the
+`WHERE` set to be exactly the primary key: it rejects the call when
+`len(whereColumns) != len(primaryKeys)`. A four-column table with a
+single-column key therefore sends four columns against a key of one and is
+always rejected. Deletion currently cannot succeed for any table whose column
+count differs from its primary-key column count.
+
+This contradicts ADR 0011, which specifies that "the row identity sent to the
+database consists of the selected row's original primary-key values".
+
+The edit path is correct and does not share the defect: `editRowModal` filters
+on `f.column.IsPrimaryKey` when building its `WHERE` clause, using column
+metadata fetched by `loadEditRowColumns`. The delete path never loads column
+metadata, so it has no way to identify key columns.
+
+The application tests did not catch this because `fakeDatabase.DeleteRow`
+returns `nil` unconditionally, so `ValidatePrimaryKeyWhere` is never exercised
+above the adapter layer.
+
+## Suggested fix
+
+Mirror the edit path. Add a `loadDeleteRowColumns` command beside
+`loadEditRowColumns`, make `openDeleteRowModal` return it, and build
+`whereColumns` from primary-key columns only when the loaded-columns message
+arrives.
+
+Preserve ADR 0011's behavior for keyless tables: open the confirmation with an
+empty `WHERE` set and let the adapter report that the table has no primary key,
+rather than hiding or pre-rejecting the action in the UI.
+
+Pressing `d` gains a brief column load before the confirmation appears, exactly
+as `e` does today.
+
+Add regression coverage that exercises the real validator rather than the
+permissive fake, so an all-columns `WHERE` set cannot pass unnoticed again.
+
 # Saved SQL script writes can complete out of order
 
 Saving a loaded SQL script runs concurrently with database execution. When a

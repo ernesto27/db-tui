@@ -92,6 +92,8 @@ func engineDisplayName(engine string) string {
 		return "PostgreSQL"
 	case db.EngineSQLite:
 		return "SQLite"
+	case db.EngineSQLServer:
+		return "SQL Server"
 	default:
 		return sanitizeText(engine)
 	}

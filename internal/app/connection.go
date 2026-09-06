@@ -69,6 +69,19 @@ func (s ConnectionSettings) connectionDSN() (string, error) {
 	if s.Password != "" {
 		user = url.UserPassword(username, s.Password)
 	}
+	address := net.JoinHostPort(host, strconv.Itoa(s.Port))
+	if engine == db.EngineSQLServer {
+		// SQL Server reads the URL path as an instance name, so the database
+		// must travel as a query parameter. A path segment would connect
+		// silently to the server's default database instead.
+		return (&url.URL{
+			Scheme:   "sqlserver",
+			User:     user,
+			Host:     address,
+			RawQuery: url.Values{"database": {databaseName}}.Encode(),
+		}).String(), nil
+	}
+
 	scheme := "postgres"
 	if engine == db.EngineMySQL {
 		scheme = "mysql"
@@ -79,7 +92,7 @@ func (s ConnectionSettings) connectionDSN() (string, error) {
 	return (&url.URL{
 		Scheme: scheme,
 		User:   user,
-		Host:   net.JoinHostPort(host, strconv.Itoa(s.Port)),
+		Host:   address,
 		Path:   "/" + databaseName,
 	}).String(), nil
 }
@@ -94,6 +107,8 @@ func (s ConnectionSettings) normalizedEngine() (string, error) {
 		return db.EngineOracle, nil
 	case db.EngineSQLite:
 		return db.EngineSQLite, nil
+	case db.EngineSQLServer:
+		return db.EngineSQLServer, nil
 	default:
 		return "", fmt.Errorf("unsupported database engine %q", s.Engine)
 	}
