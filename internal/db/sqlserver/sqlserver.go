@@ -7,10 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/ernestoponce27/db-tui/internal/csvexport"
 	"github.com/ernestoponce27/db-tui/internal/db"
+	"github.com/ernestoponce27/db-tui/internal/jsonexport"
 	mssql "github.com/microsoft/go-mssqldb"
 	"github.com/microsoft/go-mssqldb/msdsn"
 )
@@ -66,6 +69,154 @@ const listSchemaObjectGroupsSQL = `
 			WHEN 'functions' THEN 3
 		END
 `
+
+const listColumnsSQL = `
+	SELECT
+		column_info.name AS column_name,
+		column_info.column_id AS ordinal_position,
+		type_info.name +
+			CASE
+				WHEN type_info.name IN ('char', 'varchar', 'binary', 'varbinary', 'nchar', 'nvarchar') THEN
+					'(' + CASE
+						WHEN column_info.max_length = -1 THEN 'max'
+						WHEN type_info.name IN ('nchar', 'nvarchar') THEN CONVERT(varchar(10), column_info.max_length / 2)
+						ELSE CONVERT(varchar(10), column_info.max_length)
+					END + ')'
+				WHEN type_info.name IN ('decimal', 'numeric') THEN
+					'(' + CONVERT(varchar(10), column_info.precision) +
+					',' + CONVERT(varchar(10), column_info.scale) + ')'
+				WHEN type_info.name IN ('datetime2', 'datetimeoffset', 'time') THEN
+					'(' + CONVERT(varchar(10), column_info.scale) + ')'
+				ELSE ''
+			END AS data_type,
+		CASE WHEN column_info.is_identity = 1 THEN 'IDENTITY' ELSE '' END AS identity_value,
+		COALESCE(column_info.collation_name, '') AS collation,
+		CAST(CASE WHEN column_info.is_nullable = 0 THEN 1 ELSE 0 END AS bit) AS not_null,
+		COALESCE(CONVERT(nvarchar(max), OBJECT_DEFINITION(column_info.default_object_id)), '') AS default_value,
+		COALESCE(CONVERT(nvarchar(max), property_info.value), '') AS comment,
+		CAST(CASE WHEN primary_key.column_id IS NULL THEN 0 ELSE 1 END AS bit) AS is_primary_key
+	FROM sys.columns AS column_info
+	JOIN sys.tables AS table_info
+		ON table_info.object_id = column_info.object_id
+	JOIN sys.schemas AS schema_info
+		ON schema_info.schema_id = table_info.schema_id
+	JOIN sys.types AS type_info
+		ON type_info.user_type_id = column_info.user_type_id
+	LEFT JOIN sys.indexes AS primary_index
+		ON primary_index.object_id = table_info.object_id
+			AND primary_index.is_primary_key = 1
+	LEFT JOIN sys.index_columns AS primary_key
+		ON primary_key.object_id = primary_index.object_id
+			AND primary_key.index_id = primary_index.index_id
+			AND primary_key.column_id = column_info.column_id
+	LEFT JOIN sys.extended_properties AS property_info
+		ON property_info.class = 1
+			AND property_info.major_id = column_info.object_id
+			AND property_info.minor_id = column_info.column_id
+			AND property_info.name = 'MS_Description'
+	WHERE schema_info.name = @p1
+		AND table_info.name = @p2
+	ORDER BY column_info.column_id`
+
+const listIndexColumnsSQL = `
+    SELECT
+            index_info.name AS index_name,
+            column_info.name AS column_name,
+            table_info.name AS table_name,
+            index_info.type_desc AS access_method
+    FROM sys.indexes AS index_info
+    JOIN sys.tables AS table_info
+            ON table_info.object_id = index_info.object_id
+    JOIN sys.schemas AS schema_info
+            ON schema_info.schema_id = table_info.schema_id
+    JOIN sys.index_columns AS index_column
+            ON index_column.object_id = index_info.object_id
+                    AND index_column.index_id = index_info.index_id
+                    AND index_column.key_ordinal > 0
+    JOIN sys.columns AS column_info
+            ON column_info.object_id = index_column.object_id
+                    AND column_info.column_id = index_column.column_id
+    WHERE schema_info.name = @p1
+            AND table_info.name = @p2
+            AND index_info.is_hypothetical = 0
+    ORDER BY index_info.name, index_column.key_ordinal`
+
+const listViewsSQL = `
+	SELECT
+        view_info.name AS view_name
+        FROM sys.views AS view_info
+        JOIN sys.schemas AS schema_info
+                ON schema_info.schema_id = view_info.schema_id
+        WHERE schema_info.name = @p1
+                AND view_info.is_ms_shipped = 0
+        ORDER BY view_info.name`
+
+const listFunctionsSQL = `
+	SELECT
+		function_info.name AS function_name,
+		COALESCE(argument_info.arguments, '') AS arguments,
+		CASE
+			WHEN function_info.type IN ('IF', 'TF', 'FT') THEN 'TABLE'
+			ELSE return_type_info.name +
+				CASE
+					WHEN return_type_info.name IN ('char', 'varchar', 'binary', 'varbinary', 'nchar', 'nvarchar') THEN
+						'(' + CASE
+							WHEN return_parameter.max_length = -1 THEN 'max'
+							WHEN return_type_info.name IN ('nchar', 'nvarchar') THEN CONVERT(varchar(10), return_parameter.max_length / 2)
+							ELSE CONVERT(varchar(10), return_parameter.max_length)
+						END + ')'
+					WHEN return_type_info.name IN ('decimal', 'numeric') THEN
+						'(' + CONVERT(varchar(10), return_parameter.precision) +
+						',' + CONVERT(varchar(10), return_parameter.scale) + ')'
+					WHEN return_type_info.name IN ('datetime2', 'datetimeoffset', 'time') THEN
+						'(' + CONVERT(varchar(10), return_parameter.scale) + ')'
+					ELSE ''
+				END
+		END AS return_type,
+		CASE
+			WHEN function_info.type IN ('FS', 'FT') THEN 'CLR'
+			ELSE 'SQL'
+		END AS language,
+		COALESCE(module_info.definition, '') AS definition
+	FROM sys.objects AS function_info
+	JOIN sys.schemas AS schema_info
+		ON schema_info.schema_id = function_info.schema_id
+	LEFT JOIN sys.parameters AS return_parameter
+		ON return_parameter.object_id = function_info.object_id
+			AND return_parameter.parameter_id = 0
+	LEFT JOIN sys.types AS return_type_info
+		ON return_type_info.user_type_id = return_parameter.user_type_id
+	LEFT JOIN sys.sql_modules AS module_info
+		ON module_info.object_id = function_info.object_id
+	OUTER APPLY (
+		SELECT STRING_AGG(
+			parameter_info.name + ' ' + parameter_type_info.name +
+				CASE
+					WHEN parameter_type_info.name IN ('char', 'varchar', 'binary', 'varbinary', 'nchar', 'nvarchar') THEN
+						'(' + CASE
+							WHEN parameter_info.max_length = -1 THEN 'max'
+							WHEN parameter_type_info.name IN ('nchar', 'nvarchar') THEN CONVERT(varchar(10), parameter_info.max_length / 2)
+							ELSE CONVERT(varchar(10), parameter_info.max_length)
+						END + ')'
+					WHEN parameter_type_info.name IN ('decimal', 'numeric') THEN
+						'(' + CONVERT(varchar(10), parameter_info.precision) +
+						',' + CONVERT(varchar(10), parameter_info.scale) + ')'
+					WHEN parameter_type_info.name IN ('datetime2', 'datetimeoffset', 'time') THEN
+						'(' + CONVERT(varchar(10), parameter_info.scale) + ')'
+					ELSE ''
+				END +
+				CASE WHEN parameter_info.is_output = 1 THEN ' OUTPUT' ELSE '' END,
+			', '
+		) WITHIN GROUP (ORDER BY parameter_info.parameter_id) AS arguments
+		FROM sys.parameters AS parameter_info
+		JOIN sys.types AS parameter_type_info
+			ON parameter_type_info.user_type_id = parameter_info.user_type_id
+		WHERE parameter_info.object_id = function_info.object_id
+			AND parameter_info.parameter_id > 0
+	) AS argument_info
+	WHERE schema_info.name = @p1
+		AND function_info.type IN ('FN', 'FS', 'FT', 'IF', 'TF')
+	ORDER BY function_info.name`
 
 type sqlserverDatabase struct {
 	database *sql.DB
@@ -371,40 +522,286 @@ func removeFromDocker(ctx context.Context, containerID, filename string) error {
 	return nil
 }
 
-func (s *sqlserverDatabase) Export(context.Context, db.Table, string) error {
-	return errNotImplemented
+func (s *sqlserverDatabase) Export(ctx context.Context, table db.Table, typeVal string) error {
+	data, err := s.getRows(ctx, table, nil)
+	if err != nil {
+		return err
+	}
+
+	switch typeVal {
+	case db.ExportTypeCSV:
+		filename := db.TimestampedFilename(db.SafeFilename(table.Name), db.ExportTypeCSV)
+		if err := csvexport.Write(filename, data.Columns, data.Rows); err != nil {
+			return fmt.Errorf("write CSV export: %w", err)
+		}
+	case db.ExportTypeJSON:
+		filename := db.TimestampedFilename(db.SafeFilename(table.Name), db.ExportTypeJSON)
+		if err := jsonexport.Write(filename, table.Name, data.Columns, data.Rows); err != nil {
+			return fmt.Errorf("write JSON export: %w", err)
+		}
+	}
+
+	return nil
 }
 
-func (s *sqlserverDatabase) ExportQuery(context.Context, string) error {
-	return errNotImplemented
+func (s *sqlserverDatabase) ExportQuery(ctx context.Context, statement string) error {
+	if err := db.ValidateSelectQuery(statement); err != nil {
+		return err
+	}
+
+	tx, err := s.database.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin SQL Server export transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.QueryContext(ctx, statement)
+	if err != nil {
+		return fmt.Errorf("query SQL Server export rows: %w", err)
+	}
+
+	result, err := readSQLServerQueryResult(rows, 0, "")
+	if err != nil {
+		return err
+	}
+
+	filename := db.TimestampedFilename("query", db.ExportTypeCSV)
+	if err := csvexport.Write(filename, result.Columns, result.Rows); err != nil {
+		return fmt.Errorf("write CSV query export: %w", err)
+	}
+
+	return nil
 }
 
-func (s *sqlserverDatabase) ListColumns(context.Context, db.Table) ([]db.Column, error) {
-	return nil, errNotImplemented
+func (s *sqlserverDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {
+	rows, err := s.database.QueryContext(ctx, listColumnsSQL, table.Schema, table.Name)
+	if err != nil {
+		return nil, fmt.Errorf("query sqlserver columns: %w", err)
+	}
+	defer rows.Close()
+
+	columns := make([]db.Column, 0)
+	for rows.Next() {
+		var column db.Column
+		if err := rows.Scan(
+			&column.Name,
+			&column.OrdinalPosition,
+			&column.DataType,
+			&column.Identity,
+			&column.Collation,
+			&column.NotNull,
+			&column.Default,
+			&column.Comment,
+			&column.IsPrimaryKey,
+		); err != nil {
+			return nil, fmt.Errorf("scan SQL Server column: %w", err)
+		}
+
+		columns = append(columns, column)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate SQL Server columns: %w", err)
+	}
+
+	return columns, nil
 }
 
-func (s *sqlserverDatabase) ListIndexes(context.Context, db.Table) ([]db.IndexColumns, error) {
-	return nil, errNotImplemented
+func (s *sqlserverDatabase) ListIndexes(ctx context.Context, table db.Table) ([]db.IndexColumns, error) {
+	rows, err := s.database.QueryContext(ctx, listIndexColumnsSQL, table.Schema, table.Name)
+	if err != nil {
+		return nil, fmt.Errorf("query sqlserver Index columns: %w", err)
+	}
+	defer rows.Close()
+
+	indexColumns := make([]db.IndexColumns, 0)
+
+	for rows.Next() {
+		var index db.IndexColumns
+
+		err := rows.Scan(
+			&index.Name,
+			&index.Column,
+			&index.Table,
+			&index.AccessMethod,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan sqlserver index column: %w", err)
+		}
+
+		indexColumns = append(indexColumns, index)
+
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate sqlserver index columns: %w", err)
+	}
+
+	return indexColumns, nil
 }
 
-func (s *sqlserverDatabase) ListViews(context.Context, string) ([]db.View, error) {
-	return nil, errNotImplemented
+func (s *sqlserverDatabase) ListViews(ctx context.Context, schema string) ([]db.View, error) {
+	rows, err := s.database.QueryContext(ctx, listViewsSQL, schema)
+	if err != nil {
+		return nil, fmt.Errorf("query sqlserver views: %w", err)
+	}
+	defer rows.Close()
+
+	views := make([]db.View, 0)
+	for rows.Next() {
+		var view db.View
+		if err := rows.Scan(&view.Name); err != nil {
+			return nil, fmt.Errorf("scan sqlserver view: %w", err)
+		}
+		views = append(views, view)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate sqlserver view: %w", err)
+	}
+
+	return views, nil
 }
 
 func (s *sqlserverDatabase) ListMaterializedViews(context.Context, string) ([]db.MaterializedView, error) {
 	return nil, errNotImplemented
 }
 
-func (s *sqlserverDatabase) UpdateRow(context.Context, db.Table, map[string]any, map[string]any) error {
-	return errNotImplemented
+func (s *sqlserverDatabase) UpdateRow(ctx context.Context, table db.Table, setColumns, whereColumns map[string]any) error {
+	columns, err := s.ListColumns(ctx, table)
+	if err != nil {
+		return fmt.Errorf("list SQL Server columns before update: %w", err)
+	}
+	if err := db.ValidatePrimaryKeyWhere("update SQL Server row", columns, whereColumns); err != nil {
+		return err
+	}
+	if len(setColumns) == 0 {
+		return errors.New("update SQL Server row requires at least one column")
+	}
+
+	tableName := quoteIdentifier(table.Name)
+	if table.Schema != "" {
+		tableName = quoteIdentifier(table.Schema) + "." + tableName
+	}
+
+	setNames := make([]string, 0, len(setColumns))
+	for name := range setColumns {
+		setNames = append(setNames, name)
+	}
+	sort.Strings(setNames)
+
+	args := make([]any, 0, len(setColumns)+len(whereColumns))
+	setClauses := make([]string, 0, len(setNames))
+	for _, name := range setNames {
+		args = append(args, setColumns[name])
+		setClauses = append(setClauses, fmt.Sprintf("%s = @p%d", quoteIdentifier(name), len(args)))
+	}
+
+	whereNames := make([]string, 0, len(whereColumns))
+	for name := range whereColumns {
+		whereNames = append(whereNames, name)
+	}
+	sort.Strings(whereNames)
+
+	whereClauses := make([]string, 0, len(whereNames))
+	for _, name := range whereNames {
+		if whereColumns[name] == nil {
+			whereClauses = append(whereClauses, quoteIdentifier(name)+" IS NULL")
+			continue
+		}
+		args = append(args, whereColumns[name])
+		whereClauses = append(whereClauses, fmt.Sprintf("%s = @p%d", quoteIdentifier(name), len(args)))
+	}
+
+	query := fmt.Sprintf(
+		"UPDATE %s SET %s WHERE %s",
+		tableName,
+		strings.Join(setClauses, ", "),
+		strings.Join(whereClauses, " AND "),
+	)
+	result, err := s.database.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("update SQL Server row: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read SQL Server update result: %w", err)
+	}
+	if rowsAffected == 0 {
+		return errors.New("no row matched the WHERE clause; the row may have been modified or deleted")
+	}
+	return nil
 }
 
-func (s *sqlserverDatabase) DeleteRow(context.Context, db.Table, map[string]any) error {
-	return errNotImplemented
+func (s *sqlserverDatabase) DeleteRow(ctx context.Context, table db.Table, whereColumns map[string]any) error {
+	columns, err := s.ListColumns(ctx, table)
+	if err != nil {
+		return fmt.Errorf("list SQL Server columns before delete: %w", err)
+	}
+	if err := db.ValidatePrimaryKeyWhere("delete SQL Server row", columns, whereColumns); err != nil {
+		return err
+	}
+
+	tableName := quoteIdentifier(table.Name)
+	if table.Schema != "" {
+		tableName = quoteIdentifier(table.Schema) + "." + tableName
+	}
+
+	whereNames := make([]string, 0, len(whereColumns))
+	for name := range whereColumns {
+		whereNames = append(whereNames, name)
+	}
+	sort.Strings(whereNames)
+
+	args := make([]any, 0, len(whereNames))
+	whereClauses := make([]string, 0, len(whereNames))
+	for _, name := range whereNames {
+		if whereColumns[name] == nil {
+			whereClauses = append(whereClauses, quoteIdentifier(name)+" IS NULL")
+			continue
+		}
+		args = append(args, whereColumns[name])
+		whereClauses = append(whereClauses, fmt.Sprintf("%s = @p%d", quoteIdentifier(name), len(args)))
+	}
+
+	query := fmt.Sprintf(
+		"DELETE FROM %s WHERE %s",
+		tableName,
+		strings.Join(whereClauses, " AND "),
+	)
+	result, err := s.database.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("delete SQL Server row: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read SQL Server delete result: %w", err)
+	}
+	if rowsAffected == 0 {
+		return errors.New("no row matched the WHERE clause; the row may have been modified or deleted")
+	}
+	return nil
 }
 
-func (s *sqlserverDatabase) ListFunctions(context.Context, string) ([]db.FunctionColumns, error) {
-	return nil, errNotImplemented
+func (s *sqlserverDatabase) ListFunctions(ctx context.Context, schema string) ([]db.FunctionColumns, error) {
+	rows, err := s.database.QueryContext(ctx, listFunctionsSQL, schema)
+	if err != nil {
+		return nil, fmt.Errorf("query sqlserver functions: %w", err)
+	}
+	defer rows.Close()
+
+	functionColumns := make([]db.FunctionColumns, 0)
+	for rows.Next() {
+		var function db.FunctionColumns
+		if err := rows.Scan(&function.Name, &function.Arguments, &function.ReturnType, &function.Language, &function.Definition); err != nil {
+			return nil, fmt.Errorf("scan sqlserver function: %w", err)
+		}
+		functionColumns = append(functionColumns, function)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate sqlserver functions: %w", err)
+	}
+
+	return functionColumns, nil
 }
 
 func (s *sqlserverDatabase) Close() {}
