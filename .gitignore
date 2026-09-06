@@ -29,6 +29,7 @@ coverage.*
 /config.local.*
 /secrets.*
 /.local/
+/internal/db/sqlserver/test.dsn
 
 # Editor and operating-system files
 .DS_Store

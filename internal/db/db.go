@@ -58,6 +58,7 @@ const (
 	EngineMySQL      = "mysql"
 	EngineOracle     = "oracle"
 	EngineSQLite     = "sqlite"
+	EngineSqlServer  = "sqlserver"
 
 	// ExportTypeCSV identifies CSV table exports.
 	ExportTypeCSV  = "csv"
