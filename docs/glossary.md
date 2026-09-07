@@ -1,5 +1,20 @@
 # Glossary
 
+## PostgreSQL query keyword highlighting
+
+Live, automatic colorization of a small set of common SQL keywords in the
+editable raw-query input while a PostgreSQL session is active. It colors
+complete keyword tokens case-insensitively and leaves strings, quoted
+identifiers, comments, and dollar-quoted text unchanged. It does not parse or
+validate SQL, style query results, or apply to other engines.
+
+## SQL keyword token
+
+One complete identifier-like source token whose case-insensitive value occurs
+in db-tui's deliberately small PostgreSQL keyword set. Keyword-looking text
+inside quoted text or comments is not a SQL keyword token. Mouse selection
+overrides a token's keyword color with the normal selection style.
+
 ## Object selector
 
 The read-only category picker opened with `Ctrl+O`. It changes the object type

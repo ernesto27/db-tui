@@ -1,4 +1,4 @@
-[] - suuport engine sql server
+[x] - suuport engine sql server
 [] - support engine mongodb
 [x] - option to set color connections
 [ ] Replace placeholder Database methods with explicit optional capability interfaces.
