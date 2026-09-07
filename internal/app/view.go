@@ -75,6 +75,10 @@ func rawQueryHighlighter(database db.Database) sqlhighlight.Highlighter {
 		return sqlhighlight.PostgreSQL{}
 	case db.EngineMySQL:
 		return sqlhighlight.MySQL{}
+	case db.EngineOracle:
+		return sqlhighlight.Oracle{}
+	case db.EngineSQLServer:
+		return sqlhighlight.SQLServer{}
 	case db.EngineSQLite:
 		return sqlhighlight.SQLite{}
 	default:
