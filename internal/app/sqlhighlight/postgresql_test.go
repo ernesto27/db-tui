@@ -49,41 +49,12 @@ func TestPostgreSQLKeywordSpans(t *testing.T) {
 	}
 }
 
-func TestIsIdentifierContinuationRune(t *testing.T) {
-	tests := []struct {
-		name string
-		rune rune
-		want bool
-	}{
-		{name: "underscore", rune: '_', want: true}, {name: "letter", rune: 'a', want: true},
-		{name: "digit", rune: '7', want: true}, {name: "unicode letter", rune: 'é', want: true},
-		{name: "dollar sign", rune: '$', want: true}, {name: "hyphen", rune: '-', want: false},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) { assert.Equal(t, test.want, isIdentifierContinuationRune(test.rune)) })
-	}
-}
-
 func TestIsDollarQuoteTagRune(t *testing.T) {
 	assert.True(t, isDollarQuoteTagRune('_'))
 	assert.True(t, isDollarQuoteTagRune('a'))
 	assert.True(t, isDollarQuoteTagRune('7'))
 	assert.False(t, isDollarQuoteTagRune('$'))
 	assert.False(t, isDollarQuoteTagRune('-'))
-}
-
-func TestSkipSingleQuoted(t *testing.T) {
-	tests := []struct {
-		name, input string
-		want        int
-	}{
-		{name: "closes at single quote", input: "'value' trailing", want: len([]rune("'value'"))},
-		{name: "skips doubled quote escape", input: "'it''s' trailing", want: len([]rune("'it''s'"))},
-		{name: "consumes unterminated string", input: "'value", want: len([]rune("'value"))},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) { assert.Equal(t, test.want, skipSingleQuoted([]rune(test.input), 0, false)) })
-	}
 }
 
 func TestIsEscapeStringStart(t *testing.T) {
@@ -103,36 +74,6 @@ func TestIsEscapeStringStart(t *testing.T) {
 			assert.Equal(t, test.want, isEscapeStringStart([]rune(test.input), test.index))
 		})
 	}
-}
-
-func TestSkipSingleQuotedEscapeString(t *testing.T) {
-	input := ` 'it\'s FROM' trailing`
-	assert.Equal(t, len([]rune(` 'it\'s FROM'`)), skipSingleQuoted([]rune(input), 1, true))
-}
-
-func TestSkipDoubleQuoted(t *testing.T) {
-	tests := []struct {
-		name, input string
-		want        int
-	}{
-		{name: "closes at double quote", input: "\"column\" trailing", want: len([]rune("\"column\""))},
-		{name: "skips doubled quote escape", input: "\"a\"\"b\" trailing", want: len([]rune("\"a\"\"b\""))},
-		{name: "consumes unterminated identifier", input: "\"column", want: len([]rune("\"column"))},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) { assert.Equal(t, test.want, skipDoubleQuoted([]rune(test.input), 0)) })
-	}
-}
-
-func TestSkipLineComment(t *testing.T) {
-	assert.Equal(t, len([]rune("-- SELECT")), skipLineComment([]rune("-- SELECT\nFROM"), 0))
-	assert.Equal(t, len([]rune("-- SELECT")), skipLineComment([]rune("-- SELECT"), 0))
-}
-
-func TestSkipBlockComment(t *testing.T) {
-	assert.Equal(t, len([]rune("/* SELECT */")), skipBlockComment([]rune("/* SELECT */ FROM"), 0))
-	assert.Equal(t, len([]rune("/* outer /* inner */ end */")), skipBlockComment([]rune("/* outer /* inner */ end */ SELECT"), 0))
-	assert.Equal(t, len([]rune("/* SELECT")), skipBlockComment([]rune("/* SELECT"), 0))
 }
 
 func TestIsIdentifierStartRune(t *testing.T) {

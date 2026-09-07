@@ -9,7 +9,9 @@
 
 QUERY WORKFLOW
 [ ] Add SQL autocomplete for keywords, schemas, tables, views, functions, and columns.
-[ ] Add SQL syntax highlighting with engine-specific dialects.
+[x] Add SQL syntax highlighting with engine-specific postgres
+[x] Add SQL syntax highlighting with engine-specific mysql
+
 [x] Execute only selected SQL when text is selected.
 [x] - show time of execution query
 [x] Add cancellation for long-running queries.

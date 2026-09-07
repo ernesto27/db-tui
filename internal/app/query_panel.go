@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/ernestoponce27/db-tui/internal/app/sqlhighlight"
 	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
@@ -135,14 +136,14 @@ func (m queryModel) cancelControlContains(x, y int, layout appLayout) bool {
 	return x >= controlX && x < controlX+len(queryCancelControlText) && y == controlY
 }
 
-func (m queryModel) view(layout appLayout, focused, connected bool, highlightKeywords bool) string {
+func (m queryModel) view(layout appLayout, focused, connected bool, highlighter sqlhighlight.Highlighter) string {
 	headingText := "RAW QUERY"
 	if m.resultsFocused {
 		headingText += "  •  results focused"
 	}
 	heading := lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render(headingText)
 	result := m.resultView(layout, connected)
-	sections := []string{heading, m.editorView(highlightKeywords), ""}
+	sections := []string{heading, m.editorView(highlighter)}
 	if m.saveWarning != "" {
 		sections = append(sections, lipgloss.NewStyle().Foreground(colorError).Render("⚠ SQL script was not saved: "+sanitizeText(m.saveWarning)), "")
 	}

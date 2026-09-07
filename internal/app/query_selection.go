@@ -112,14 +112,14 @@ func (m *queryModel) finishSelection(x, y int, layout appLayout) bool {
 	return m.selection.release(point, index) && m.selection.active
 }
 
-func (m queryModel) editorView(highlightKeywords bool) string {
+func (m queryModel) editorView(highlighter sqlhighlight.Highlighter) string {
 	rendered := m.editor.View()
-	if highlightKeywords {
+	if highlighter != nil {
 		rendered = highlightSQLKeywords(
 			rendered,
 			m.visibleEditorRows(),
 			m.editor.Value(),
-			sqlhighlight.PostgreSQL{},
+			highlighter,
 		)
 	}
 	if !m.selection.active {

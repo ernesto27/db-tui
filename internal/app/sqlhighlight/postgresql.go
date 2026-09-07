@@ -1,10 +1,7 @@
 // Package sqlhighlight finds SQL token spans for query-editor rendering.
 package sqlhighlight
 
-import (
-	"strings"
-	"unicode"
-)
+import "unicode"
 
 // Span identifies a half-open rune range in SQL source text.
 type Span struct {
@@ -46,53 +43,27 @@ var postgreSQLKeywords = map[string]struct{}{
 
 // KeywordSpans implements Highlighter.
 func (PostgreSQL) KeywordSpans(value string) []Span {
-	runes := []rune(value)
-	var spans []Span
-
-	for index := 0; index < len(runes); {
-		switch {
-		case isEscapeStringStart(runes, index):
-			index = skipSingleQuoted(runes, index+1, true)
-			continue
-		case runes[index] == '\'':
-			index = skipSingleQuoted(runes, index, false)
-			continue
-		case runes[index] == '"':
-			index = skipDoubleQuoted(runes, index)
-			continue
-		case index+1 < len(runes) && runes[index] == '-' && runes[index+1] == '-':
-			index = skipLineComment(runes, index)
-			continue
-		case index+1 < len(runes) && runes[index] == '/' && runes[index+1] == '*':
-			index = skipBlockComment(runes, index)
-			continue
-		case runes[index] == '$':
-			if delimiter, ok := dollarQuoteDelimiterAt(runes, index); ok {
-				index = skipDollarQuoted(runes, delimiter, index+len(delimiter))
-				continue
-			}
-		}
-
-		if !isIdentifierContinuationRune(runes[index]) {
-			index++
-			continue
-		}
-
-		start := index
-		for index < len(runes) && isIdentifierContinuationRune(runes[index]) {
-			index++
-		}
-
-		if _, ok := postgreSQLKeywords[strings.ToUpper(string(runes[start:index]))]; ok {
-			spans = append(spans, Span{Start: start, End: index})
-		}
-	}
-
-	return spans
+	return keywordSpans(value, postgreSQLKeywords, skipPostgreSQLRegion, nil)
 }
 
-func isIdentifierContinuationRune(r rune) bool {
-	return r == '_' || r == '$' || unicode.IsLetter(r) || unicode.IsDigit(r)
+func skipPostgreSQLRegion(runes []rune, index int) (int, bool) {
+	switch {
+	case isEscapeStringStart(runes, index):
+		return skipQuoted(runes, index+1, '\'', true), true
+	case runes[index] == '\'':
+		return skipQuoted(runes, index, '\'', false), true
+	case runes[index] == '"':
+		return skipQuoted(runes, index, '"', false), true
+	case index+1 < len(runes) && runes[index] == '-' && runes[index+1] == '-':
+		return skipLineComment(runes, index), true
+	case index+1 < len(runes) && runes[index] == '/' && runes[index+1] == '*':
+		return skipNestedBlockComment(runes, index), true
+	case runes[index] == '$':
+		if delimiter, ok := dollarQuoteDelimiterAt(runes, index); ok {
+			return skipDollarQuoted(runes, delimiter, index+len(delimiter)), true
+		}
+	}
+	return 0, false
 }
 
 func isDollarQuoteTagRune(r rune) bool {
@@ -104,71 +75,6 @@ func isEscapeStringStart(runes []rune, index int) bool {
 		return false
 	}
 	return index == 0 || !isIdentifierContinuationRune(runes[index-1])
-}
-
-func skipSingleQuoted(runes []rune, index int, escapeString bool) int {
-	index++
-	for index < len(runes) {
-		if escapeString && runes[index] == '\\' && index+1 < len(runes) {
-			index += 2
-			continue
-		}
-		if runes[index] != '\'' {
-			index++
-			continue
-		}
-		if index+1 < len(runes) && runes[index+1] == '\'' {
-			index += 2
-			continue
-		}
-		return index + 1
-	}
-	return len(runes)
-}
-
-func skipDoubleQuoted(runes []rune, index int) int {
-	index++
-	for index < len(runes) {
-		if runes[index] != '"' {
-			index++
-			continue
-		}
-		if index+1 < len(runes) && runes[index+1] == '"' {
-			index += 2
-			continue
-		}
-		return index + 1
-	}
-	return len(runes)
-}
-
-func skipLineComment(runes []rune, index int) int {
-	index += 2
-	for index < len(runes) && runes[index] != '\n' {
-		index++
-	}
-	return index
-}
-
-func skipBlockComment(runes []rune, index int) int {
-	depth := 1
-	index += 2
-	for index < len(runes) {
-		switch {
-		case index+1 < len(runes) && runes[index] == '/' && runes[index+1] == '*':
-			depth++
-			index += 2
-		case index+1 < len(runes) && runes[index] == '*' && runes[index+1] == '/':
-			depth--
-			index += 2
-			if depth == 0 {
-				return index
-			}
-		default:
-			index++
-		}
-	}
-	return len(runes)
 }
 
 func isIdentifierStartRune(r rune) bool {

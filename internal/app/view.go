@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/ernestoponce27/db-tui/internal/app/sqlhighlight"
 	"github.com/ernestoponce27/db-tui/internal/config"
 	"github.com/ernestoponce27/db-tui/internal/db"
 	"github.com/ernestoponce27/db-tui/internal/version"
@@ -48,8 +49,7 @@ func (m Model) baseView() tea.View {
 		rightPanel = m.activeFunction.view(m.layout, m.focus == focusData)
 	}
 	if m.panel == panelQuery {
-		highlightKeywords := m.database != nil && m.database.Engine() == db.EnginePostgreSQL
-		rightPanel = m.query.view(m.layout, m.focus == focusData, m.database != nil, highlightKeywords)
+		rightPanel = m.query.view(m.layout, m.focus == focusData, m.database != nil, rawQueryHighlighter(m.database))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top,
 		m.navigator.view(m.navigatorStatus(), m.layout, m.focus == focusNavigator), " ",
@@ -63,6 +63,21 @@ func (m Model) baseView() tea.View {
 	view.MouseMode = tea.MouseModeCellMotion
 	view.WindowTitle = "db-tui"
 	return view
+}
+
+func rawQueryHighlighter(database db.Database) sqlhighlight.Highlighter {
+	if database == nil {
+		return nil
+	}
+
+	switch database.Engine() {
+	case db.EnginePostgreSQL:
+		return sqlhighlight.PostgreSQL{}
+	case db.EngineMySQL:
+		return sqlhighlight.MySQL{}
+	default:
+		return nil
+	}
 }
 
 func (m Model) activeConnectionEnvironment() config.ConnectionEnvironment {

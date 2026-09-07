@@ -52,7 +52,7 @@ func TestHighlightSQLKeywords(t *testing.T) {
 	assert.Contains(t, highlighted, keywordStyle.Render("FROM"))
 }
 
-func TestBaseViewHighlightsKeywordsOnlyForPostgreSQL(t *testing.T) {
+func TestBaseViewHighlightsKeywordsForSupportedEngines(t *testing.T) {
 	tests := []struct {
 		name            string
 		database        db.Database
@@ -64,9 +64,11 @@ func TestBaseViewHighlightsKeywordsOnlyForPostgreSQL(t *testing.T) {
 			wantHighlighted: true,
 		},
 		{
-			name:     "MySQL",
-			database: &fakeDatabase{engine: db.EngineMySQL},
+			name:            "MySQL",
+			database:        &fakeDatabase{engine: db.EngineMySQL},
+			wantHighlighted: true,
 		},
+		{name: "Oracle", database: &fakeDatabase{engine: db.EngineOracle}},
 		{name: "disconnected"},
 	}
 
@@ -95,7 +97,7 @@ func TestQueryEditorViewSelectionReplacesKeywordStyle(t *testing.T) {
 	query.editor.SetValue("SELECT")
 	query.selection = sqlSelection{anchor: 0, head: 5, active: true}
 
-	rendered := query.editorView(true)
+	rendered := query.editorView(sqlhighlight.PostgreSQL{})
 	selected, active := query.selection.selectedSQL(query.editor.Value())
 	keywordStyle := lipgloss.NewStyle().Foreground(colorSQLKeyword)
 
