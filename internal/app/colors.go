@@ -22,4 +22,5 @@ var (
 	colorSelectionBackground        = lipgloss.Color("#3a3a4a")
 	colorWarningForeground          = lipgloss.Color("#ffff00")
 	colorWarningBackground          = lipgloss.Color("#3c3728")
+	colorSQLKeyword                 = lipgloss.Color("#c586c0")
 )

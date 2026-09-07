@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/ernestoponce27/db-tui/internal/app/sqlhighlight"
 	"github.com/ernestoponce27/db-tui/internal/app/textselection"
 )
 
@@ -111,8 +112,16 @@ func (m *queryModel) finishSelection(x, y int, layout appLayout) bool {
 	return m.selection.release(point, index) && m.selection.active
 }
 
-func (m queryModel) editorView(layout appLayout) string {
+func (m queryModel) editorView(highlightKeywords bool) string {
 	rendered := m.editor.View()
+	if highlightKeywords {
+		rendered = highlightSQLKeywords(
+			rendered,
+			m.visibleEditorRows(),
+			m.editor.Value(),
+			sqlhighlight.PostgreSQL{},
+		)
+	}
 	if !m.selection.active {
 		return rendered
 	}

@@ -135,14 +135,14 @@ func (m queryModel) cancelControlContains(x, y int, layout appLayout) bool {
 	return x >= controlX && x < controlX+len(queryCancelControlText) && y == controlY
 }
 
-func (m queryModel) view(layout appLayout, focused, connected bool) string {
+func (m queryModel) view(layout appLayout, focused, connected bool, highlightKeywords bool) string {
 	headingText := "RAW QUERY"
 	if m.resultsFocused {
 		headingText += "  •  results focused"
 	}
 	heading := lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render(headingText)
 	result := m.resultView(layout, connected)
-	sections := []string{heading, m.editorView(layout), ""}
+	sections := []string{heading, m.editorView(highlightKeywords), ""}
 	if m.saveWarning != "" {
 		sections = append(sections, lipgloss.NewStyle().Foreground(colorError).Render("⚠ SQL script was not saved: "+sanitizeText(m.saveWarning)), "")
 	}

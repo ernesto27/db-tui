@@ -62,8 +62,8 @@ func TestQueryMouseSelectionResolvesLogicalSQL(t *testing.T) {
 			selected, ok := updated.query.selection.selectedSQL(updated.query.editor.Value())
 			assert.True(t, ok)
 			assert.Equal(t, test.want, selected)
-			assert.Equal(t, ansi.Strip(updated.query.editor.View()), ansi.Strip(updated.query.editorView(updated.layout)))
-			assert.NotEqual(t, updated.query.editor.View(), updated.query.editorView(updated.layout))
+			assert.Equal(t, ansi.Strip(updated.query.editor.View()), ansi.Strip(updated.query.editorView(false)))
+			assert.NotEqual(t, updated.query.editor.View(), updated.query.editorView(false))
 		})
 	}
 }

@@ -19,9 +19,12 @@ it identifies keywords only. It is neither a SQL parser nor a query validator.
 - Let the existing text-selection style replace keyword colors in selected
   cells.
 
-## Initial vocabulary
+## Vocabulary
 
-The first release recognizes these keywords:
+The highlighter recognizes the initial common query vocabulary plus the missing
+PostgreSQL 18 reserved words. It deliberately does not add PostgreSQL words
+that may be used as identifiers, such as `BETWEEN` or `EXISTS`; coloring
+those would cause false positives in user schema names.
 
 ```text
 SELECT FROM WHERE JOIN INNER LEFT RIGHT FULL ON AS
@@ -29,11 +32,19 @@ INSERT INTO VALUES UPDATE SET DELETE
 CREATE ALTER DROP TABLE
 ORDER BY GROUP HAVING LIMIT OFFSET UNION ALL DISTINCT
 AND OR NOT NULL CASE WHEN THEN ELSE END
+ANALYSE ANALYZE ANY ARRAY ASC ASYMMETRIC AUTHORIZATION BINARY BOTH CAST CHECK
+COLLATE COLLATION COLUMN CONCURRENTLY CONSTRAINT CROSS CURRENT_CATALOG
+CURRENT_DATE CURRENT_ROLE CURRENT_TIME CURRENT_TIMESTAMP CURRENT_USER DEFAULT
+DEFERRABLE DESC DO EXCEPT FALSE FETCH FOR FOREIGN FREEZE GRANT ILIKE IN
+INITIALLY INTERSECT IS ISNULL LATERAL LEADING LIKE LOCALTIME LOCALTIMESTAMP
+NATURAL NOTNULL ONLY OUTER OVERLAPS PLACING PRIMARY REFERENCES RETURNING
+SESSION_USER SIMILAR SOME SYMMETRIC SYSTEM_USER TABLESAMPLE TO TRAILING TRUE
+UNIQUE USER USING VARIADIC VERBOSE WINDOW WITH
 ```
 
-The vocabulary is intentionally local and static. Adding a full PostgreSQL
-keyword catalog, semantic analysis, schema-aware highlighting, or dialects for
-other engines is out of scope.
+The vocabulary is intentionally local and static. Adding PostgreSQL's full
+parser-keyword catalog, semantic analysis, schema-aware highlighting, or
+dialects for other engines is out of scope.
 
 ## Design
 
@@ -64,8 +75,9 @@ visual priority.
 
 ## Structure
 
-- `internal/app/query_highlighting.go` will own the PostgreSQL lexical scanner,
-  keyword set, and pure ANSI-rendering helper.
+- `internal/app/sqlhighlight` will own the SQL-only `Highlighter` contract and
+  PostgreSQL lexical scanner. `internal/app/query_highlighting.go` will own the
+  pure ANSI-rendering helper and terminal-cell mapping.
 - `internal/app/query_panel.go` will choose highlighted versus plain editor
   rendering from the active `db.Database` engine.
 - `internal/app/query_selection.go` will preserve its current selection mapping

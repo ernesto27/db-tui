@@ -1,4 +1,4 @@
-# ADR 0017: Render a small PostgreSQL keyword set in the raw-query editor
+# ADR 0017: Render a PostgreSQL keyword set in the raw-query editor
 
 ## Status
 
@@ -18,9 +18,18 @@ selected cells with a uniform selection style.
 
 ## Decision
 
-Use a small local PostgreSQL-aware lexical scanner during raw-query editor
-rendering. It colors only the agreed common keyword set with the semantic
-`colorSQLKeyword` color.
+Use a local PostgreSQL-aware lexical scanner during raw-query editor rendering.
+It colors the agreed common query words and every PostgreSQL 18 reserved word
+missing from that initial set with the semantic `colorSQLKeyword` color. Do not
+add PostgreSQL words that may be identifiers: that would color user-defined
+table or column names without understanding SQL context.
+
+Keep SQL-only scanning in `internal/app/sqlhighlight`. Its narrow
+`Highlighter` interface returns source spans, and `PostgreSQL` is the only
+implementation in this release. The `app` package owns ANSI insertion and
+terminal-cell mapping, so the scanner does not depend on Bubble Tea selection
+or rendering types. New dialects require an explicit implementation and app
+engine gate; this is not a dialect registry or automatic multi-engine feature.
 
 Highlighting is automatic when, and only when, the active database session's
 engine is PostgreSQL. It applies only to editable raw-query input. The scanner

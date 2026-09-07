@@ -48,7 +48,8 @@ func (m Model) baseView() tea.View {
 		rightPanel = m.activeFunction.view(m.layout, m.focus == focusData)
 	}
 	if m.panel == panelQuery {
-		rightPanel = m.query.view(m.layout, m.focus == focusData, m.database != nil)
+		highlightKeywords := m.database != nil && m.database.Engine() == db.EnginePostgreSQL
+		rightPanel = m.query.view(m.layout, m.focus == focusData, m.database != nil, highlightKeywords)
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top,
 		m.navigator.view(m.navigatorStatus(), m.layout, m.focus == focusNavigator), " ",
