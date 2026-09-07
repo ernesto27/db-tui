@@ -68,6 +68,11 @@ func TestBaseViewHighlightsKeywordsForSupportedEngines(t *testing.T) {
 			database:        &fakeDatabase{engine: db.EngineMySQL},
 			wantHighlighted: true,
 		},
+		{
+			name:            "SQLite",
+			database:        &fakeDatabase{engine: db.EngineSQLite},
+			wantHighlighted: true,
+		},
 		{name: "Oracle", database: &fakeDatabase{engine: db.EngineOracle}},
 		{name: "disconnected"},
 	}
