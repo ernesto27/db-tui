@@ -38,6 +38,7 @@ func TestListTables(t *testing.T) {
 	want := []db.Table{
 		{Schema: "public", Name: "Album"},
 		{Schema: "public", Name: "Artist"},
+		{Schema: "public", Name: "CLIJSONExample"},
 		{Schema: "public", Name: "Customer"},
 		{Schema: "public", Name: "Employee"},
 		{Schema: "public", Name: "Genre"},

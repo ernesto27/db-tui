@@ -16758,5 +16758,19 @@ INSERT INTO audit."Event" VALUES
 
 
 --
+-- CLI JSON normalization fixture.
+--
+
+CREATE TABLE public."CLIJSONExample" (
+    "Identifier" uuid PRIMARY KEY,
+    "Measurement" double precision NOT NULL,
+    "RecordedAt" timestamp with time zone NOT NULL
+);
+
+INSERT INTO public."CLIJSONExample" ("Identifier", "Measurement", "RecordedAt") VALUES
+    ('3234b411-89ab-4cde-8f01-23456789abcd', 'NaN'::double precision, 'infinity'::timestamp with time zone);
+
+
+--
 -- PostgreSQL database dump complete
 --

@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "$script_dir/.." && pwd)"
+dsn="postgres://db_tui@127.0.0.1:5433/chinook?sslmode=disable"
+
+temp_dir="$(mktemp -d)"
+trap 'rm -rf "$temp_dir"' EXIT
+binary="$temp_dir/db-tui"
+
+fail() {
+	echo "FAIL: $1" >&2
+	exit 1
+}
+
+expect_cli() {
+	local name="$1"
+	local expected_exit="$2"
+	local expected_stdout="$3"
+	local expected_stderr="$4"
+	shift 4
+
+	local stdout_file="$temp_dir/$name.stdout"
+	local stderr_file="$temp_dir/$name.stderr"
+	local actual_exit
+
+	if "$binary" "$@" >"$stdout_file" 2>"$stderr_file"; then
+		actual_exit=0
+	else
+		actual_exit=$?
+	fi
+
+	local actual_stdout
+	local actual_stderr
+	actual_stdout="$(<"$stdout_file")"
+	actual_stderr="$(<"$stderr_file")"
+
+	[[ "$actual_exit" == "$expected_exit" ]] ||
+		fail "$name exit code is $actual_exit; want $expected_exit"
+	[[ "$actual_stdout" == "$expected_stdout" ]] ||
+		fail "$name stdout is $actual_stdout; want $expected_stdout"
+
+	if [[ "$expected_stderr" == "*" ]]; then
+		[[ -n "$actual_stderr" ]] || fail "$name stderr is empty"
+	elif [[ "$actual_stderr" != "$expected_stderr" ]]; then
+		fail "$name stderr is $actual_stderr; want $expected_stderr"
+	fi
+
+	echo "PASS: $name"
+}
+
+cd "$repo_root"
+docker compose up -d --wait postgres
+go build -o "$binary" ./cmd/db-tui
+
+expect_cli \
+	"two_rows" \
+	0 \
+	$'[\n  {\n    "ArtistId": 1,\n    "Name": "AC/DC"\n  },\n  {\n    "ArtistId": 2,\n    "Name": "Accept"\n  }\n]' \
+	"" \
+	-q 'SELECT "ArtistId", "Name" FROM public."Artist" ORDER BY "ArtistId" LIMIT 2' \
+	-c "$dsn"
+
+expect_cli \
+	"empty_result" \
+	0 \
+	"[]" \
+	"" \
+	-q 'SELECT "ArtistId" FROM public."Artist" WHERE "ArtistId" = -1' \
+	-c "$dsn"
+
+expect_cli \
+	"json_normalization" \
+	0 \
+	$'[\n  {\n    "Identifier": "3234b411-89ab-4cde-8f01-23456789abcd",\n    "Measurement": "NaN",\n    "RecordedAt": "infinity"\n  }\n]' \
+	"" \
+	-q 'SELECT "Identifier", "Measurement", "RecordedAt" FROM public."CLIJSONExample"' \
+	-c "$dsn"
+
+expect_cli \
+	"missing_dsn" \
+	2 \
+	"" \
+	"db-tui: -q and -c must be provided together" \
+	-q 'SELECT 1'
+
+expect_cli \
+	"missing_query" \
+	2 \
+	"" \
+	"db-tui: -q and -c must be provided together" \
+	-c "$dsn"
+
+expect_cli \
+	"non_select_query" \
+	1 \
+	"" \
+	"db-tui: query: only SELECT queries can be exported" \
+	-q 'UPDATE public."Artist" SET "Name" = "unchanged" WHERE false' \
+	-c "$dsn"
+
+expect_cli \
+	"unreachable_database" \
+	1 \
+	"" \
+	"*" \
+	-q 'SELECT 1' \
+	-c 'postgres://db_tui@127.0.0.1:1/chinook?sslmode=disable&connect_timeout=1'
+
+echo "All CLI scenarios passed."

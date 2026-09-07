@@ -1,5 +1,27 @@
 # Glossary
 
+## Non-interactive JSON query
+
+The PostgreSQL-only command mode invoked with `db-tui -q '<SQL>' -c
+'<PostgreSQL-DSN>'`. It does not start the TUI. It accepts one lexically
+restricted `SELECT` statement, materializes the complete result, writes one
+JSON array to stdout only on success, then exits. Errors write to stderr and
+leave stdout empty.
+
+## PostgreSQL CLI DSN
+
+The PostgreSQL data-source name supplied by the mandatory `-c` flag in
+non-interactive JSON query mode. It lets a command connect without consulting a
+saved connection or interactive-client selection. A DSN can contain credentials
+and must not be logged, committed, or exposed in error output.
+
+## Completed-result emission
+
+The all-or-nothing output rule for a non-interactive JSON query. db-tui holds
+the complete JSON result in memory and emits it to stdout only after the query
+and JSON conversion succeed. A query or conversion failure emits no partial
+document to stdout.
+
 ## PostgreSQL query keyword highlighting
 
 Live, automatic colorization of a small set of common SQL keywords in the

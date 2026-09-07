@@ -3,7 +3,10 @@ package main
 
 import (
 	"context"
+	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -20,6 +23,14 @@ import (
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	handled, exitCode := runCLI(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	if handled {
+		os.Exit(exitCode)
+	}
+
 	appConfig, err := config.Load()
 	if err != nil {
 		panic(err)
@@ -34,6 +45,45 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "db-tui: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) (handled bool, exitCode int) {
+	flags := flag.NewFlagSet("db-tui", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	query := flags.String("q", "", "SQL query")
+	dsn := flags.String("c", "", "PostgreSQL DSN")
+
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			_, _ = fmt.Fprintln(stdout, "Usage: db-tui [-q <SQL> -c <PostgreSQL-DSN>]")
+			return true, 0
+		}
+		_, _ = fmt.Fprintf(stderr, "db-tui: %v\n", err)
+		return true, 2
+	}
+	if len(flags.Args()) != 0 {
+		_, _ = fmt.Fprintf(stderr, "db-tui: unexpected arguments: %s\n", strings.Join(flags.Args(), " "))
+		return true, 2
+	}
+
+	queryMissing := strings.TrimSpace(*query) == ""
+	dsnMissing := strings.TrimSpace(*dsn) == ""
+	if queryMissing && dsnMissing {
+		return false, 0
+	}
+	if queryMissing || dsnMissing {
+		_, _ = fmt.Fprintln(stderr, "db-tui: -q and -c must be provided together")
+		return true, 2
+	}
+
+	result, err := postgres.ExecuteCLI(ctx, *dsn, *query)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "db-tui: query: %v\n", err)
+		return true, 1
+	}
+
+	_, _ = fmt.Fprintln(stdout, result)
+	return true, 0
 }
 
 func connectDatabase(ctx context.Context, engine, dsn string) (db.Database, error) {

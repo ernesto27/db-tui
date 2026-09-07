@@ -167,6 +167,14 @@ type postgresql struct {
 
 // Connect opens a PostgreSQL database using dsn and verifies that it is reachable.
 func Connect(ctx context.Context, dsn string) (db.Database, error) {
+	database, err := connect(ctx, dsn)
+	if err != nil {
+		return nil, err
+	}
+	return database, nil
+}
+
+func connect(ctx context.Context, dsn string) (*postgresql, error) {
 	poolConfig, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("parse PostgreSQL DSN: %w", err)
@@ -612,25 +620,29 @@ func normalizeJSONValues(rows [][]any) {
 	}
 }
 
-// ExportQuery re-runs a SELECT query in a read-only transaction and writes all rows to CSV.
-func (p *postgresql) ExportQuery(ctx context.Context, statement string) error {
+func (p *postgresql) executeAll(ctx context.Context, statement string) (db.QueryResult, error) {
 	if err := db.ValidateSelectQuery(statement); err != nil {
-		return err
+		return db.QueryResult{}, err
 	}
 
 	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
-		return fmt.Errorf("begin PostgreSQL export transaction: %w", err)
+		return db.QueryResult{}, fmt.Errorf("begin PostgreSQL export transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
 	p.logger.Log(statement)
 	rows, err := tx.Query(ctx, statement, pgx.QueryExecModeSimpleProtocol)
 	if err != nil {
-		return fmt.Errorf("query PostgreSQL export rows: %w", err)
+		return db.QueryResult{}, fmt.Errorf("query PostgreSQL export rows: %w", err)
 	}
 
-	result, err := readQueryResult(rows, 0)
+	return readQueryResult(rows, 0)
+}
+
+// ExportQuery re-runs a SELECT query in a read-only transaction and writes all rows to CSV.
+func (p *postgresql) ExportQuery(ctx context.Context, statement string) error {
+	result, err := p.executeAll(ctx, statement)
 	if err != nil {
 		return err
 	}
@@ -640,6 +652,33 @@ func (p *postgresql) ExportQuery(ctx context.Context, statement string) error {
 		return fmt.Errorf("write CSV query export: %w", err)
 	}
 	return nil
+}
+
+// ExecuteCLI runs a PostgreSQL CLI query and returns a JSON array of its rows.
+func (p *postgresql) ExecuteCLI(ctx context.Context, statement string) (string, error) {
+	result, err := p.executeAll(ctx, statement)
+	if err != nil {
+		return "", err
+	}
+
+	normalizeJSONValues(result.Rows)
+	data, err := jsonexport.Marshal(result.Columns, result.Rows)
+	if err != nil {
+		return "", fmt.Errorf("encode PostgreSQL query JSON: %w", err)
+	}
+
+	return string(data), nil
+}
+
+// ExecuteCLI connects to PostgreSQL, runs a CLI query, and returns a JSON array of its rows.
+func ExecuteCLI(ctx context.Context, dsn, statement string) (string, error) {
+	database, err := connect(ctx, dsn)
+	if err != nil {
+		return "", err
+	}
+	defer database.Close()
+
+	return database.ExecuteCLI(ctx, statement)
 }
 
 func dockerContainerIDForPort(ctx context.Context, port int) (string, error) {

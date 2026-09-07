@@ -18,21 +18,12 @@ func Write(path, tableName string, columns []string, rows [][]any) error {
 		return errors.New("JSON export table name is required")
 	}
 
-	records := make([]map[string]any, 0, len(rows))
-
-	for rowIndex, row := range rows {
-		if len(row) != len(columns) {
-			return fmt.Errorf("JSON row %d has %d values; want %d", rowIndex+1, len(row), len(columns))
-		}
-
-		record := make(map[string]any, len(columns))
-		for columnIndex, column := range columns {
-			record[column] = normalizeValue(row[columnIndex])
-		}
-		records = append(records, record)
+	rowsJSON, err := Marshal(columns, rows)
+	if err != nil {
+		return err
 	}
 
-	data, err := json.MarshalIndent(map[string][]map[string]any{tableName: records}, "", "  ")
+	data, err := json.MarshalIndent(map[string]json.RawMessage{tableName: rowsJSON}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -42,6 +33,25 @@ func Write(path, tableName string, columns []string, rows [][]any) error {
 	}
 
 	return nil
+}
+
+// Marshal converts columns and rows to a pretty-printed JSON array of row objects.
+func Marshal(columns []string, rows [][]any) ([]byte, error) {
+	records := make([]map[string]any, 0, len(rows))
+
+	for rowIndex, row := range rows {
+		if len(row) != len(columns) {
+			return nil, fmt.Errorf("JSON row %d has %d values; want %d", rowIndex+1, len(row), len(columns))
+		}
+
+		record := make(map[string]any, len(columns))
+		for columnIndex, column := range columns {
+			record[column] = normalizeValue(row[columnIndex])
+		}
+		records = append(records, record)
+	}
+
+	return json.MarshalIndent(records, "", "  ")
 }
 
 func normalizeValue(value any) any {
