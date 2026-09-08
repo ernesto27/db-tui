@@ -6,6 +6,8 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/.." && pwd)"
 dsn="postgres://db_tui@127.0.0.1:5433/chinook?sslmode=disable"
 mysql_dsn="mysql://db_tui:db_tui@127.0.0.1:3307/world"
+oracle_dsn="oracle://db_tui:db_tui@127.0.0.1:1522/FREEPDB1"
+sqlserver_dsn="sqlserver://sa:DbTuiSql2026%21@127.0.0.1:1434?database=db_tui&encrypt=true&trustservercertificate=true"
 sqlite_path="$repo_root/docker/sqlite/employee.db"
 
 temp_dir="$(mktemp -d)"
@@ -54,7 +56,7 @@ expect_cli() {
 }
 
 cd "$repo_root"
-docker compose up -d --wait postgres mysql
+docker compose up -d --wait postgres mysql oracle sqlserver
 go build -o "$binary" ./cmd/db-tui
 
 expect_cli \
@@ -174,5 +176,37 @@ expect_cli \
 	"*" \
 	-q 'SELECT 1' \
 	-c 'mysql://db_tui:db_tui@127.0.0.1:1/world?timeout=1s'
+
+expect_cli \
+	"oracle_json_result" \
+	0 \
+	$'[\n  {\n    "GREETING": "hello"\n  }\n]' \
+	"" \
+	-q "SELECT 'hello' AS greeting FROM dual" \
+	-c "$oracle_dsn"
+
+expect_cli \
+	"oracle_non_select_query" \
+	1 \
+	"" \
+	"db-tui: query: only SELECT queries can be exported" \
+	-q 'DROP TABLE countries' \
+	-c "$oracle_dsn"
+
+expect_cli \
+	"sqlserver_json_result" \
+	0 \
+	$'[\n  {\n    "greeting": "hello"\n  }\n]' \
+	"" \
+	-q "SELECT CAST('hello' AS nvarchar(5)) AS greeting" \
+	-c "$sqlserver_dsn"
+
+expect_cli \
+	"sqlserver_non_select_query" \
+	1 \
+	"" \
+	"db-tui: query: only SELECT queries can be exported" \
+	-q 'DROP TABLE dbo.cities' \
+	-c "$sqlserver_dsn"
 
 echo "All CLI scenarios passed."

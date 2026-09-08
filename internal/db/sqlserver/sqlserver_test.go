@@ -33,10 +33,38 @@ func TestListTables(t *testing.T) {
 func TestExecuteCLI(t *testing.T) {
 	ctx, database := connectLocalSQLServer(t)
 
-	result, err := database.ExecuteCLI(ctx, "SELECT 1")
+	for _, test := range []struct {
+		name      string
+		statement string
+		wantRows  []map[string]any
+		wantErr   string
+	}{
+		{
+			name:      "returns JSON rows",
+			statement: "SELECT CAST('hello' AS nvarchar(5)) AS greeting",
+			wantRows:  []map[string]any{{"greeting": "hello"}},
+		},
+		{
+			name:      "validates SELECT only",
+			statement: "DROP TABLE dbo.cities",
+			wantErr:   "only SELECT",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := database.ExecuteCLI(ctx, test.statement)
 
-	assert.Empty(t, result)
-	assert.ErrorContains(t, err, "SQL Server does not support non-interactive CLI queries")
+			if test.wantErr != "" {
+				assert.ErrorContains(t, err, test.wantErr)
+				assert.Empty(t, result)
+				return
+			}
+
+			require.NoError(t, err)
+			var rows []map[string]any
+			require.NoError(t, json.Unmarshal([]byte(result), &rows))
+			assert.Equal(t, test.wantRows, rows)
+		})
+	}
 }
 
 func TestListColumns(t *testing.T) {

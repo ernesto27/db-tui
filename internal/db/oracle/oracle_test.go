@@ -11,6 +11,7 @@ import (
 	"github.com/ernestoponce27/db-tui/internal/db"
 	"github.com/ernestoponce27/db-tui/internal/db/oracle"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const freePDBDSN = "oracle://db_tui:db_tui@127.0.0.1:1522/FREEPDB1"
@@ -274,6 +275,48 @@ func TestExecuteCancelsRunningQuery(t *testing.T) {
 
 	assert.ErrorContains(t, err, "ORA-01013")
 	assert.Less(t, time.Since(started), 2*time.Second, "canceled query should not finish the PL/SQL loop")
+}
+
+func TestExecuteCLI(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := oracle.Connect(ctx, freePDBDSN)
+	require.NoError(t, err, "connect to local Compose Oracle")
+	t.Cleanup(database.Close)
+
+	for _, test := range []struct {
+		name      string
+		statement string
+		wantRows  []map[string]any
+		wantErr   string
+	}{
+		{
+			name:      "returns JSON rows",
+			statement: "SELECT 'hello' AS greeting FROM dual",
+			wantRows:  []map[string]any{{"GREETING": "hello"}},
+		},
+		{
+			name:      "validates SELECT only",
+			statement: "DROP TABLE countries",
+			wantErr:   "only SELECT",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := database.ExecuteCLI(ctx, test.statement)
+
+			if test.wantErr != "" {
+				assert.ErrorContains(t, err, test.wantErr)
+				assert.Empty(t, result)
+				return
+			}
+
+			require.NoError(t, err)
+			var rows []map[string]any
+			require.NoError(t, json.Unmarshal([]byte(result), &rows))
+			assert.Equal(t, test.wantRows, rows)
+		})
+	}
 }
 
 func TestExport(t *testing.T) {

@@ -539,23 +539,27 @@ func (s *sqlserverDatabase) Export(ctx context.Context, table db.Table, typeVal 
 	return nil
 }
 
-func (s *sqlserverDatabase) ExportQuery(ctx context.Context, statement string) error {
+// executeAll runs a SELECT in a transaction and reads every row.
+func (s *sqlserverDatabase) executeAll(ctx context.Context, statement string) (db.QueryResult, error) {
 	if err := db.ValidateSelectQuery(statement); err != nil {
-		return err
+		return db.QueryResult{}, err
 	}
 
 	tx, err := s.database.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin SQL Server export transaction: %w", err)
+		return db.QueryResult{}, fmt.Errorf("begin SQL Server export transaction: %w", err)
 	}
 	defer tx.Rollback()
 
 	rows, err := tx.QueryContext(ctx, statement)
 	if err != nil {
-		return fmt.Errorf("query SQL Server export rows: %w", err)
+		return db.QueryResult{}, fmt.Errorf("query SQL Server export rows: %w", err)
 	}
+	return readSQLServerQueryResult(rows, 0, "")
+}
 
-	result, err := readSQLServerQueryResult(rows, 0, "")
+func (s *sqlserverDatabase) ExportQuery(ctx context.Context, statement string) error {
+	result, err := s.executeAll(ctx, statement)
 	if err != nil {
 		return err
 	}
@@ -568,10 +572,29 @@ func (s *sqlserverDatabase) ExportQuery(ctx context.Context, statement string) e
 	return nil
 }
 
-// ExecuteCLI is a placeholder because non-interactive CLI queries are
-// PostgreSQL- and MySQL-only.
-func (s *sqlserverDatabase) ExecuteCLI(context.Context, string) (string, error) {
-	return "", errors.New("SQL Server does not support non-interactive CLI queries")
+// ExecuteCLI runs a SQL Server query and returns a JSON array of its rows.
+func (s *sqlserverDatabase) ExecuteCLI(ctx context.Context, statement string) (string, error) {
+	result, err := s.executeAll(ctx, statement)
+	if err != nil {
+		return "", err
+	}
+
+	data, err := jsonexport.Marshal(result.Columns, result.Rows)
+	if err != nil {
+		return "", fmt.Errorf("encode SQL Server query JSON: %w", err)
+	}
+	return string(data), nil
+}
+
+// ExecuteCLI connects to SQL Server, runs a query, and returns a JSON array of its rows.
+func ExecuteCLI(ctx context.Context, dsn, statement string) (string, error) {
+	database, err := Connect(ctx, dsn)
+	if err != nil {
+		return "", err
+	}
+	defer database.Close()
+
+	return database.ExecuteCLI(ctx, statement)
 }
 
 func (s *sqlserverDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {

@@ -88,6 +88,10 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) (handl
 		result, err = postgres.ExecuteCLI(ctx, *dsn, *query)
 	case db.EngineMySQL:
 		result, err = mysql.ExecuteCLI(ctx, *dsn, *query)
+	case db.EngineOracle:
+		result, err = oracle.ExecuteCLI(ctx, *dsn, *query)
+	case db.EngineSQLServer:
+		result, err = sqlserver.ExecuteCLI(ctx, *dsn, *query)
 	case db.EngineSQLite:
 		result, err = sqlite.ExecuteCLI(ctx, *dsn, *query)
 	default:
@@ -106,16 +110,26 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) (handl
 func detectEngine(dsn string) (string, error) {
 	dsn = strings.TrimSpace(dsn)
 	lowerDSN := strings.ToLower(dsn)
-	if strings.HasPrefix(lowerDSN, "postgres://") || strings.HasPrefix(lowerDSN, "postgresql://") {
+
+	switch {
+	case strings.HasPrefix(lowerDSN, "postgres://"), strings.HasPrefix(lowerDSN, "postgresql://"):
 		return db.EnginePostgreSQL, nil
-	}
-	if strings.HasPrefix(lowerDSN, "mysql://") {
+	case strings.HasPrefix(lowerDSN, "mysql://"):
 		return db.EngineMySQL, nil
-	}
-	if info, err := os.Stat(dsn); err == nil && info.Mode().IsRegular() {
+	case strings.HasPrefix(lowerDSN, "oracle://"):
+		return db.EngineOracle, nil
+	case strings.HasPrefix(lowerDSN, "sqlserver://"):
+		return db.EngineSQLServer, nil
+	case isRegularFile(dsn):
 		return db.EngineSQLite, nil
+	default:
+		return "", errors.New("unsupported DSN")
 	}
-	return "", errors.New("unsupported DSN")
+}
+
+func isRegularFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
 }
 
 func connectDatabase(ctx context.Context, engine, dsn string) (db.Database, error) {

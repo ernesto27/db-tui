@@ -447,23 +447,33 @@ func (o *oracleDatabase) Export(ctx context.Context, table db.Table, typeVal str
 	return nil
 }
 
-// ExportQuery re-runs a SELECT query and writes all result rows to CSV.
-func (o *oracleDatabase) ExportQuery(ctx context.Context, statement string) error {
+// executeAll runs a SELECT in a read-only transaction and reads every row.
+func (o *oracleDatabase) executeAll(ctx context.Context, statement string) (db.QueryResult, error) {
 	if err := db.ValidateSelectQuery(statement); err != nil {
-		return err
+		return db.QueryResult{}, err
 	}
+
 	tx, err := o.database.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin Oracle export transaction: %w", err)
+		return db.QueryResult{}, fmt.Errorf("begin Oracle export transaction: %w", err)
 	}
 	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, "SET TRANSACTION READ ONLY"); err != nil {
+		return db.QueryResult{}, fmt.Errorf("set Oracle export transaction read-only: %w", err)
+	}
 
 	o.logger.Log(statement)
 	rows, err := tx.QueryContext(ctx, statement)
 	if err != nil {
-		return fmt.Errorf("query Oracle export rows: %w", err)
+		return db.QueryResult{}, fmt.Errorf("query Oracle export rows: %w", err)
 	}
-	result, err := readQueryResult(rows, 0, "")
+	return readQueryResult(rows, 0, "")
+}
+
+// ExportQuery re-runs a SELECT query and writes all result rows to CSV.
+func (o *oracleDatabase) ExportQuery(ctx context.Context, statement string) error {
+	result, err := o.executeAll(ctx, statement)
 	if err != nil {
 		return err
 	}
@@ -474,10 +484,30 @@ func (o *oracleDatabase) ExportQuery(ctx context.Context, statement string) erro
 	return nil
 }
 
-// ExecuteCLI is a placeholder because non-interactive CLI queries are
-// PostgreSQL- and MySQL-only.
-func (o *oracleDatabase) ExecuteCLI(context.Context, string) (string, error) {
-	return "", errors.New("Oracle does not support non-interactive CLI queries")
+// ExecuteCLI runs an Oracle query in a read-only transaction and returns a JSON
+// array of its rows.
+func (o *oracleDatabase) ExecuteCLI(ctx context.Context, statement string) (string, error) {
+	result, err := o.executeAll(ctx, statement)
+	if err != nil {
+		return "", err
+	}
+
+	data, err := jsonexport.Marshal(result.Columns, result.Rows)
+	if err != nil {
+		return "", fmt.Errorf("encode Oracle query JSON: %w", err)
+	}
+	return string(data), nil
+}
+
+// ExecuteCLI connects to Oracle, runs a query, and returns a JSON array of its rows.
+func ExecuteCLI(ctx context.Context, dsn, statement string) (string, error) {
+	database, err := Connect(ctx, dsn)
+	if err != nil {
+		return "", err
+	}
+	defer database.Close()
+
+	return database.ExecuteCLI(ctx, statement)
 }
 
 // Close releases the Oracle connection and query logger.
