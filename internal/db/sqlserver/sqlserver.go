@@ -568,6 +568,12 @@ func (s *sqlserverDatabase) ExportQuery(ctx context.Context, statement string) e
 	return nil
 }
 
+// ExecuteCLI is a placeholder because non-interactive CLI queries are
+// PostgreSQL- and MySQL-only.
+func (s *sqlserverDatabase) ExecuteCLI(context.Context, string) (string, error) {
+	return "", errors.New("SQL Server does not support non-interactive CLI queries")
+}
+
 func (s *sqlserverDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {
 	rows, err := s.database.QueryContext(ctx, listColumnsSQL, table.Schema, table.Name)
 	if err != nil {

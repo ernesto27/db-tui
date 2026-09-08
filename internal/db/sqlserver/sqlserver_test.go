@@ -30,6 +30,15 @@ func TestListTables(t *testing.T) {
 
 }
 
+func TestExecuteCLI(t *testing.T) {
+	ctx, database := connectLocalSQLServer(t)
+
+	result, err := database.ExecuteCLI(ctx, "SELECT 1")
+
+	assert.Empty(t, result)
+	assert.ErrorContains(t, err, "SQL Server does not support non-interactive CLI queries")
+}
+
 func TestListColumns(t *testing.T) {
 	ctx, database := connectLocalSQLServer(t)
 
