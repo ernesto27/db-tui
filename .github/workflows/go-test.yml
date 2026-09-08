@@ -30,6 +30,9 @@ jobs:
       - name: Run tests
         run: go test ./...
 
+      - name: Run CLI integration tests
+        run: scripts/test-cli.sh
+
       - name: Show database logs on failure
         if: failure()
         run: docker compose logs postgres mysql oracle sqlserver
