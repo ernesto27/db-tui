@@ -6,6 +6,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/.." && pwd)"
 dsn="postgres://db_tui@127.0.0.1:5433/chinook?sslmode=disable"
 mysql_dsn="mysql://db_tui:db_tui@127.0.0.1:3307/world"
+sqlite_path="$repo_root/docker/sqlite/employee.db"
 
 temp_dir="$(mktemp -d)"
 trap 'rm -rf "$temp_dir"' EXIT
@@ -95,6 +96,14 @@ expect_cli \
 	-c "$dsn"
 
 expect_cli \
+	"unsupported_dsn" \
+	2 \
+	"" \
+	"db-tui: unsupported DSN" \
+	-q 'SELECT 1' \
+	-c 'unsupported://example'
+
+expect_cli \
 	"postgres_non_select_query" \
 	1 \
 	"" \
@@ -109,6 +118,30 @@ expect_cli \
 	"*" \
 	-q 'SELECT 1' \
 	-c 'postgres://db_tui@127.0.0.1:1/chinook?sslmode=disable&connect_timeout=1'
+
+expect_cli \
+	"sqlite_two_rows" \
+	0 \
+	$'[\n  {\n    "emp_no": 10001,\n    "first_name": "Georgi"\n  },\n  {\n    "emp_no": 10002,\n    "first_name": "Bezalel"\n  }\n]' \
+	"" \
+	-q 'SELECT emp_no, first_name FROM employee ORDER BY emp_no LIMIT 2' \
+	-c "$sqlite_path"
+
+expect_cli \
+	"sqlite_empty_result" \
+	0 \
+	"[]" \
+	"" \
+	-q 'SELECT emp_no FROM employee WHERE emp_no = -1' \
+	-c "$sqlite_path"
+
+expect_cli \
+	"sqlite_non_select_query" \
+	1 \
+	"" \
+	"db-tui: query: only SELECT queries can be exported" \
+	-q 'UPDATE employee SET first_name = first_name WHERE false' \
+	-c "$sqlite_path"
 
 expect_cli \
 	"mysql_two_rows" \

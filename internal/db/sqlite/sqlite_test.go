@@ -206,6 +206,61 @@ func TestExecute(t *testing.T) {
 	assert.Equal(t, "CREATE TABLE", result.CommandTag)
 }
 
+func TestExecuteCLI(t *testing.T) {
+	database := connectEmployee(t)
+
+	for _, test := range []struct {
+		name          string
+		statement     string
+		wantRows      []map[string]any
+		wantUnbounded bool
+		wantErr       string
+	}{
+		{
+			name:      "returns JSON rows",
+			statement: "SELECT emp_no, first_name FROM employee ORDER BY emp_no LIMIT 2",
+			wantRows: []map[string]any{
+				{"emp_no": float64(10001), "first_name": "Georgi"},
+				{"emp_no": float64(10002), "first_name": "Bezalel"},
+			},
+		},
+		{
+			name:          "returns every matching row past the page limit",
+			statement:     "WITH RECURSIVE counter(value) AS (SELECT 1 UNION ALL SELECT value + 1 FROM counter WHERE value <= 100) SELECT value FROM counter",
+			wantUnbounded: true,
+		},
+		{
+			name:      "returns an empty array without rows",
+			statement: "SELECT emp_no FROM employee WHERE emp_no = -1",
+			wantRows:  []map[string]any{},
+		},
+		{
+			name:      "validates SELECT only",
+			statement: "DROP TABLE employee",
+			wantErr:   "only SELECT",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := database.ExecuteCLI(context.Background(), test.statement)
+
+			if test.wantErr != "" {
+				assert.ErrorContains(t, err, test.wantErr)
+				assert.Empty(t, result)
+				return
+			}
+
+			require.NoError(t, err)
+			var rows []map[string]any
+			require.NoError(t, json.Unmarshal([]byte(result), &rows))
+			if test.wantUnbounded {
+				assert.Greater(t, len(rows), db.MaxPageSize)
+				return
+			}
+			assert.Equal(t, test.wantRows, rows)
+		})
+	}
+}
+
 func TestExecuteCancelsRunningQuery(t *testing.T) {
 	database := connectEmployee(t)
 	queryCtx, cancelQuery := context.WithCancel(context.Background())

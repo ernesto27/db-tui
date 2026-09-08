@@ -20,6 +20,10 @@ QUERY WORKFLOW
 CLI
 [ ] Add a non-interactive CLI mode for executing SQL and exporting results.
 
+FIXES
+[] - when open new connectin set table data as default
+
+
 NON-RELATIONAL EXPANSION
 [ ] Design a data-source interface that does not force documents into relational table and row types.
 [ ] Prototype MongoDB connection, database, collection, and document browsing.

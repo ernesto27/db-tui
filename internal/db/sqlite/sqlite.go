@@ -360,23 +360,29 @@ func (s *sqliteDatabase) Export(ctx context.Context, table db.Table, typeVal str
 	return nil
 }
 
-// ExportQuery re-runs a SELECT query and writes all result rows to CSV.
-func (s *sqliteDatabase) ExportQuery(ctx context.Context, statement string) error {
+// executeAll runs a SELECT in a read-only transaction and reads every row.
+func (s *sqliteDatabase) executeAll(ctx context.Context, statement string) (db.QueryResult, error) {
 	if err := db.ValidateSelectQuery(statement); err != nil {
-		return err
+		return db.QueryResult{}, err
 	}
+
 	tx, err := s.database.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		return fmt.Errorf("begin SQLite export transaction: %w", err)
+		return db.QueryResult{}, fmt.Errorf("begin SQLite export transaction: %w", err)
 	}
 	defer tx.Rollback()
 
 	s.logger.Log(statement)
 	rows, err := tx.QueryContext(ctx, statement)
 	if err != nil {
-		return fmt.Errorf("query SQLite export rows: %w", err)
+		return db.QueryResult{}, fmt.Errorf("query SQLite export rows: %w", err)
 	}
-	result, err := readQueryResult(rows, 0, "")
+	return readQueryResult(rows, 0, "")
+}
+
+// ExportQuery re-runs a SELECT query and writes all result rows to CSV.
+func (s *sqliteDatabase) ExportQuery(ctx context.Context, statement string) error {
+	result, err := s.executeAll(ctx, statement)
 	if err != nil {
 		return err
 	}
@@ -387,10 +393,31 @@ func (s *sqliteDatabase) ExportQuery(ctx context.Context, statement string) erro
 	return nil
 }
 
-// ExecuteCLI is a placeholder because non-interactive CLI queries are
-// PostgreSQL- and MySQL-only.
-func (s *sqliteDatabase) ExecuteCLI(context.Context, string) (string, error) {
-	return "", errors.New("SQLite does not support non-interactive CLI queries")
+// ExecuteCLI runs a SQLite query in a read-only transaction and returns a JSON
+// array of its rows.
+func (s *sqliteDatabase) ExecuteCLI(ctx context.Context, statement string) (string, error) {
+	result, err := s.executeAll(ctx, statement)
+	if err != nil {
+		return "", err
+	}
+
+	data, err := jsonexport.Marshal(result.Columns, result.Rows)
+	if err != nil {
+		return "", fmt.Errorf("encode SQLite query JSON: %w", err)
+	}
+
+	return string(data), nil
+}
+
+// ExecuteCLI connects to SQLite, runs a query, and returns a JSON array of its rows.
+func ExecuteCLI(ctx context.Context, path, statement string) (string, error) {
+	database, err := Connect(ctx, path)
+	if err != nil {
+		return "", err
+	}
+	defer database.Close()
+
+	return database.ExecuteCLI(ctx, statement)
 }
 
 // Close releases the database connection and query logger.

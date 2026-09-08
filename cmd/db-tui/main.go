@@ -76,17 +76,22 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) (handl
 		return true, 2
 	}
 
-	engine := detectEngine(*dsn)
+	engine, err := detectEngine(*dsn)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "db-tui: %v\n", err)
+		return true, 2
+	}
 
 	var result string
-	var err error
 	switch engine {
 	case db.EnginePostgreSQL:
 		result, err = postgres.ExecuteCLI(ctx, *dsn, *query)
 	case db.EngineMySQL:
 		result, err = mysql.ExecuteCLI(ctx, *dsn, *query)
+	case db.EngineSQLite:
+		result, err = sqlite.ExecuteCLI(ctx, *dsn, *query)
 	default:
-		_, _ = fmt.Fprintf(stderr, "db-tui: unsupported DSN: %s\n", *dsn)
+		_, _ = fmt.Fprintln(stderr, "db-tui: unsupported DSN")
 		return true, 2
 	}
 	if err != nil {
@@ -98,12 +103,19 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) (handl
 	return true, 0
 }
 
-func detectEngine(dsn string) string {
-	if strings.HasPrefix(strings.ToLower(dsn), "mysql://") {
-		return db.EngineMySQL
+func detectEngine(dsn string) (string, error) {
+	dsn = strings.TrimSpace(dsn)
+	lowerDSN := strings.ToLower(dsn)
+	if strings.HasPrefix(lowerDSN, "postgres://") || strings.HasPrefix(lowerDSN, "postgresql://") {
+		return db.EnginePostgreSQL, nil
 	}
-	// Default to PostgreSQL for backward compatibility
-	return db.EnginePostgreSQL
+	if strings.HasPrefix(lowerDSN, "mysql://") {
+		return db.EngineMySQL, nil
+	}
+	if info, err := os.Stat(dsn); err == nil && info.Mode().IsRegular() {
+		return db.EngineSQLite, nil
+	}
+	return "", errors.New("unsupported DSN")
 }
 
 func connectDatabase(ctx context.Context, engine, dsn string) (db.Database, error) {
