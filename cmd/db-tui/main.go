@@ -51,11 +51,11 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) (handl
 	flags := flag.NewFlagSet("db-tui", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	query := flags.String("q", "", "SQL query")
-	dsn := flags.String("c", "", "PostgreSQL DSN")
+	dsn := flags.String("c", "", "DSN")
 
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			_, _ = fmt.Fprintln(stdout, "Usage: db-tui [-q <SQL> -c <PostgreSQL-DSN>]")
+			_, _ = fmt.Fprintln(stdout, "Usage: db-tui [-q <SQL> -c <DSN>]")
 			return true, 0
 		}
 		_, _ = fmt.Fprintf(stderr, "db-tui: %v\n", err)
@@ -76,7 +76,19 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) (handl
 		return true, 2
 	}
 
-	result, err := postgres.ExecuteCLI(ctx, *dsn, *query)
+	engine := detectEngine(*dsn)
+
+	var result string
+	var err error
+	switch engine {
+	case db.EnginePostgreSQL:
+		result, err = postgres.ExecuteCLI(ctx, *dsn, *query)
+	case db.EngineMySQL:
+		result, err = mysql.ExecuteCLI(ctx, *dsn, *query)
+	default:
+		_, _ = fmt.Fprintf(stderr, "db-tui: unsupported DSN: %s\n", *dsn)
+		return true, 2
+	}
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "db-tui: query: %v\n", err)
 		return true, 1
@@ -84,6 +96,14 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) (handl
 
 	_, _ = fmt.Fprintln(stdout, result)
 	return true, 0
+}
+
+func detectEngine(dsn string) string {
+	if strings.HasPrefix(strings.ToLower(dsn), "mysql://") {
+		return db.EngineMySQL
+	}
+	// Default to PostgreSQL for backward compatibility
+	return db.EnginePostgreSQL
 }
 
 func connectDatabase(ctx context.Context, engine, dsn string) (db.Database, error) {

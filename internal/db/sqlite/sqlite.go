@@ -387,6 +387,12 @@ func (s *sqliteDatabase) ExportQuery(ctx context.Context, statement string) erro
 	return nil
 }
 
+// ExecuteCLI is a placeholder because non-interactive CLI queries are
+// PostgreSQL- and MySQL-only.
+func (s *sqliteDatabase) ExecuteCLI(context.Context, string) (string, error) {
+	return "", errors.New("SQLite does not support non-interactive CLI queries")
+}
+
 // Close releases the database connection and query logger.
 func (s *sqliteDatabase) Close() {
 	_ = s.database.Close()

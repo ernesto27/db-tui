@@ -384,6 +384,62 @@ func TestExecute(t *testing.T) {
 	})
 }
 
+func TestExecuteCLI(t *testing.T) {
+	database := connectWorld(t)
+
+	for _, test := range []struct {
+		name          string
+		statement     string
+		wantRows      []map[string]any
+		wantUnbounded bool
+		wantErr       string
+	}{
+		{
+			name:      "returns JSON rows",
+			statement: "SELECT ID, Name FROM city ORDER BY ID LIMIT 2",
+			wantRows: []map[string]any{
+				{"ID": float64(1), "Name": "Kabul"},
+				{"ID": float64(2), "Name": "Qandahar"},
+			},
+		},
+		{
+			name:          "returns every matching row past the page limit",
+			statement:     "SELECT ID FROM city ORDER BY ID",
+			wantUnbounded: true,
+		},
+		{
+			name:      "returns an empty array without rows",
+			statement: "SELECT ID FROM city WHERE ID = -1",
+			wantRows:  []map[string]any{},
+		},
+		{
+			name:      "validates SELECT only",
+			statement: "DROP TABLE city",
+			wantErr:   "only SELECT",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := database.ExecuteCLI(context.Background(), test.statement)
+
+			if test.wantErr != "" {
+				assert.ErrorContains(t, err, test.wantErr)
+				assert.Empty(t, result)
+				return
+			}
+
+			require.NoError(t, err)
+			var rows []map[string]any
+			require.NoError(t, json.Unmarshal([]byte(result), &rows))
+
+			if test.wantUnbounded {
+				assert.Greater(t, len(rows), db.MaxPageSize)
+				return
+			}
+			assert.Equal(t, test.wantRows, rows)
+		})
+	}
+}
+
 func TestUpdateRow(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

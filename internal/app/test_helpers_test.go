@@ -229,6 +229,10 @@ func (f *fakeDatabase) ExportQuery(ctx context.Context, query string) error {
 	return f.exportQueryErr
 }
 
+func (f *fakeDatabase) ExecuteCLI(ctx context.Context, statement string) (string, error) {
+	return "", nil
+}
+
 func (f *fakeDatabase) UpdateRow(ctx context.Context, table db.Table, setColumns, whereColumns map[string]any) error {
 	return nil
 }

@@ -191,6 +191,9 @@ type Database interface {
 	TableDDL(ctx context.Context, table Table) (string, error)
 	// Execute runs SQL and returns its first rows and command status.
 	Execute(ctx context.Context, sql string) (QueryResult, error)
+	// ExecuteCLI runs a SELECT in a read-only transaction and returns all of
+	// its rows as a JSON array.
+	ExecuteCLI(ctx context.Context, statement string) (string, error)
 	Dump(ctx context.Context) error
 	// Export writes all table rows using typeVal as the export format.
 	Export(ctx context.Context, table Table, typeVal string) error

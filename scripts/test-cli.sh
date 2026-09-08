@@ -5,6 +5,7 @@ set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/.." && pwd)"
 dsn="postgres://db_tui@127.0.0.1:5433/chinook?sslmode=disable"
+mysql_dsn="mysql://db_tui:db_tui@127.0.0.1:3307/world"
 
 temp_dir="$(mktemp -d)"
 trap 'rm -rf "$temp_dir"' EXIT
@@ -52,11 +53,11 @@ expect_cli() {
 }
 
 cd "$repo_root"
-docker compose up -d --wait postgres
+docker compose up -d --wait postgres mysql
 go build -o "$binary" ./cmd/db-tui
 
 expect_cli \
-	"two_rows" \
+	"postgres_two_rows" \
 	0 \
 	$'[\n  {\n    "ArtistId": 1,\n    "Name": "AC/DC"\n  },\n  {\n    "ArtistId": 2,\n    "Name": "Accept"\n  }\n]' \
 	"" \
@@ -64,7 +65,7 @@ expect_cli \
 	-c "$dsn"
 
 expect_cli \
-	"empty_result" \
+	"postgres_empty_result" \
 	0 \
 	"[]" \
 	"" \
@@ -72,7 +73,7 @@ expect_cli \
 	-c "$dsn"
 
 expect_cli \
-	"json_normalization" \
+	"postgres_json_normalization" \
 	0 \
 	$'[\n  {\n    "Identifier": "3234b411-89ab-4cde-8f01-23456789abcd",\n    "Measurement": "NaN",\n    "RecordedAt": "infinity"\n  }\n]' \
 	"" \
@@ -94,7 +95,7 @@ expect_cli \
 	-c "$dsn"
 
 expect_cli \
-	"non_select_query" \
+	"postgres_non_select_query" \
 	1 \
 	"" \
 	"db-tui: query: only SELECT queries can be exported" \
@@ -102,11 +103,43 @@ expect_cli \
 	-c "$dsn"
 
 expect_cli \
-	"unreachable_database" \
+	"postgres_unreachable_database" \
 	1 \
 	"" \
 	"*" \
 	-q 'SELECT 1' \
 	-c 'postgres://db_tui@127.0.0.1:1/chinook?sslmode=disable&connect_timeout=1'
+
+expect_cli \
+	"mysql_two_rows" \
+	0 \
+	$'[\n  {\n    "ID": 1,\n    "Name": "Kabul"\n  },\n  {\n    "ID": 2,\n    "Name": "Qandahar"\n  }\n]' \
+	"" \
+	-q 'SELECT ID, Name FROM city ORDER BY ID LIMIT 2' \
+	-c "$mysql_dsn"
+
+expect_cli \
+	"mysql_empty_result" \
+	0 \
+	"[]" \
+	"" \
+	-q 'SELECT ID FROM city WHERE ID = -1' \
+	-c "$mysql_dsn"
+
+expect_cli \
+	"mysql_non_select_query" \
+	1 \
+	"" \
+	"db-tui: query: only SELECT queries can be exported" \
+	-q 'UPDATE city SET Name = Name WHERE false' \
+	-c "$mysql_dsn"
+
+expect_cli \
+	"mysql_unreachable_database" \
+	1 \
+	"" \
+	"*" \
+	-q 'SELECT 1' \
+	-c 'mysql://db_tui:db_tui@127.0.0.1:1/world?timeout=1s'
 
 echo "All CLI scenarios passed."

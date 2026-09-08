@@ -474,6 +474,12 @@ func (o *oracleDatabase) ExportQuery(ctx context.Context, statement string) erro
 	return nil
 }
 
+// ExecuteCLI is a placeholder because non-interactive CLI queries are
+// PostgreSQL- and MySQL-only.
+func (o *oracleDatabase) ExecuteCLI(context.Context, string) (string, error) {
+	return "", errors.New("Oracle does not support non-interactive CLI queries")
+}
+
 // Close releases the Oracle connection and query logger.
 func (o *oracleDatabase) Close() {
 	_ = o.database.Close()

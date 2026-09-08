@@ -650,25 +650,30 @@ func (m *mysqlDatabase) Export(ctx context.Context, table db.Table, typeVal stri
 	return nil
 }
 
-// ExportQuery re-runs a SELECT query in a read-only transaction and writes all rows to CSV.
-func (m *mysqlDatabase) ExportQuery(ctx context.Context, statement string) error {
+// executeAll runs a SELECT in a read-only transaction and reads every row.
+func (m *mysqlDatabase) executeAll(ctx context.Context, statement string) (db.QueryResult, error) {
 	if err := db.ValidateSelectQuery(statement); err != nil {
-		return err
+		return db.QueryResult{}, err
 	}
 
 	tx, err := m.database.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		return fmt.Errorf("begin MySQL export transaction: %w", err)
+		return db.QueryResult{}, fmt.Errorf("begin MySQL export transaction: %w", err)
 	}
 	defer tx.Rollback()
 
 	m.logger.Log(statement)
 	rows, err := tx.QueryContext(ctx, statement)
 	if err != nil {
-		return fmt.Errorf("query MySQL export rows: %w", err)
+		return db.QueryResult{}, fmt.Errorf("query MySQL export rows: %w", err)
 	}
 
-	result, err := readQueryResult(rows, 0, "")
+	return readQueryResult(rows, 0, "")
+}
+
+// ExportQuery re-runs a SELECT query in a read-only transaction and writes all rows to CSV.
+func (m *mysqlDatabase) ExportQuery(ctx context.Context, statement string) error {
+	result, err := m.executeAll(ctx, statement)
 	if err != nil {
 		return err
 	}
@@ -679,6 +684,35 @@ func (m *mysqlDatabase) ExportQuery(ctx context.Context, statement string) error
 	}
 	return nil
 }
+
+// ExecuteCLI runs a MySQL query in a read-only transaction and returns a JSON
+// array of its rows.
+func (m *mysqlDatabase) ExecuteCLI(ctx context.Context, statement string) (string, error) {
+	result, err := m.executeAll(ctx, statement)
+	if err != nil {
+		return "", err
+	}
+
+	data, err := jsonexport.Marshal(result.Columns, result.Rows)
+	if err != nil {
+		return "", fmt.Errorf("encode MySQL query JSON: %w", err)
+	}
+
+	return string(data), nil
+}
+
+// ExecuteCLI connects to MySQL, runs a query, and returns a JSON array of its rows.
+func ExecuteCLI(ctx context.Context, dsn, statement string) (string, error) {
+	database, err := Connect(ctx, dsn)
+	if err != nil {
+		return "", err
+	}
+	defer database.Close()
+
+	return database.ExecuteCLI(ctx, statement)
+}
+
+
 
 func dockerContainerIDForPort(ctx context.Context, port string) (string, error) {
 	command := exec.CommandContext(
