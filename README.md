@@ -1,6 +1,6 @@
 # db-tui
 
-A keyboard-first terminal client for PostgreSQL, MySQL, Oracle, and SQLite.
+A keyboard-first terminal client for PostgreSQL, MySQL, Oracle, SQLite, and SQL Server.
 
 ## Install
 
@@ -28,12 +28,29 @@ db-tui
 Saved connections are available with `Ctrl+L`.
 
 SQLite connections use a local database-file path, such as
-`/data/reporting.db`. PostgreSQL, MySQL, and Oracle can use either the form
-fields or an engine-specific DSN.
+`/data/reporting.db`. PostgreSQL, MySQL, Oracle, and SQL Server can use either
+the form fields or an engine-specific DSN.
+
+## Run a query without the TUI
+
+Pass both `-q` (the SQL query) and `-c` (the connection DSN) to print a JSON
+array of rows to standard output. This mode accepts `postgres://` or
+`postgresql://`, `mysql://`, `oracle://`, and `sqlserver://` DSNs, or the path
+to an existing SQLite database file. The query must contain `SELECT` and runs
+in a read-only transaction.
+
+```sh
+db-tui \
+  -q 'SELECT id, name FROM customers ORDER BY id LIMIT 10' \
+  -c 'postgres://user:password@localhost:5432/appdb?sslmode=disable'
+```
+
+Run `db-tui -h` for the concise command usage. Omit both flags to start the
+interactive application.
 
 ## Features
 
-- Save and switch between PostgreSQL, MySQL, Oracle, and SQLite connections.
+- Save and switch between PostgreSQL, MySQL, Oracle, SQLite, and SQL Server connections.
 - Browse tables, views, materialized views, and functions when supported by
   the connected database.
 - Filter database objects and inspect table data in bounded pages.
@@ -42,7 +59,9 @@ fields or an engine-specific DSN.
 - Write and execute SQL in the raw-query panel.
 - Save and reopen SQL scripts for each connection.
 - Export a table or successful query results as CSV or JSON.
-- Create timestamped SQL dumps for PostgreSQL, MySQL, and SQLite.
+- Create timestamped SQL dumps for PostgreSQL, MySQL, SQLite, and SQL Server.
+  SQL Server dumps require access to the database's local Docker container;
+  Oracle dumps are not supported.
 - Rename saved connections and set their environment label.
 
 ## Keyboard reference
@@ -52,6 +71,7 @@ fields or an engine-specific DSN.
 | Key | Action |
 | --- | --- |
 | `Ctrl+N` | Create a connection; in the raw-query panel, start a new script |
+| `Ctrl+K` | Open or close keyboard shortcuts |
 | `Ctrl+L` | Open saved connections |
 | `Ctrl+R` | Open the raw-query panel |
 | `Ctrl+T` | Return to table data |
