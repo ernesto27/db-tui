@@ -28,6 +28,17 @@ func TestBaseViewShowsConnectedEngine(t *testing.T) {
 	assert.Contains(t, view.Content, "chinook  /  MySQL")
 }
 
+func TestViewRendersRawQueryDeleteConfirmation(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	modal := newRawQueryDeleteModal("DELETE FROM album")
+	model.rawQueryDeleteModal = &modal
+
+	view := model.View()
+
+	assert.Contains(t, view.Content, "Confirm DELETE")
+	assert.Contains(t, view.Content, "This query will delete data.")
+}
+
 func TestBaseViewHidesNavigatorContentWithoutDatabase(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 

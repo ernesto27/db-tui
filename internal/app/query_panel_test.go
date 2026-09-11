@@ -352,6 +352,71 @@ func TestModelStartQueryBeginsExecution(t *testing.T) {
 	assert.False(t, model.spinnerRunning)
 }
 
+func TestModelStartQueryRequiresDeleteConfirmation(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook"}
+	sql := "WITH stale AS (SELECT id FROM album) DELETE FROM album WHERE id IN (SELECT id FROM stale)"
+	model.query.editor.SetValue(sql)
+
+	command := model.startQuery()
+
+	assert.Nil(t, command)
+	require.NotNil(t, model.rawQueryDeleteModal)
+	assert.Equal(t, sql, model.rawQueryDeleteModal.sql)
+	assert.False(t, model.query.loading)
+	assert.Zero(t, model.query.request)
+}
+
+func TestRawQueryDeleteConfirmationExecutesOriginalSQL(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook"}
+	sql := "SELECT 1; DELETE FROM album"
+	model.query.editor.SetValue(sql)
+	_ = model.startQuery()
+
+	updated, command := model.Update(keyPress(tea.KeyEnter, "", 0))
+	require.NotNil(t, command)
+	message := command()
+	confirmed, command := updated.(Model).Update(message)
+	got := confirmed.(Model)
+
+	require.NotNil(t, command)
+	assert.Nil(t, got.rawQueryDeleteModal)
+	assert.True(t, got.query.loading)
+	assert.Equal(t, sql, got.query.lastExecutedSQL)
+}
+
+func TestRawQueryDeleteConfirmationCancelPreservesQuery(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook"}
+	sql := "DELETE FROM album"
+	model.query.editor.SetValue(sql)
+	_ = model.startQuery()
+
+	updated, command := model.Update(keyPress(tea.KeyEscape, "", 0))
+	require.NotNil(t, command)
+	canceled, command := updated.(Model).Update(command())
+	got := canceled.(Model)
+
+	assert.Nil(t, command)
+	assert.Nil(t, got.rawQueryDeleteModal)
+	assert.False(t, got.query.loading)
+	assert.Equal(t, sql, got.query.editor.Value())
+}
+
+func TestRawQueryDeleteConfirmationBlocksEditorInput(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook"}
+	model.query.editor.SetValue("DELETE FROM album")
+	_ = model.startQuery()
+
+	updated, command := model.Update(keyPress('x', "x", 0))
+	got := updated.(Model)
+
+	assert.Nil(t, command)
+	assert.Equal(t, "DELETE FROM album", got.query.editor.Value())
+}
+
 func TestModelStartQueryIgnoresSubmissionWhileExecuting(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.database = &fakeDatabase{name: "chinook"}

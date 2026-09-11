@@ -104,8 +104,9 @@ type Model struct {
 	objectsModal          *objectsModal
 	databaseExplorerModal *databaseExplorerModal
 
-	editRowModal   *editRowModal
-	deleteRowModal *deleteRowModal
+	editRowModal        *editRowModal
+	deleteRowModal      *deleteRowModal
+	rawQueryDeleteModal *rawQueryDeleteModal
 }
 
 // New creates the root Bubble Tea application model.

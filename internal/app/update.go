@@ -84,6 +84,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.deleteRowModal != nil {
 		return m.updateDeleteRowModal(msg)
 	}
+	if m.rawQueryDeleteModal != nil {
+		return m.updateRawQueryDeleteModal(msg)
+	}
 
 	if m.actionsModal != nil {
 		return m.updateActionsModal(msg)
@@ -501,6 +504,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.navigator.setFunctionsAvailable(supportsFunctions(msg.database.Engine()))
 		m.data.reset()
 		m.query.reset(m.layout)
+		m.rawQueryDeleteModal = nil
 		m.ddlModal = nil
 		m.columnsModal = nil
 		m.indexesModal = nil
@@ -1127,6 +1131,19 @@ func (m *Model) startQuery() tea.Cmd {
 	if m.database == nil || m.query.loading || strings.TrimSpace(sql) == "" {
 		return nil
 	}
+	if rawQueryContainsDelete(sql) {
+		modal := newRawQueryDeleteModal(sql)
+		m.rawQueryDeleteModal = &modal
+		return nil
+	}
+
+	return m.executeRawQuery(sql)
+}
+
+func (m *Model) executeRawQuery(sql string) tea.Cmd {
+	if m.database == nil || m.query.loading || strings.TrimSpace(sql) == "" {
+		return nil
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), queryExecutionTimeout)
 	request := m.query.beginExecute(sql)
@@ -1506,6 +1523,24 @@ func (m *Model) updateDeleteRowModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 	default:
 		modal, command := m.deleteRowModal.update(msg)
 		m.deleteRowModal = &modal
+		return m, command
+	}
+}
+
+func (m *Model) updateRawQueryDeleteModal(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg.(type) {
+	case rawQueryDeleteCancelMsg:
+		m.rawQueryDeleteModal = nil
+		return m, nil
+
+	case rawQueryDeleteConfirmMsg:
+		sql := m.rawQueryDeleteModal.sql
+		m.rawQueryDeleteModal = nil
+		return m, m.executeRawQuery(sql)
+
+	default:
+		modal, command := m.rawQueryDeleteModal.update(msg)
+		m.rawQueryDeleteModal = &modal
 		return m, command
 	}
 }

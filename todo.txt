@@ -6,6 +6,8 @@
 [] test connection to remote database - mysql , postgresql
 [ ] Add DuckDB support for local files and in-memory databases.
 [ ] Add SSH tunnel configuration for connections behind bastion hosts.
+[x] skill for check updates to README
+[] - postgresql requires "" in table name and colums prevent that , add automatically
 
 QUERY WORKFLOW
 [ ] Add SQL autocomplete for keywords, schemas, tables, views, functions, and columns.
@@ -15,7 +17,8 @@ QUERY WORKFLOW
 [x] Execute only selected SQL when text is selected.
 [x] - show time of execution query
 [x] Add cancellation for long-running queries.
-[ ] Add a read-only safety mode and confirmation before destructive statements.
+[ ] Add a read-only safety mode and
+[ ]  confirmation before destructive statements.
 
 CLI
 [ ] Add a non-interactive CLI mode for executing SQL and exporting results.
