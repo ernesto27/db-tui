@@ -240,7 +240,7 @@ func TestExecuteQuery(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), queryExecutionTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 			defer cancel()
 			message, ok := executeQuery(
 				ctx,

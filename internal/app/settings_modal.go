@@ -11,23 +11,26 @@ import (
 )
 
 type settingsModal struct {
-	maxPageSize textinput.Model
-	errorText   string
-	saving      bool
+	maxPageSize  textinput.Model
+	queryTimeout textinput.Model
+	errorText    string
+	saving       bool
 }
 
 type saveSettingsMsg struct {
-	maxPageSize int
+	maxPageSize         int
+	queryTimeoutSeconds int
 }
 
 type cancelSettingsMsg struct{}
 
 type settingsSavedMsg struct {
-	maxPageSize int
-	err         error
+	maxPageSize         int
+	queryTimeoutSeconds int
+	err                 error
 }
 
-func newSettingsModal(maxPageSize int) settingsModal {
+func newSettingsModal(maxPageSize, queryTimeoutSeconds int) settingsModal {
 	input := textinput.New()
 	input.Prompt = ""
 	styles := editRowInputStyles()
@@ -36,7 +39,11 @@ func newSettingsModal(maxPageSize int) settingsModal {
 	styles.Cursor.Color = colorModalBackground
 	input.SetStyles(styles)
 	input.SetValue(strconv.Itoa(maxPageSize))
-	return settingsModal{maxPageSize: input}
+	timeout := textinput.New()
+	timeout.Prompt = ""
+	timeout.SetStyles(styles)
+	timeout.SetValue(strconv.Itoa(queryTimeoutSeconds))
+	return settingsModal{maxPageSize: input, queryTimeout: timeout}
 }
 
 func (m settingsModal) update(msg tea.Msg) (settingsModal, tea.Cmd) {
@@ -53,14 +60,35 @@ func (m settingsModal) update(msg tea.Msg) (settingsModal, tea.Cmd) {
 				return m, nil
 			}
 			m.errorText = ""
-			return m, func() tea.Msg { return saveSettingsMsg{maxPageSize: maxPageSize} }
+			queryTimeoutSeconds, err := parseQueryTimeout(m.queryTimeout.Value())
+			if err != nil {
+				m.errorText = err.Error()
+				return m, nil
+			}
+			return m, func() tea.Msg {
+				return saveSettingsMsg{maxPageSize: maxPageSize, queryTimeoutSeconds: queryTimeoutSeconds}
+			}
 		case "esc":
 			return m, func() tea.Msg { return cancelSettingsMsg{} }
 		}
 	}
 
 	var command tea.Cmd
-	m.maxPageSize, command = m.maxPageSize.Update(msg)
+	if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "tab" {
+		if m.maxPageSize.Focused() {
+			m.maxPageSize.Blur()
+			command = m.queryTimeout.Focus()
+		} else {
+			m.queryTimeout.Blur()
+			command = m.maxPageSize.Focus()
+		}
+		return m, command
+	}
+	if m.queryTimeout.Focused() {
+		m.queryTimeout, command = m.queryTimeout.Update(msg)
+	} else {
+		m.maxPageSize, command = m.maxPageSize.Update(msg)
+	}
 	return m, command
 }
 
@@ -70,6 +98,14 @@ func parseMaxPageSize(value string) (int, error) {
 		return 0, errors.New("max page size must be a positive whole number")
 	}
 	return maxPageSize, nil
+}
+
+func parseQueryTimeout(value string) (int, error) {
+	seconds, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || seconds < 1 {
+		return 0, errors.New("query timeout must be a positive whole number of seconds")
+	}
+	return seconds, nil
 }
 
 func (m settingsModal) view(width int) string {
@@ -85,6 +121,10 @@ func (m settingsModal) view(width int) string {
 			labelStyle.Render("Max page size"),
 			m.maxPageSize.View(),
 		),
+		lipgloss.JoinHorizontal(lipgloss.Top,
+			labelStyle.Render("Query timeout (sec)"),
+			m.queryTimeout.View(),
+		),
 	}
 	if m.errorText != "" {
 		lines = append(lines, "", lipgloss.NewStyle().
@@ -97,7 +137,7 @@ func (m settingsModal) view(width int) string {
 	if m.saving {
 		lines = append(lines, "", lipgloss.NewStyle().Foreground(colorAccent).Render("Saving settings…"))
 	} else {
-		lines = append(lines, "", lipgloss.NewStyle().Foreground(colorTextMuted).Render("Enter save  •  Esc cancel"))
+		lines = append(lines, "", lipgloss.NewStyle().Foreground(colorTextMuted).Render("Tab switch  •  Enter save  •  Esc cancel"))
 	}
 
 	return lipgloss.NewStyle().

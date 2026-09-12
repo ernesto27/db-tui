@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/ernestoponce27/db-tui/internal/db"
 )
@@ -43,8 +44,9 @@ type Connection struct {
 
 // Config contains db-tui connection settings.
 type Config struct {
-	Connections []Connection `json:"connections,omitempty"`
-	MaxPageSize int          `json:"maxPageSize"`
+	Connections         []Connection `json:"connections,omitempty"`
+	MaxPageSize         int          `json:"maxPageSize"`
+	QueryTimeoutSeconds int          `json:"queryTimeoutSeconds,omitempty"`
 }
 
 // PageSize returns the configured page size or the default when it is invalid.
@@ -53,6 +55,14 @@ func (config Config) PageSize() int {
 		return db.MaxPageSize
 	}
 	return config.MaxPageSize
+}
+
+// QueryTimeout returns the configured query timeout or the default when it is invalid.
+func (config Config) QueryTimeout() time.Duration {
+	if config.QueryTimeoutSeconds < 1 {
+		return 20 * time.Minute
+	}
+	return time.Duration(config.QueryTimeoutSeconds) * time.Second
 }
 
 // Load reads the db-tui configuration from $HOME/.config/db-tui/config.json.
