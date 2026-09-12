@@ -573,6 +573,7 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.editingConnection = -1
 		m.creatingConnection = false
 		m.pendingConnectionIndex = msg.index
+		m.panel = panelData
 		return m, func() tea.Msg { return submitConnectionMsg{} }
 	case editConnectionMsg:
 		modal := newConnectionModal(connectionSettingsFromConfig(msg.connection))

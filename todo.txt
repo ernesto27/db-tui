@@ -18,7 +18,7 @@ po
 [x] - show time of execution query
 [x] Add cancellation for long-running queries.
 [ ] Add a read-only safety mode and
-[ ]  confirmation before destructive statements.
+[x] confirmation before destructive statements.
 
 CLI
 [x] Add a non-interactive CLI mode for executing SQL json
