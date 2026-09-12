@@ -377,8 +377,8 @@ func TestRawQueryDeleteConfirmationExecutesOriginalSQL(t *testing.T) {
 	updated, command := model.Update(keyPress(tea.KeyEnter, "", 0))
 	require.NotNil(t, command)
 	message := command()
-	confirmed, command := updated.(Model).Update(message)
-	got := confirmed.(Model)
+	confirmed, command := updated.(*Model).Update(message)
+	got := confirmed.(*Model)
 
 	require.NotNil(t, command)
 	assert.Nil(t, got.rawQueryDeleteModal)
@@ -395,8 +395,8 @@ func TestRawQueryDeleteConfirmationCancelPreservesQuery(t *testing.T) {
 
 	updated, command := model.Update(keyPress(tea.KeyEscape, "", 0))
 	require.NotNil(t, command)
-	canceled, command := updated.(Model).Update(command())
-	got := canceled.(Model)
+	canceled, command := updated.(*Model).Update(command())
+	got := canceled.(*Model)
 
 	assert.Nil(t, command)
 	assert.Nil(t, got.rawQueryDeleteModal)
@@ -411,7 +411,7 @@ func TestRawQueryDeleteConfirmationBlocksEditorInput(t *testing.T) {
 	_ = model.startQuery()
 
 	updated, command := model.Update(keyPress('x', "x", 0))
-	got := updated.(Model)
+	got := updated.(*Model)
 
 	assert.Nil(t, command)
 	assert.Equal(t, "DELETE FROM album", got.query.editor.Value())
