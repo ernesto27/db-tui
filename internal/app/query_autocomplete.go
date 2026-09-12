@@ -16,6 +16,7 @@ import (
 const tableCompletionMaxMatches = 5
 
 type tableCompletionModel struct {
+	engine   string
 	matches  []db.Table
 	selected int
 	start    int
@@ -27,8 +28,8 @@ func (m *tableCompletionModel) dismiss() {
 	*m = tableCompletionModel{}
 }
 
-func (m *queryModel) refreshTableCompletion(tables []db.Table) {
-	start, end, prefix, ok := tableCompletionPrefix(m.editor)
+func (m *queryModel) refreshTableCompletion(tables []db.Table, engine string, highlighter sqlhighlight.Highlighter) {
+	start, end, prefix, ok := tableCompletionPrefix(m.editor, engine, highlighter)
 	if !ok {
 		m.completion.dismiss()
 		return
@@ -40,7 +41,7 @@ func (m *queryModel) refreshTableCompletion(tables []db.Table) {
 		return
 	}
 
-	m.completion = tableCompletionModel{matches: matches, start: start, end: end, visible: true}
+	m.completion = tableCompletionModel{engine: engine, matches: matches, start: start, end: end, visible: true}
 }
 
 func (m *queryModel) handleTableCompletionKey(msg tea.KeyPressMsg) bool {
@@ -70,7 +71,7 @@ func (m *queryModel) acceptTableCompletion() {
 	}
 
 	value := []rune(m.editor.Value())
-	replacement := []rune(quotePostgreSQLIdentifier(completion.matches[completion.selected].Name))
+	replacement := []rune(quoteTableCompletionIdentifier(completion.engine, completion.matches[completion.selected].Name))
 	updated := make([]rune, 0, len(value)-completion.end+completion.start+len(replacement))
 	updated = append(updated, value[:completion.start]...)
 	updated = append(updated, replacement...)
@@ -103,7 +104,7 @@ func (m *queryModel) restoreEditorCursorOffset(offset int) {
 	m.editor.SetCursorColumn(max(0, column))
 }
 
-func tableCompletionPrefix(editor textarea.Model) (start, end int, prefix string, ok bool) {
+func tableCompletionPrefix(editor textarea.Model, engine string, highlighter sqlhighlight.Highlighter) (start, end int, prefix string, ok bool) {
 	runes := []rune(editor.Value())
 	end = editorCursorOffset(editor)
 	if end <= 0 || end > len(runes) {
@@ -121,7 +122,7 @@ func tableCompletionPrefix(editor textarea.Model) (start, end int, prefix string
 	for end < len(runes) && isTableCompletionIdentifierRune(runes[end]) {
 		end++
 	}
-	if !tableCompletionCodePosition(runes, start) || !tableCompletionKeywordBefore(runes, start) {
+	if !tableCompletionKeywordBefore(runes, start, engine, highlighter) {
 		return 0, 0, "", false
 	}
 	return start, end, string(runes[start:cursor]), true
@@ -137,8 +138,8 @@ func editorCursorOffset(editor textarea.Model) int {
 	return offset + editor.Column()
 }
 
-func tableCompletionKeywordBefore(runes []rune, start int) bool {
-	spans := (sqlhighlight.PostgreSQL{}).KeywordSpans(string(runes[:start]))
+func tableCompletionKeywordBefore(runes []rune, start int, engine string, highlighter sqlhighlight.Highlighter) bool {
+	spans := highlighter.KeywordSpans(string(runes[:start]))
 	if len(spans) == 0 {
 		return false
 	}
@@ -148,65 +149,31 @@ func tableCompletionKeywordBefore(runes []rune, start int) bool {
 		return false
 	}
 	switch strings.ToUpper(string(runes[last.Start:last.End])) {
-	case "FROM", "JOIN", "UPDATE", "INTO", "TRUNCATE":
+	case "FROM", "JOIN", "UPDATE", "INTO":
 		return true
+	case "TRUNCATE":
+		return engine == db.EnginePostgreSQL || engine == db.EngineMySQL
+	case "TABLE":
+		return supportsTruncateTableCompletion(engine) && tableCompletionPrecededByTruncate(runes, spans)
 	default:
 		return false
 	}
 }
 
-func tableCompletionCodePosition(runes []rune, position int) bool {
-	for index := 0; index < position; {
-		switch {
-		case runes[index] == '\'':
-			next := quotedCompletionEnd(runes, index, '\'')
-			if next > position {
-				return false
-			}
-			index = next
-		case runes[index] == '"':
-			next := quotedCompletionEnd(runes, index, '"')
-			if next > position {
-				return false
-			}
-			index = next
-		case index+1 < position && runes[index] == '-' && runes[index+1] == '-':
-			for index < position && runes[index] != '\n' {
-				index++
-			}
-			if index == position {
-				return false
-			}
-		case index+1 < position && runes[index] == '/' && runes[index+1] == '*':
-			index += 2
-			for index+1 < position && !(runes[index] == '*' && runes[index+1] == '/') {
-				index++
-			}
-			if index+1 >= position {
-				return false
-			}
-			index += 2
-		default:
-			index++
-		}
-	}
-	return true
+func supportsTruncateTableCompletion(engine string) bool {
+	return engine == db.EnginePostgreSQL || engine == db.EngineMySQL ||
+		engine == db.EngineOracle || engine == db.EngineSQLServer
 }
 
-func quotedCompletionEnd(runes []rune, index int, quote rune) int {
-	index++
-	for index < len(runes) {
-		if runes[index] != quote {
-			index++
-			continue
-		}
-		if index+1 < len(runes) && runes[index+1] == quote {
-			index += 2
-			continue
-		}
-		return index + 1
+func tableCompletionPrecededByTruncate(runes []rune, spans []sqlhighlight.Span) bool {
+	if len(spans) < 2 {
+		return false
 	}
-	return len(runes)
+
+	previous := spans[len(spans)-2]
+	last := spans[len(spans)-1]
+	return strings.EqualFold(string(runes[previous.Start:previous.End]), "TRUNCATE") &&
+		strings.TrimSpace(string(runes[previous.End:last.Start])) == ""
 }
 
 func isTableCompletionIdentifierRune(r rune) bool {
@@ -228,8 +195,15 @@ func matchingTables(tables []db.Table, prefix string) []db.Table {
 	return matches
 }
 
-func quotePostgreSQLIdentifier(identifier string) string {
-	return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"`
+func quoteTableCompletionIdentifier(engine, identifier string) string {
+	switch engine {
+	case db.EngineMySQL:
+		return "`" + strings.ReplaceAll(identifier, "`", "``") + "`"
+	case db.EngineSQLServer:
+		return "[" + strings.ReplaceAll(identifier, "]", "]]") + "]"
+	default:
+		return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"`
+	}
 }
 
 func (m queryModel) completionOverlay(editorView string) string {

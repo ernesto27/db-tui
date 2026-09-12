@@ -24,7 +24,7 @@ func TestOracleKeywordSpans(t *testing.T) {
 		{name: "skips doubled quote escapes", input: "SELECT 'it''s FROM' FROM dual", want: []string{"SELECT", "FROM"}},
 		{name: "skips paired alternative quoted strings", input: "SELECT q'{FROM WHERE}' AS value FROM dual", want: []string{"SELECT", "AS", "FROM"}},
 		{name: "skips national alternative quoted strings", input: "SELECT nq'!FROM WHERE!' AS value FROM dual", want: []string{"SELECT", "AS", "FROM"}},
-		{name: "recognizes Oracle reserved and structural keywords", input: "ACCESS ADD ALTER AUDIT CONNECT MERGE MINUS ROWNUM SYSDATE VARCHAR2 BEGIN DECLARE EXCEPTION JOIN OFFSET RETURNING", want: []string{"ACCESS", "ADD", "ALTER", "AUDIT", "CONNECT", "MERGE", "MINUS", "ROWNUM", "SYSDATE", "VARCHAR2", "BEGIN", "DECLARE", "EXCEPTION", "JOIN", "OFFSET", "RETURNING"}},
+		{name: "recognizes Oracle reserved and structural keywords", input: "ACCESS ADD ALTER AUDIT CONNECT MERGE MINUS ROWNUM SYSDATE VARCHAR2 BEGIN DECLARE EXCEPTION JOIN OFFSET RETURNING TRUNCATE", want: []string{"ACCESS", "ADD", "ALTER", "AUDIT", "CONNECT", "MERGE", "MINUS", "ROWNUM", "SYSDATE", "VARCHAR2", "BEGIN", "DECLARE", "EXCEPTION", "JOIN", "OFFSET", "RETURNING", "TRUNCATE"}},
 		{name: "ends an Oracle block comment at its first closing delimiter", input: "/* outer /* SELECT */ FROM dual", want: []string{"FROM"}},
 	}
 

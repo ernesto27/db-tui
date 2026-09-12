@@ -903,14 +903,17 @@ func (m *Model) updateQueryEditor(msg tea.Msg) tea.Cmd {
 	m.query.clearSelectionBeforeEditorUpdate()
 	editor, command := m.query.editor.Update(msg)
 	m.query.editor = editor
-	if m.database != nil &&
-		m.database.Engine() == db.EnginePostgreSQL &&
-		!m.loading &&
-		m.tableLoadErr == nil {
-		m.query.refreshTableCompletion(m.navigator.tables)
-	} else {
+	if m.database == nil || m.loading || m.tableLoadErr != nil {
 		m.query.completion.dismiss()
+		return command
 	}
+
+	highlighter := rawQueryHighlighter(m.database)
+	if highlighter == nil {
+		m.query.completion.dismiss()
+		return command
+	}
+	m.query.refreshTableCompletion(m.navigator.tables, m.database.Engine(), highlighter)
 	return command
 }
 
