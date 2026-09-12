@@ -207,3 +207,13 @@ type Database interface {
 	ListFunctions(ctx context.Context, schema string) ([]FunctionColumns, error)
 	Close()
 }
+
+type ExtensionData struct {
+	Name    string
+	Version string
+	Schema  string
+}
+
+type Extension interface {
+	ListExtensions(ctx context.Context) ([]ExtensionData, error)
+}

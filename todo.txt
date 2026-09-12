@@ -13,7 +13,7 @@ QUERY WORKFLOW
 [ ] Add SQL autocomplete for keywords, schemas, tables, views, functions, and columns.
 [x] Add SQL syntax highlighting with engine-specific postgres
 [x] Add SQL syntax highlighting with engine-specific mysql
-
+po
 [x] Execute only selected SQL when text is selected.
 [x] - show time of execution query
 [x] Add cancellation for long-running queries.
@@ -21,7 +21,8 @@ QUERY WORKFLOW
 [ ]  confirmation before destructive statements.
 
 CLI
-[ ] Add a non-interactive CLI mode for executing SQL and exporting results.
+[x] Add a non-interactive CLI mode for executing SQL json
+[x] Add a non-interactive CLI mode for executing SQL csv
 
 FIXES
 [] - when open new connectin set table data as default

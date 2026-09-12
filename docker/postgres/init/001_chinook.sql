@@ -16761,6 +16761,13 @@ INSERT INTO audit."Event" VALUES
 -- CLI JSON normalization fixture.
 --
 
+--
+-- PostgreSQL extension fixtures.
+--
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
+
 CREATE TABLE public."CLIJSONExample" (
     "Identifier" uuid PRIMARY KEY,
     "Measurement" double precision NOT NULL,
