@@ -60,6 +60,29 @@ func TestLoadFunctions(t *testing.T) {
 	assert.Equal(t, uint64(7), message.session)
 }
 
+func TestLoadExtensions(t *testing.T) {
+	wantErr := errors.New("list failed")
+	wantExtensions := []db.ExtensionData{{Name: "pg_trgm", Schema: "public", Version: "1.6"}}
+	database := &fakeDatabase{extensions: wantExtensions, extensionsErr: wantErr}
+
+	message, ok := loadExtensions(database, 7, 3)().(extensionsLoadedMsg)
+
+	require.True(t, ok)
+	assert.Equal(t, 1, database.listExtensionsCalls)
+	assert.True(t, database.listExtensionsDeadline)
+	assert.Equal(t, wantExtensions, message.extensions)
+	assert.Equal(t, uint64(7), message.session)
+	assert.Equal(t, uint64(3), message.request)
+	assert.ErrorIs(t, message.err, wantErr)
+}
+
+func TestExtensionRowPage(t *testing.T) {
+	assert.Equal(t, db.RowPage{
+		Columns: []string{extensionNameColumn, extensionSchemaColumn, extensionVersionColumn},
+		Rows:    [][]any{{"pg_trgm", "public", "1.6"}},
+	}, extensionRowPage([]db.ExtensionData{{Name: "pg_trgm", Schema: "public", Version: "1.6"}}))
+}
+
 func TestLoadRows(t *testing.T) {
 	wantErr := errors.New("rows failed")
 	tests := []struct {

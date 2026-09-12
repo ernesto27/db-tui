@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -45,12 +46,13 @@ func TestDatabaseExplorerModalListsAvailableSchemaObjectPairs(t *testing.T) {
 	modal := newDatabaseExplorerModal([]db.SchemaObjectGroup{
 		{Schema: "analytics", Type: db.SchemaObjectViews},
 		{Schema: "public", Type: db.SchemaObjectTables},
-	})
+	}, true)
 
 	view := modal.view(newAppLayout(80, 24))
 
 	assert.Contains(t, view, "analytics — Views")
 	assert.Contains(t, view, "public — Tables")
+	assert.Contains(t, view, extensionPanelTitle)
 	assert.NotContains(t, view, "Functions")
 }
 
@@ -59,7 +61,7 @@ func TestDatabaseExplorerModalSelectsOneSchemaObjectPair(t *testing.T) {
 		{Schema: "analytics", Type: db.SchemaObjectViews},
 		{Schema: "public", Type: db.SchemaObjectTables},
 	}
-	modal := newDatabaseExplorerModal(groups)
+	modal := newDatabaseExplorerModal(groups, false)
 
 	modal.move(1, newAppLayout(80, 24))
 
@@ -72,7 +74,7 @@ func TestDatabaseExplorerModalScrollsAndTruncatesLabels(t *testing.T) {
 	for index := range groups {
 		groups[index] = db.SchemaObjectGroup{Schema: "schema-" + string(rune('a'+index)), Type: db.SchemaObjectTables}
 	}
-	modal := newDatabaseExplorerModal(groups)
+	modal := newDatabaseExplorerModal(groups, false)
 
 	modal.move(len(groups)-1, layout)
 	view := modal.view(layout)
@@ -85,7 +87,7 @@ func TestDatabaseExplorerModalScrollsAndTruncatesLabels(t *testing.T) {
 	longLabelModal := newDatabaseExplorerModal([]db.SchemaObjectGroup{{
 		Schema: strings.Repeat("long-schema-name-", 8),
 		Type:   db.SchemaObjectMaterializedViews,
-	}})
+	}}, false)
 	assert.Contains(t, longLabelModal.view(layout), "…")
 }
 
@@ -117,6 +119,7 @@ func TestObjectsShortcutOpensDatabaseExplorerModalForPostgreSQL(t *testing.T) {
 	require.NotNil(t, updated.databaseExplorerModal)
 	assert.Nil(t, updated.objectsModal)
 	assert.Equal(t, groups, updated.databaseExplorerModal.groups)
+	assert.True(t, updated.databaseExplorerModal.extensionsAvailable)
 	assert.Nil(t, command)
 }
 
@@ -126,7 +129,7 @@ func TestDatabaseExplorerModalMovesAndCloses(t *testing.T) {
 		{Schema: "public", Type: db.SchemaObjectTables},
 	}
 	model := New(config.Config{}, ConnectionSettings{}, nil)
-	modal := newDatabaseExplorerModal(groups)
+	modal := newDatabaseExplorerModal(groups, false)
 	model.databaseExplorerModal = &modal
 
 	moved, command := updateModel(t, model, keyPress(tea.KeyDown, "", 0))
@@ -145,7 +148,7 @@ func TestDatabaseExplorerModalLoadsSelectedSchemaTables(t *testing.T) {
 	database := &fakeDatabase{engine: db.EnginePostgreSQL}
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.database = database
-	modal := newDatabaseExplorerModal([]db.SchemaObjectGroup{{Schema: "analytics", Type: db.SchemaObjectTables}})
+	modal := newDatabaseExplorerModal([]db.SchemaObjectGroup{{Schema: "analytics", Type: db.SchemaObjectTables}}, false)
 	model.databaseExplorerModal = &modal
 
 	updated, command := updateModel(t, model, keyPress(tea.KeyEnter, "", 0))
@@ -159,6 +162,105 @@ func TestDatabaseExplorerModalLoadsSelectedSchemaTables(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "analytics", database.listTablesSchema)
 	assert.Equal(t, updated.session, message.session)
+}
+
+func TestDatabaseExplorerModalLoadsExtensionsAsReadOnlyData(t *testing.T) {
+	database := &fakeDatabase{
+		engine:     db.EnginePostgreSQL,
+		extensions: []db.ExtensionData{{Name: "pg_trgm", Schema: "public", Version: "1.6"}},
+	}
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = database
+	modal := newDatabaseExplorerModal(nil, true)
+	model.databaseExplorerModal = &modal
+
+	updated, command := updateModel(t, model, keyPress(tea.KeyEnter, "", 0))
+
+	require.NotNil(t, command)
+	assert.Nil(t, updated.databaseExplorerModal)
+	assert.True(t, updated.activeExtensions.set)
+	assert.False(t, updated.activeRelation.set)
+	assert.True(t, updated.data.loading)
+
+	updated, command = updateModel(t, updated, extensionsLoadedMsg{
+		extensions: database.extensions,
+		session:    updated.session,
+		request:    updated.activeExtensions.request,
+	})
+	assert.Nil(t, command)
+	assert.False(t, updated.data.loading)
+	assert.Equal(t, db.RowPage{Columns: []string{extensionNameColumn, extensionSchemaColumn, extensionVersionColumn}, Rows: [][]any{{"pg_trgm", "public", "1.6"}}}, updated.data.page)
+	assert.Contains(t, updated.View().Content, extensionPanelTitle)
+}
+
+func TestExtensionsRefreshAndIgnoreStaleResults(t *testing.T) {
+	database := &fakeDatabase{engine: db.EnginePostgreSQL}
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = database
+	model.panel = panelData
+	model.focus = focusData
+	model.activeExtensions = activeExtensions{request: 2, set: true}
+	model.data = dataModel{page: extensionRowPage([]db.ExtensionData{{Name: "hstore", Schema: "public", Version: "1.8"}})}
+
+	stale, command := updateModel(t, model, extensionsLoadedMsg{
+		extensions: []db.ExtensionData{{Name: "pg_trgm", Schema: "public", Version: "1.6"}},
+		session:    model.session,
+		request:    1,
+	})
+	assert.Nil(t, command)
+	assert.Equal(t, "hstore", stale.data.page.Rows[0][0])
+
+	updated, command := updateModel(t, stale, keyPress('r', "r", 0))
+	require.NotNil(t, command)
+	assert.Equal(t, uint64(3), updated.activeExtensions.request)
+	assert.True(t, updated.data.loading)
+}
+
+func TestExtensionsDisableRelationActions(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{engine: db.EnginePostgreSQL}
+	model.panel = panelData
+	model.focus = focusData
+	model.activeExtensions = activeExtensions{set: true}
+	model.navigator.tables = []db.Table{{Name: "Album"}}
+
+	updated, command := updateModel(t, model, keyPress('e', "e", 0))
+	assert.Nil(t, command)
+	assert.Nil(t, updated.exportModal)
+
+	updated, command = updateModel(t, updated, keyPress('g', "g", tea.ModCtrl))
+	assert.Nil(t, command)
+	assert.Nil(t, updated.actionsModal)
+}
+
+func TestExtensionsShowEmptyAndErrorStates(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{engine: db.EnginePostgreSQL}
+	model.activeExtensions = activeExtensions{request: 1, set: true}
+	model.data.finishLoad(extensionRowPage(nil), 0, nil, model.layout)
+
+	assert.Contains(t, model.View().Content, noExtensionsText)
+
+	loadErr := errors.New("catalog access denied")
+	updated, command := updateModel(t, model, extensionsLoadedMsg{
+		session: model.session,
+		request: model.activeExtensions.request,
+		err:     loadErr,
+	})
+	assert.Nil(t, command)
+	assert.Contains(t, updated.View().Content, extensionLoadErrorText)
+	assert.Contains(t, updated.View().Content, loadErr.Error())
+}
+
+func TestDatabaseExplorerOmitsExtensionsOutsidePostgreSQL(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{engine: db.EngineSQLServer}
+
+	updated, command := updateModel(t, model, keyPress('o', "", tea.ModCtrl))
+
+	assert.Nil(t, command)
+	require.NotNil(t, updated.databaseExplorerModal)
+	assert.False(t, updated.databaseExplorerModal.extensionsAvailable)
 }
 
 func TestSchemaObjectTableLoadIgnoresStaleSchema(t *testing.T) {

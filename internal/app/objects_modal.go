@@ -14,9 +14,10 @@ type objectsModal struct {
 }
 
 type databaseExplorerModal struct {
-	groups   []db.SchemaObjectGroup
-	selected int
-	offset   int
+	groups              []db.SchemaObjectGroup
+	extensionsAvailable bool
+	selected            int
+	offset              int
 }
 
 func newObjectsModal(navigator navigatorModel) objectsModal {
@@ -38,28 +39,36 @@ func newObjectsModal(navigator navigatorModel) objectsModal {
 	return objectsModal{sections: sections, selected: selected}
 }
 
-func newDatabaseExplorerModal(groups []db.SchemaObjectGroup) databaseExplorerModal {
-	return databaseExplorerModal{groups: groups}
+func newDatabaseExplorerModal(groups []db.SchemaObjectGroup, extensionsAvailable bool) databaseExplorerModal {
+	return databaseExplorerModal{groups: groups, extensionsAvailable: extensionsAvailable}
+}
+
+func (m databaseExplorerModal) itemCount() int {
+	count := len(m.groups)
+	if m.extensionsAvailable {
+		count++
+	}
+	return count
 }
 
 func (m *databaseExplorerModal) move(delta int, layout appLayout) {
-	if len(m.groups) == 0 {
+	if m.itemCount() == 0 {
 		m.selected = 0
 		m.offset = 0
 		return
 	}
-	m.selected = min(max(m.selected+delta, 0), len(m.groups)-1)
+	m.selected = min(max(m.selected+delta, 0), m.itemCount()-1)
 	m.ensureVisible(layout)
 }
 
 func (m *databaseExplorerModal) clamp(layout appLayout) {
-	if len(m.groups) == 0 {
+	if m.itemCount() == 0 {
 		m.selected = 0
 		m.offset = 0
 		return
 	}
-	m.selected = min(max(m.selected, 0), len(m.groups)-1)
-	m.offset = min(max(m.offset, 0), max(0, len(m.groups)-m.visibleRows(layout)))
+	m.selected = min(max(m.selected, 0), m.itemCount()-1)
+	m.offset = min(max(m.offset, 0), max(0, m.itemCount()-m.visibleRows(layout)))
 	m.ensureVisible(layout)
 }
 
@@ -71,7 +80,7 @@ func (m *databaseExplorerModal) ensureVisible(layout appLayout) {
 	if m.selected >= m.offset+visibleRows {
 		m.offset = m.selected - visibleRows + 1
 	}
-	m.offset = min(max(m.offset, 0), max(0, len(m.groups)-visibleRows))
+	m.offset = min(max(m.offset, 0), max(0, m.itemCount()-visibleRows))
 }
 
 func (m databaseExplorerModal) visibleRows(layout appLayout) int {
@@ -79,10 +88,14 @@ func (m databaseExplorerModal) visibleRows(layout appLayout) int {
 }
 
 func (m databaseExplorerModal) selectedGroup() db.SchemaObjectGroup {
-	if len(m.groups) == 0 {
+	if m.selectedExtensions() || len(m.groups) == 0 {
 		return db.SchemaObjectGroup{}
 	}
 	return m.groups[m.selected]
+}
+
+func (m databaseExplorerModal) selectedExtensions() bool {
+	return m.extensionsAvailable && m.selected == len(m.groups)
 }
 
 func (m *objectsModal) move(delta int) {
@@ -127,17 +140,20 @@ func (m databaseExplorerModal) view(layout appLayout) string {
 		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Database explorer"),
 		"",
 	}
-	first := min(max(m.offset, 0), max(0, len(m.groups)-m.visibleRows(layout)))
-	last := min(first+m.visibleRows(layout), len(m.groups))
+	first := min(max(m.offset, 0), max(0, m.itemCount()-m.visibleRows(layout)))
+	last := min(first+m.visibleRows(layout), m.itemCount())
 	for index := first; index < last; index++ {
-		group := m.groups[index]
 		prefix := "  "
 		style := lipgloss.NewStyle()
 		if index == m.selected {
 			prefix = "> "
 			style = style.Bold(true).Foreground(colorTitle)
 		}
-		label := truncateLabel(sanitizeText(group.Schema)+" — "+schemaObjectTypeDisplayName(group.Type), max(1, modalWidth-6))
+		label := extensionPanelTitle
+		if index < len(m.groups) {
+			group := m.groups[index]
+			label = truncateLabel(sanitizeText(group.Schema)+" — "+schemaObjectTypeDisplayName(group.Type), max(1, modalWidth-6))
+		}
 		lines = append(lines, prefix+style.Render(label))
 	}
 	lines = append(lines, "", lipgloss.NewStyle().Foreground(colorTextMuted).Render("↑/↓ or j/k move  •  Enter select  •  Esc close"))

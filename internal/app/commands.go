@@ -48,6 +48,13 @@ type rowsLoadedMsg struct {
 	err         error
 }
 
+type extensionsLoadedMsg struct {
+	extensions []db.ExtensionData
+	session    uint64
+	request    uint64
+	err        error
+}
+
 type tableDDLLoadedMsg struct {
 	table   db.Table
 	sql     string
@@ -170,6 +177,16 @@ func loadRows(database db.Database, relation navigatorItem, offset, selectedRow,
 			request:     request,
 			err:         err,
 		}
+	}
+}
+
+func loadExtensions(database db.Extension, session, request uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		defer cancel()
+
+		extensions, err := database.ListExtensions(ctx)
+		return extensionsLoadedMsg{extensions: extensions, session: session, request: request, err: err}
 	}
 }
 

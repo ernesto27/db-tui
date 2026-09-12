@@ -35,6 +35,9 @@ type dataStatus struct {
 	tableLoadErr    error
 	noTables        bool
 	spinner         string
+	loadingText     string
+	errorText       string
+	emptyText       string
 }
 
 func (m *dataModel) reset() {
@@ -141,11 +144,23 @@ func (m dataModel) view(status dataStatus, layout appLayout, focused bool) strin
 		}
 		return panelStyle(layout.data.width, layout.data.height, focused).Render("No relation active.\n\n" + instruction)
 	case m.loading:
-		return panelStyle(layout.data.width, layout.data.height, focused).Render(status.tableName + "\n\n" + status.spinner + " Query executing…")
+		loadingText := "Query executing…"
+		if status.loadingText != "" {
+			loadingText = status.loadingText
+		}
+		return panelStyle(layout.data.width, layout.data.height, focused).Render(status.tableName + "\n\n" + status.spinner + " " + loadingText)
 	case m.err != nil:
-		return panelStyle(layout.data.width, layout.data.height, focused).Render(status.tableName + "\n\nUnable to load rows:\n" + sanitizeText(m.err.Error()))
+		errorText := "Unable to load rows:"
+		if status.errorText != "" {
+			errorText = status.errorText
+		}
+		return panelStyle(layout.data.width, layout.data.height, focused).Render(status.tableName + "\n\n" + errorText + "\n" + sanitizeText(m.err.Error()))
 	case len(m.page.Rows) == 0:
-		return panelStyle(layout.data.width, layout.data.height, focused).Render(status.tableName + "\n\nNo rows in this page.")
+		emptyText := "No rows in this page."
+		if status.emptyText != "" {
+			emptyText = status.emptyText
+		}
+		return panelStyle(layout.data.width, layout.data.height, focused).Render(status.tableName + "\n\n" + emptyText)
 	}
 
 	title := m.title(status, layout)

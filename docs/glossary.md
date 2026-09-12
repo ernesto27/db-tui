@@ -1,5 +1,12 @@
 # Glossary
 
+## PostgreSQL extension metadata
+
+The installed-extension catalog data exposed only for PostgreSQL through the
+optional `db.Extension` capability: extension name, installed schema, and
+current installed version. Database Explorer displays it as a read-only grid;
+it is not a row-browsable relation and does not support relation actions.
+
 ## Non-interactive JSON query
 
 The PostgreSQL-only command mode invoked with `db-tui -q '<SQL>' -c
