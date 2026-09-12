@@ -100,10 +100,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.updateNavigatorSearch(msg)
 		}
 		if m.panel == panelQuery && !m.query.resultsFocused {
-			m.query.clearSelectionBeforeEditorUpdate()
-			editor, command := m.query.editor.Update(msg)
-			m.query.editor = editor
-			return m, command
+			return m, m.updateQueryEditor(msg)
 		}
 		return m, nil
 	case tea.MouseClickMsg:
@@ -765,6 +762,8 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case m.panel == panelQuery && key.Matches(msg, m.keys.executeQuery):
 		return m.startQuery()
+	case m.panel == panelQuery && !m.query.resultsFocused && m.query.handleTableCompletionKey(msg):
+		return nil
 	case m.panel == panelQuery && key.Matches(msg, m.keys.queryFocus):
 		return m.query.toggleFocus()
 	case m.panel == panelQuery && m.query.resultsFocused && key.Matches(msg, m.keys.up):
@@ -782,10 +781,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 	case m.panel == panelQuery && m.query.resultsFocused:
 		return nil
 	case m.panel == panelQuery:
-		m.query.clearSelectionBeforeEditorUpdate()
-		editor, command := m.query.editor.Update(msg)
-		m.query.editor = editor
-		return command
+		return m.updateQueryEditor(msg)
 	case key.Matches(msg, m.keys.focusLeft):
 		if m.focus == focusData && m.data.columnOffset > 0 {
 			m.data.scrollColumns(-1, m.layout)
@@ -901,6 +897,21 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 	default:
 		return nil
 	}
+}
+
+func (m *Model) updateQueryEditor(msg tea.Msg) tea.Cmd {
+	m.query.clearSelectionBeforeEditorUpdate()
+	editor, command := m.query.editor.Update(msg)
+	m.query.editor = editor
+	if m.database != nil &&
+		m.database.Engine() == db.EnginePostgreSQL &&
+		!m.loading &&
+		m.tableLoadErr == nil {
+		m.query.refreshTableCompletion(m.navigator.tables)
+	} else {
+		m.query.completion.dismiss()
+	}
+	return command
 }
 
 func (m *Model) updateNavigatorSearch(msg tea.Msg) tea.Cmd {

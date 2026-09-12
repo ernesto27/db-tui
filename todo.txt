@@ -10,6 +10,7 @@
 [] - postgresql requires "" in table name and colums prevent that , add automatically
 
 QUERY WORKFLOW
+[ ] Add SQL autocomplete for tablesW.
 [ ] Add SQL autocomplete for keywords, schemas, tables, views, functions, and columns.
 [x] Add SQL syntax highlighting with engine-specific postgres
 [x] Add SQL syntax highlighting with engine-specific mysql
@@ -25,8 +26,8 @@ CLI
 [x] Add a non-interactive CLI mode for executing SQL csv
 
 FIXES
-[] - when open new connectin set table data as default
-
+[x] - when open new connectin set table data as default
+W
 
 NON-RELATIONAL EXPANSION
 [ ] Design a data-source interface that does not force documents into relational table and row types.

@@ -41,6 +41,7 @@ func TestQueryFinishExecuteFocusesReturnedRows(t *testing.T) {
 	layout := newAppLayout(100, 24)
 	query := newQueryModel(layout)
 	query.loading = true
+	query.completion.visible = true
 	_ = query.editor.Focus()
 
 	result := db.QueryResult{
@@ -57,6 +58,7 @@ func TestQueryFinishExecuteFocusesReturnedRows(t *testing.T) {
 	assert.Zero(t, query.viewport)
 	assert.True(t, query.resultsFocused)
 	assert.False(t, query.editor.Focused())
+	assert.False(t, query.completion.visible)
 }
 
 func TestQueryFinishExecuteKeepsCommandResultUnfocused(t *testing.T) {
