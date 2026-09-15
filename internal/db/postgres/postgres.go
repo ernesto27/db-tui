@@ -159,6 +159,15 @@ const listFunctionsSQL = `SELECT
     AND namespace.nspname = $1
   ORDER BY routine.proname`
 
+const listExtensionsSQL = `
+	SELECT
+	    extname AS extension,
+	    extversion AS version,
+	    extnamespace::regnamespace AS schema
+	  FROM pg_extension
+	  ORDER BY extname;
+`
+
 type postgresql struct {
 	pool   *pgxpool.Pool
 	logger *logger.Logger
@@ -804,5 +813,37 @@ func (p *postgresql) DeleteRow(ctx context.Context, table db.Table, whereColumns
 		return errors.New("no row matched the WHERE clause; the row may have been modified or deleted")
 	}
 	return nil
+}
+
+func (p *postgresql) ListExtensions(ctx context.Context) ([]db.ExtensionData, error) {
+	rows, err := p.pool.Query(ctx, listExtensionsSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := []db.ExtensionData{}
+
+	for rows.Next() {
+		var extensionData db.ExtensionData
+
+		err := rows.Scan(
+			&extensionData.Name,
+			&extensionData.Version,
+			&extensionData.Schema,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, extensionData)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return result, err
 
 }

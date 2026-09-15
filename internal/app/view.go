@@ -144,6 +144,17 @@ func (m Model) connectedDatabaseName() string {
 }
 
 func (m Model) dataStatus() dataStatus {
+	if m.activeExtensions.set {
+		return dataStatus{
+			tableName:    extensionPanelTitle,
+			active:       true,
+			disconnected: m.database == nil,
+			spinner:      m.spinner(),
+			loadingText:  extensionLoadingText,
+			errorText:    extensionLoadErrorText,
+			emptyText:    noExtensionsText,
+		}
+	}
 	tableLoadErr := error(nil)
 	if !m.navigator.hasRelations() {
 		tableLoadErr = m.tableLoadErr
@@ -235,6 +246,19 @@ func (m Model) footerText() string {
 			ddlHelp = "  •  Ctrl+G actions"
 		}
 		return "raw query  •  Ctrl+N new script  •  Ctrl+P execute  •  Ctrl+H saved scripts" + exportHelp + ddlHelp + "  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+S settings  •  Ctrl+T table data  •  Ctrl+L connections  •  Ctrl+K shortcuts  •  q quit"
+	}
+	if m.activeExtensions.set {
+		status := ""
+		if m.data.loading {
+			status = "  •  " + m.spinner() + " " + extensionLoadingText
+		} else if m.data.err != nil {
+			status = "  •  extension load failed"
+		}
+		refresh := ""
+		if m.focus == focusData && !m.data.loading {
+			refresh = "  •  r refresh"
+		}
+		return "PostgreSQL extensions" + status + refresh + "  •  Ctrl+O objects  •  Ctrl+R raw query  •  Tab navigator/data  •  Ctrl+K shortcuts  •  q quit"
 	}
 	if (m.loading || m.viewsLoading || m.materializedViewsLoading || m.functionsLoading) && !m.navigator.hasObjects() {
 		return "loading database objects  •  Ctrl+K shortcuts  •  q quit"

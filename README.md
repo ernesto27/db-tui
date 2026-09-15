@@ -53,10 +53,13 @@ interactive application.
 - Save and switch between PostgreSQL, MySQL, Oracle, SQLite, and SQL Server connections.
 - Browse tables, views, materialized views, and functions when supported by
   the connected database.
+- Browse installed PostgreSQL extensions from the object chooser.
 - Filter database objects and inspect table data in bounded pages.
 - View table DDL, columns, and indexes.
 - Edit or delete a selected row when its table has a usable primary key.
-- Write and execute SQL in the raw-query panel.
+- Write and execute SQL in the raw-query panel, with confirmation before
+  executing statements that delete data.
+- Autocomplete current-schema PostgreSQL table names in the raw-query editor.
 - Save and reopen SQL scripts for each connection.
 - Export a table or successful query results as CSV or JSON.
 - Create timestamped SQL dumps for PostgreSQL, MySQL, SQLite, and SQL Server.
@@ -75,7 +78,7 @@ interactive application.
 | `Ctrl+L` | Open saved connections |
 | `Ctrl+R` | Open the raw-query panel |
 | `Ctrl+T` | Return to table data |
-| `Ctrl+O` | Choose the database object category |
+| `Ctrl+O` | Choose the database object category, including PostgreSQL extensions when available |
 | `Ctrl+F` | Filter database objects |
 | `Ctrl+G` | Open actions for the selected table or connection |
 | `Ctrl+S` | Change the maximum page size |
@@ -102,9 +105,11 @@ interactive application.
 
 | Key | Action |
 | --- | --- |
-| `Ctrl+P` | Execute the SQL in the editor |
+| `Ctrl+P` | Execute SQL; queries containing `DELETE` require confirmation |
 | `Ctrl+N` | Clear the editor and start a new script |
 | `Ctrl+H` | Open saved scripts for the current connection |
 | `Ctrl+E` | Export successful query results as CSV or JSON |
-| `Tab` | Switch between the editor and results |
+| `Up` / `Down` | Move through PostgreSQL table suggestions when shown |
+| `Tab` / `Enter` | Accept the highlighted table suggestion; otherwise, `Tab` switches editor/results focus |
+| `Esc` | Close a table suggestion or cancel a `DELETE` confirmation |
 | `Up` / `Down`, `k` / `j`, `PgUp` / `PgDown` | Scroll results when results have focus |

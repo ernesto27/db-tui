@@ -26,6 +26,7 @@ const (
 type queryModel struct {
 	editor             textarea.Model
 	selection          sqlSelection
+	completion         tableCompletionModel
 	result             db.QueryResult
 	loading            bool
 	err                error
@@ -67,6 +68,7 @@ func (m *queryModel) resize(layout appLayout) {
 }
 
 func (m *queryModel) beginExecute(sql string) uint64 {
+	m.completion.dismiss()
 	m.loading = true
 	m.err = nil
 	m.result = db.QueryResult{}
@@ -81,6 +83,7 @@ func (m *queryModel) beginExecute(sql string) uint64 {
 }
 
 func (m *queryModel) finishExecute(result db.QueryResult, duration time.Duration, err error) {
+	m.completion.dismiss()
 	m.cancelExecution()
 	m.loading = false
 	m.result = result
@@ -102,16 +105,18 @@ func (m *queryModel) cancelExecution() {
 
 func (m *queryModel) focusEditor() tea.Cmd {
 	m.resultsFocused = false
+	m.completion.dismiss()
 	return m.editor.Focus()
 }
 
 func (m *queryModel) toggleFocus() tea.Cmd {
 	m.resultsFocused = !m.resultsFocused
 	if m.resultsFocused {
+		m.completion.dismiss()
 		m.editor.Blur()
 		return nil
 	}
-	return m.editor.Focus()
+	return m.focusEditor()
 }
 
 func (m *queryModel) scrollResults(delta int) {
@@ -143,7 +148,8 @@ func (m queryModel) view(layout appLayout, focused, connected bool, highlighter 
 	}
 	heading := lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render(headingText)
 	result := m.resultView(layout, connected)
-	sections := []string{heading, m.editorView(highlighter)}
+	editor := m.completionOverlay(m.editorView(highlighter))
+	sections := []string{heading, editor}
 	if m.saveWarning != "" {
 		sections = append(sections, lipgloss.NewStyle().Foreground(colorError).Render("⚠ SQL script was not saved: "+sanitizeText(m.saveWarning)), "")
 	}

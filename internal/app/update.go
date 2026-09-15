@@ -100,10 +100,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.updateNavigatorSearch(msg)
 		}
 		if m.panel == panelQuery && !m.query.resultsFocused {
-			m.query.clearSelectionBeforeEditorUpdate()
-			editor, command := m.query.editor.Update(msg)
-			m.query.editor = editor
-			return m, command
+			return m, m.updateQueryEditor(msg)
 		}
 		return m, nil
 	case tea.MouseClickMsg:
@@ -203,6 +200,13 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 
 		m.focus = focusData
 
+		return nil, true
+	case extensionsLoadedMsg:
+		if msg.session != m.session || !m.activeExtensions.set || msg.request != m.activeExtensions.request {
+			return nil, true
+		}
+		m.data.finishLoad(extensionRowPage(msg.extensions), 0, msg.err, m.layout)
+		m.focus = focusData
 		return nil, true
 	case tableDDLLoadedMsg:
 		table, ok := m.navigator.selectedTable()
@@ -499,6 +503,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.navigator.reset()
 		m.activeRelation = activeRelation{}
 		m.activeFunction = activeFunction{}
+		m.activeExtensions = activeExtensions{}
 		m.lastNavigatorClick = navigatorClick{}
 		m.navigator.setMaterializedViewsAvailable(supportsMaterializedViews(msg.database.Engine()))
 		m.navigator.setFunctionsAvailable(supportsFunctions(msg.database.Engine()))
@@ -565,6 +570,7 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.editingConnection = -1
 		m.creatingConnection = false
 		m.pendingConnectionIndex = msg.index
+		m.panel = panelData
 		return m, func() tea.Msg { return submitConnectionMsg{} }
 	case editConnectionMsg:
 		modal := newConnectionModal(connectionSettingsFromConfig(msg.connection))
@@ -607,6 +613,7 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.navigator.reset()
 			m.activeRelation = activeRelation{}
 			m.activeFunction = activeFunction{}
+			m.activeExtensions = activeExtensions{}
 			m.lastNavigatorClick = navigatorClick{}
 			m.data.reset()
 			m.query.reset(m.layout)
@@ -681,7 +688,8 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		m.navigator.finishSearch()
 		if supportsSchemaObjectGroups(m.database.Engine()) {
-			modal := newDatabaseExplorerModal(m.schemaObjectGroups)
+			_, extensionsAvailable := m.database.(db.Extension)
+			modal := newDatabaseExplorerModal(m.schemaObjectGroups, m.database.Engine() == db.EnginePostgreSQL && extensionsAvailable)
 			m.databaseExplorerModal = &modal
 			return nil
 		}
@@ -699,6 +707,9 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.sqlScriptsModal = &modal
 		return loadSQLScripts(m.sqlScripts, connectionName, request)
 	case key.Matches(msg, m.keys.tableDDL):
+		if m.panel == panelData && m.activeExtensions.set {
+			return nil
+		}
 		if m.navigator.selectedIsView() {
 			return nil
 		}
@@ -751,6 +762,8 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case m.panel == panelQuery && key.Matches(msg, m.keys.executeQuery):
 		return m.startQuery()
+	case m.panel == panelQuery && !m.query.resultsFocused && m.query.handleTableCompletionKey(msg):
+		return nil
 	case m.panel == panelQuery && key.Matches(msg, m.keys.queryFocus):
 		return m.query.toggleFocus()
 	case m.panel == panelQuery && m.query.resultsFocused && key.Matches(msg, m.keys.up):
@@ -768,10 +781,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 	case m.panel == panelQuery && m.query.resultsFocused:
 		return nil
 	case m.panel == panelQuery:
-		m.query.clearSelectionBeforeEditorUpdate()
-		editor, command := m.query.editor.Update(msg)
-		m.query.editor = editor
-		return command
+		return m.updateQueryEditor(msg)
 	case key.Matches(msg, m.keys.focusLeft):
 		if m.focus == focusData && m.data.columnOffset > 0 {
 			m.data.scrollColumns(-1, m.layout)
@@ -873,17 +883,38 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case key.Matches(msg, m.keys.export):
 		table, ok := m.navigator.selectedTable()
-		if m.database == nil || !ok || m.loading || m.data.loading || m.query.loading {
+		if m.database == nil || !ok || m.loading || m.data.loading || m.query.loading || (m.panel == panelData && m.activeExtensions.set) {
 			return nil
 		}
 		modal := newExportModal(table)
 		m.exportModal = &modal
 		return nil
 	case m.panel == panelData && m.focus == focusData && !m.data.loading && key.Matches(msg, m.keys.refreshTable):
+		if m.activeExtensions.set {
+			return m.startExtensionsLoad()
+		}
 		return m.startRowLoad(0, 0)
 	default:
 		return nil
 	}
+}
+
+func (m *Model) updateQueryEditor(msg tea.Msg) tea.Cmd {
+	m.query.clearSelectionBeforeEditorUpdate()
+	editor, command := m.query.editor.Update(msg)
+	m.query.editor = editor
+	if m.database == nil || m.loading || m.tableLoadErr != nil {
+		m.query.completion.dismiss()
+		return command
+	}
+
+	highlighter := rawQueryHighlighter(m.database)
+	if highlighter == nil {
+		m.query.completion.dismiss()
+		return command
+	}
+	m.query.refreshTableCompletion(m.navigator.tables, m.database.Engine(), highlighter)
+	return command
 }
 
 func (m *Model) updateNavigatorSearch(msg tea.Msg) tea.Cmd {
@@ -1039,6 +1070,7 @@ func (m *Model) activateHighlightedItem() tea.Cmd {
 			return nil
 		}
 		m.activeRelation = activeRelation{}
+		m.activeExtensions = activeExtensions{}
 		m.data.reset()
 		m.activeFunction.activate(item.function, m.layout)
 		m.focus = focusData
@@ -1048,6 +1080,7 @@ func (m *Model) activateHighlightedItem() tea.Cmd {
 		return nil
 	}
 	m.activeFunction = activeFunction{}
+	m.activeExtensions = activeExtensions{}
 	m.activeRelation.item = item
 	m.activeRelation.set = true
 	return m.startRowLoad(0, 0)
@@ -1086,6 +1119,10 @@ func (m *Model) updateSchemaObjectsModal(msg tea.Msg) tea.Cmd {
 	case "down", "j":
 		m.databaseExplorerModal.move(1, m.layout)
 	case "enter":
+		if m.databaseExplorerModal.selectedExtensions() {
+			m.databaseExplorerModal = nil
+			return m.startExtensionsLoad()
+		}
 		group := m.databaseExplorerModal.selectedGroup()
 		m.databaseExplorerModal = nil
 		m.navigator.schema = group.Schema
@@ -1124,6 +1161,23 @@ func (m *Model) startRowLoad(offset, selectedRow int) tea.Cmd {
 	m.activeRelation.request++
 	m.data.beginLoad(offset)
 	return tea.Batch(loadRows(m.database, m.activeRelation.item, offset, selectedRow, m.config.PageSize(), m.session, m.activeRelation.request), m.startSpinner())
+}
+
+func (m *Model) startExtensionsLoad() tea.Cmd {
+	if m.database == nil {
+		return nil
+	}
+	extensions, ok := m.database.(db.Extension)
+	if !ok {
+		return nil
+	}
+
+	m.activeExtensions.request++
+	m.activeExtensions.set = true
+	m.activeRelation = activeRelation{}
+	m.activeFunction = activeFunction{}
+	m.data.beginLoad(0)
+	return tea.Batch(loadExtensions(extensions, m.session, m.activeExtensions.request), m.startSpinner())
 }
 
 func (m *Model) startQuery() tea.Cmd {

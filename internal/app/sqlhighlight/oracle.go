@@ -25,7 +25,7 @@ var oracleKeywords = map[string]struct{}{
 	"ROW": {}, "ROWID": {}, "ROWNUM": {}, "ROWS": {}, "SELECT": {}, "SESSION": {},
 	"SET": {}, "SHARE": {}, "SIZE": {}, "SMALLINT": {}, "SUCCESSFUL": {},
 	"SYNONYM": {}, "SYSDATE": {}, "TABLE": {}, "THEN": {}, "TO": {}, "TRIGGER": {},
-	"UID": {}, "UNION": {}, "UNIQUE": {}, "UPDATE": {}, "USER": {}, "VALIDATE": {},
+	"TRUNCATE": {}, "UID": {}, "UNION": {}, "UNIQUE": {}, "UPDATE": {}, "USER": {}, "VALIDATE": {},
 	"VALUES": {}, "VARCHAR": {}, "VARCHAR2": {}, "VIEW": {}, "WHENEVER": {}, "WHERE": {},
 	"WITH": {},
 

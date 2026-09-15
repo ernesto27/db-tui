@@ -13,22 +13,24 @@
 [] - add refresh tables
 
 QUERY WORKFLOW
+[ ] Add SQL autocomplete for tablesW.
 [ ] Add SQL autocomplete for keywords, schemas, tables, views, functions, and columns.
 [x] Add SQL syntax highlighting with engine-specific postgres
 [x] Add SQL syntax highlighting with engine-specific mysql
-
+po
 [x] Execute only selected SQL when text is selected.
 [x] - show time of execution query
 [x] Add cancellation for long-running queries.
 [ ] Add a read-only safety mode and
-[ ]  confirmation before destructive statements.
+[x] confirmation before destructive statements.
 
 CLI
-[ ] Add a non-interactive CLI mode for executing SQL and exporting results.
+[x] Add a non-interactive CLI mode for executing SQL json
+[x] Add a non-interactive CLI mode for executing SQL csv
 
 FIXES
-[] - when open new connectin set table data as default
-
+[x] - when open new connectin set table data as default
+W
 
 NON-RELATIONAL EXPANSION
 [ ] Design a data-source interface that does not force documents into relational table and row types.

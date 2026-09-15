@@ -48,16 +48,18 @@ type fakeDatabase struct {
 	engine string
 	host   string
 
-	tables       []db.Table
-	tablesErr    error
-	views        []db.View
-	viewsErr     error
-	functions    []db.FunctionColumns
-	functionsErr error
-	columns      []db.Column
-	columnsErr   error
-	indexes      []db.IndexColumns
-	indexesErr   error
+	tables        []db.Table
+	tablesErr     error
+	views         []db.View
+	viewsErr      error
+	functions     []db.FunctionColumns
+	functionsErr  error
+	extensions    []db.ExtensionData
+	extensionsErr error
+	columns       []db.Column
+	columnsErr    error
+	indexes       []db.IndexColumns
+	indexesErr    error
 
 	page    db.RowPage
 	pageErr error
@@ -83,6 +85,8 @@ type fakeDatabase struct {
 	listFunctionsCalls             int
 	listFunctionsSchema            string
 	listFunctionsDeadline          bool
+	listExtensionsCalls            int
+	listExtensionsDeadline         bool
 	listColumnsCalls               int
 	listColumnsTable               db.Table
 	listColumnsDeadline            bool
@@ -156,6 +160,12 @@ func (f *fakeDatabase) ListFunctions(ctx context.Context, schema string) ([]db.F
 	f.listFunctionsSchema = schema
 	_, f.listFunctionsDeadline = ctx.Deadline()
 	return f.functions, f.functionsErr
+}
+
+func (f *fakeDatabase) ListExtensions(ctx context.Context) ([]db.ExtensionData, error) {
+	f.listExtensionsCalls++
+	_, f.listExtensionsDeadline = ctx.Deadline()
+	return f.extensions, f.extensionsErr
 }
 
 func (f *fakeDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {

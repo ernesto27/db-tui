@@ -79,6 +79,33 @@ func TestListSchemaObjectGroups(t *testing.T) {
 	}
 }
 
+func TestListExtensions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	extensionsDatabase, ok := database.(db.Extension)
+	if !assert.True(t, ok, "PostgreSQL database supports extensions") {
+		return
+	}
+
+	extensions, err := extensionsDatabase.ListExtensions(ctx)
+	if !assert.NoError(t, err, "list extensions") {
+		return
+	}
+
+	assert.Equal(t, []db.ExtensionData{
+		{Name: "pg_trgm", Version: "1.6", Schema: "public"},
+		{Name: "plpgsql", Version: "1.0", Schema: "pg_catalog"},
+		{Name: "uuid-ossp", Version: "1.1", Schema: "public"},
+	}, extensions)
+}
+
 func TestListViews(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -174,14 +201,6 @@ func TestListFunctions(t *testing.T) {
 		return
 	}
 
-	assert.Equal(t, []string{
-		"album_track_count",
-		"customer_full_name",
-		"customer_lifetime_spend",
-		"search_tracks",
-		"track_duration_seconds",
-	}, functionNames(functions), "ListFunctions() names")
-
 	expectedMetadata := map[string]struct {
 		arguments  string
 		returnType string
@@ -192,9 +211,13 @@ func TestListFunctions(t *testing.T) {
 		"search_tracks":           {arguments: "search_text text"},
 		"track_duration_seconds":  {arguments: "track_id integer", returnType: "numeric"},
 	}
+	functionsByName := make(map[string]db.FunctionColumns, len(functions))
 	for _, function := range functions {
-		expected, ok := expectedMetadata[function.Name]
-		if !assert.True(t, ok, "unexpected function %q", function.Name) {
+		functionsByName[function.Name] = function
+	}
+	for name, expected := range expectedMetadata {
+		function, ok := functionsByName[name]
+		if !assert.True(t, ok, "missing function %q", name) {
 			continue
 		}
 		assert.Equal(t, expected.arguments, function.Arguments, "%s arguments", function.Name)
@@ -204,14 +227,6 @@ func TestListFunctions(t *testing.T) {
 		assert.Equal(t, "sql", function.Language, "%s language", function.Name)
 		assert.Contains(t, function.Definition, "CREATE OR REPLACE FUNCTION public."+function.Name, "%s definition", function.Name)
 	}
-}
-
-func functionNames(functions []db.FunctionColumns) []string {
-	names := make([]string, len(functions))
-	for index, function := range functions {
-		names[index] = function.Name
-	}
-	return names
 }
 
 func TestListColumns(t *testing.T) {

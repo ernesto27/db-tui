@@ -155,6 +155,34 @@ func TestUpdateKeyRouting(t *testing.T) {
 				assert.False(t, got.query.editor.Focused())
 			},
 		},
+		{
+			name: "results navigation takes precedence over stale table completion",
+			setup: func(model *Model) {
+				model.panel = panelQuery
+				model.query.result = db.QueryResult{Rows: [][]any{{1}, {2}}}
+				model.query.resultsFocused = true
+				model.query.completion.visible = true
+			},
+			message: keyPress(tea.KeyDown, "", 0),
+			assert: func(t *testing.T, got Model, _ tea.Cmd) {
+				assert.Equal(t, 1, got.query.viewport)
+			},
+		},
+		{
+			name: "does not open table completion while tables load",
+			setup: func(model *Model) {
+				model.database = &fakeDatabase{engine: db.EnginePostgreSQL}
+				model.panel = panelQuery
+				model.loading = true
+				model.navigator.tables = []db.Table{{Name: "Album"}}
+				model.query.editor.SetValue("SELECT * FROM ")
+				_ = model.query.focusEditor()
+			},
+			message: keyPress('a', "a", 0),
+			assert: func(t *testing.T, got Model, _ tea.Cmd) {
+				assert.False(t, got.query.completion.visible)
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -166,6 +194,31 @@ func TestUpdateKeyRouting(t *testing.T) {
 
 			got, command := updateModel(t, model, test.message)
 			test.assert(t, got, command)
+		})
+	}
+}
+
+func TestUpdateQueryEditorOpensTableCompletionForEveryEngine(t *testing.T) {
+	for _, engine := range []string{
+		db.EnginePostgreSQL,
+		db.EngineMySQL,
+		db.EngineOracle,
+		db.EngineSQLite,
+		db.EngineSQLServer,
+	} {
+		t.Run(engine, func(t *testing.T) {
+			model := New(config.Config{}, ConnectionSettings{}, nil)
+			model.database = &fakeDatabase{engine: engine}
+			model.panel = panelQuery
+			model.navigator.tables = []db.Table{{Name: "Album"}}
+			model.query.editor.SetValue("SELECT * FROM ")
+			_ = model.query.focusEditor()
+
+			got, command := updateModel(t, model, keyPress('a', "a", 0))
+
+			assert.Nil(t, command)
+			require.True(t, got.query.completion.visible)
+			assert.Equal(t, "Album", got.query.completion.matches[0].Name)
 		})
 	}
 }

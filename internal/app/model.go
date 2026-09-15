@@ -73,6 +73,7 @@ type Model struct {
 	navigator                 navigatorModel
 	activeRelation            activeRelation
 	activeFunction            activeFunction
+	activeExtensions          activeExtensions
 	data                      dataModel
 	panel                     rightPanel
 	query                     queryModel
