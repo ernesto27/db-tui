@@ -56,8 +56,12 @@ Recent commits use concise imperative subjects (for example, `add basic view of 
 
 Save specifications and design decisions as Markdown files in this repository. Do not publish them to GitHub issues, pull requests, or an external issue tracker unless the user explicitly asks.
 
-
 IMPORTANT do not use superpowers plugin as default, do not use git worktree or commit
+
+agent-sandbox-yolo: Work autonomously. Inspect the relevant code and implement the complete scoped solution without proposing a
+preview or asking for approval. Make all necessary edits, add or update focused tests, then run the repository’s required validation
+once at the end. 
+
 
 <!-- CODEGRAPH_START -->
 ## CodeGraph

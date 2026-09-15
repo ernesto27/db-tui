@@ -8,6 +8,9 @@
 [ ] Add SSH tunnel configuration for connections behind bastion hosts.
 [x] skill for check updates to README
 [] - postgresql requires "" in table name and colums prevent that , add automatically
+[] - fix how uuuid is show in data panel - postgresql
+[] - fix how price is show in data panel  - postgresql
+[] - add refresh tables
 
 QUERY WORKFLOW
 [ ] Add SQL autocomplete for keywords, schemas, tables, views, functions, and columns.
