@@ -10,7 +10,7 @@ import (
 	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
-func TestDataGridSelectionKeepsWrappedTextWithinOneCell(t *testing.T) {
+func TestDataGridTruncatesLongValuesIntoSingleLineCells(t *testing.T) {
 	layout := newAppLayout(64, 16)
 	data := dataModel{page: db.RowPage{
 		Columns: []string{"id", "password"},
@@ -18,8 +18,10 @@ func TestDataGridSelectionKeepsWrappedTextWithinOneCell(t *testing.T) {
 	}}
 	status := dataStatus{tableName: "credentials"}
 	gridTop := data.gridTop(data.title(status, layout), layout)
-	_, bounds, ok := data.visibleDataGrid(layout, gridTop)
+	grid, bounds, ok := data.visibleDataGrid(layout, gridTop)
 	require.True(t, ok)
+	assert.Contains(t, grid, "…")
+	assert.NotContains(t, grid, strings.Repeat("x", 80))
 	firstColumn, lastColumn := data.visibleColumnRange(layout.data.width)
 	widths := data.dataColumnWidths(layout.data.width, firstColumn, lastColumn)
 	require.Len(t, widths, 2)
@@ -31,14 +33,14 @@ func TestDataGridSelectionKeepsWrappedTextWithinOneCell(t *testing.T) {
 	require.True(t, ok)
 	region, ok := data.cellBoundsAt(point, layout)
 	require.True(t, ok)
-	require.Greater(t, region.Bottom, region.Top)
+	assert.Equal(t, region.Top, region.Bottom)
 
 	assert.True(t, data.beginTextSelection(startX, startY, layout, gridTop))
-	assert.True(t, data.extendTextSelection(bounds.x+region.Right-1, bounds.y+region.Bottom, layout, gridTop))
-	text, copied := data.finishTextSelection(bounds.x+region.Right-1, bounds.y+region.Bottom, layout, gridTop)
+	text, copied := data.finishTextSelection(bounds.x+region.Right-1, bounds.y+region.Top, layout, gridTop)
 
 	assert.True(t, copied)
-	assert.Contains(t, text, "\n")
+	assert.NotContains(t, text, "\n")
+	assert.Contains(t, text, "…")
 	assert.NotContains(t, text, "1")
 }
 

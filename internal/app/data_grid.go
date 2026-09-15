@@ -81,7 +81,8 @@ func (m dataModel) dataGrid(width, firstColumn, lastColumn, firstRow, lastRow in
 			if columnIndex < len(row) {
 				value = row[columnIndex]
 			}
-			values = append(values, formatCell(value))
+			columnWidth := columnWidths[columnIndex-firstColumn] - tableHorizontalPadding
+			values = append(values, truncateLabel(formatCell(value), columnWidth))
 		}
 		rows = append(rows, values)
 	}
@@ -90,7 +91,7 @@ func (m dataModel) dataGrid(width, firstColumn, lastColumn, firstRow, lastRow in
 		Headers(headers...).
 		Rows(rows...).
 		Width(totalTableWidth(columnWidths)).
-		Wrap(true).
+		Wrap(false).
 		Border(lipgloss.NormalBorder()).
 		BorderStyle(lipgloss.NewStyle().Foreground(colorBorderInactive)).
 		StyleFunc(func(row, column int) lipgloss.Style {
