@@ -1,6 +1,8 @@
 package app
 
 import (
+	"strings"
+
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 
@@ -11,6 +13,7 @@ const (
 	tableHorizontalPadding = 2
 	tableOuterBorderWidth  = 2
 	tableColumnBorderWidth = 1
+	dataColumnResizeHandle = " ↔"
 )
 
 var textSelectionStyle = lipgloss.NewStyle().
@@ -35,7 +38,7 @@ func (m dataModel) visibleColumnRange(width int) (int, int) {
 	lastColumn := firstColumn
 
 	for columnIndex := firstColumn; columnIndex < len(m.page.Columns); columnIndex++ {
-		columnWidth := lipgloss.Width(sanitizeText(m.page.Columns[columnIndex])) + tableHorizontalPadding
+		columnWidth := m.visibleColumnWidth(columnIndex)
 		if columnIndex > firstColumn {
 			columnWidth += tableColumnBorderWidth
 		}
@@ -48,6 +51,21 @@ func (m dataModel) visibleColumnRange(width int) (int, int) {
 	}
 
 	return firstColumn, lastColumn
+}
+
+func (m dataModel) minimumColumnWidth(column int) int {
+	return lipgloss.Width(dataColumnHeader(m.page.Columns[column])) + tableHorizontalPadding
+}
+
+func dataColumnHeader(column string) string {
+	return sanitizeText(column) + dataColumnResizeHandle
+}
+
+func (m dataModel) visibleColumnWidth(column int) int {
+	if width, ok := m.columnWidths[column]; ok {
+		return max(width, m.minimumColumnWidth(column))
+	}
+	return m.minimumColumnWidth(column)
 }
 
 func (m dataModel) visibleDataEnd(width, height, firstColumn, lastColumn, firstRow int) int {
@@ -67,11 +85,13 @@ func (m dataModel) visibleDataEnd(width, height, firstColumn, lastColumn, firstR
 }
 
 func (m dataModel) dataGrid(width, firstColumn, lastColumn, firstRow, lastRow int) *table.Table {
-	headers := make([]string, 0, lastColumn-firstColumn)
-	for _, column := range m.page.Columns[firstColumn:lastColumn] {
-		headers = append(headers, sanitizeText(column))
-	}
 	columnWidths := m.dataColumnWidths(width, firstColumn, lastColumn)
+	headers := make([]string, 0, lastColumn-firstColumn)
+	for columnIndex := firstColumn; columnIndex < lastColumn; columnIndex++ {
+		columnName := sanitizeText(m.page.Columns[columnIndex])
+		handlePadding := max(0, columnWidths[columnIndex-firstColumn]-tableHorizontalPadding-lipgloss.Width(columnName)-lipgloss.Width(dataColumnResizeHandle))
+		headers = append(headers, columnName+strings.Repeat(" ", handlePadding)+dataColumnResizeHandle)
+	}
 
 	rows := make([][]string, 0, lastRow-firstRow)
 	for _, row := range m.page.Rows[firstRow:lastRow] {
@@ -81,7 +101,8 @@ func (m dataModel) dataGrid(width, firstColumn, lastColumn, firstRow, lastRow in
 			if columnIndex < len(row) {
 				value = row[columnIndex]
 			}
-			values = append(values, formatCell(value))
+			columnWidth := columnWidths[columnIndex-firstColumn] - tableHorizontalPadding
+			values = append(values, truncateLabel(formatCell(value), columnWidth))
 		}
 		rows = append(rows, values)
 	}
@@ -90,12 +111,15 @@ func (m dataModel) dataGrid(width, firstColumn, lastColumn, firstRow, lastRow in
 		Headers(headers...).
 		Rows(rows...).
 		Width(totalTableWidth(columnWidths)).
-		Wrap(true).
+		Wrap(false).
 		Border(lipgloss.NormalBorder()).
 		BorderStyle(lipgloss.NewStyle().Foreground(colorBorderInactive)).
 		StyleFunc(func(row, column int) lipgloss.Style {
 			style := lipgloss.NewStyle().Padding(0, 1).Width(columnWidths[column])
 			if row == table.HeaderRow {
+				if m.resizing != nil && firstColumn+column == m.resizing.column {
+					return style.Bold(true).Foreground(colorSelectionForeground).Background(colorSelectionBackground)
+				}
 				return style.Bold(true).Foreground(colorAccent)
 			}
 			if row == m.selected-firstRow {
@@ -171,6 +195,69 @@ func (m *dataModel) clearTextSelection() {
 	m.selection.Clear()
 }
 
+func (m *dataModel) beginColumnResize(x, y int, layout appLayout, gridTop int) bool {
+	_, bounds, ok := m.visibleDataGrid(layout, gridTop)
+	if !ok || y != bounds.y+1 {
+		return false
+	}
+
+	firstColumn, lastColumn := m.visibleColumnRange(layout.data.width)
+	columnWidths := m.dataColumnWidths(layout.data.width, firstColumn, lastColumn)
+	dividerX := bounds.x + 1 // outer table border
+	for index, width := range columnWidths {
+		dividerX += width
+		if x >= dividerX-lipgloss.Width(dataColumnResizeHandle) && x <= dividerX {
+			m.clearTextSelection()
+			m.resizing = &columnResize{
+				column:     firstColumn + index,
+				startX:     x,
+				startWidth: width,
+			}
+			return true
+		}
+		dividerX += tableColumnBorderWidth
+	}
+	return false
+}
+
+func (m *dataModel) resizeColumn(x int, layout appLayout) bool {
+	if m.resizing == nil {
+		return false
+	}
+
+	column := m.resizing.column
+	minimumWidth := m.minimumColumnWidth(column)
+	maximumWidth := max(minimumWidth, tableWidth(layout.data.width)-tableOuterBorderWidth)
+	width := min(max(m.resizing.startWidth+x-m.resizing.startX, minimumWidth), maximumWidth)
+	if m.columnWidths == nil {
+		m.columnWidths = make(map[int]int)
+	}
+	m.columnWidths[column] = width
+	// Cells do not wrap, so changing a width cannot alter the selected row's
+	// vertical position. Avoid re-rendering the grid on every mouse motion.
+	return true
+}
+
+func (m *dataModel) finishColumnResize() bool {
+	if m.resizing == nil {
+		return false
+	}
+	m.resizing = nil
+	return true
+}
+
+func (m *dataModel) clampColumnWidths(layout appLayout) {
+	for column, width := range m.columnWidths {
+		if column < 0 || column >= len(m.page.Columns) {
+			delete(m.columnWidths, column)
+			continue
+		}
+		minimumWidth := m.minimumColumnWidth(column)
+		maximumWidth := max(minimumWidth, tableWidth(layout.data.width)-tableOuterBorderWidth)
+		m.columnWidths[column] = min(max(width, minimumWidth), maximumWidth)
+	}
+}
+
 func (m dataModel) selectionPointAt(x, y int, layout appLayout, gridTop int) (textselection.Point, bool) {
 	_, bounds, ok := m.visibleDataGrid(layout, gridTop)
 	if !ok || x <= bounds.x || x >= bounds.x+bounds.width-1 || y <= bounds.y || y >= bounds.y+bounds.height-1 {
@@ -227,7 +314,7 @@ func (m dataModel) dataColumnWidths(width, firstColumn, lastColumn int) []int {
 
 	for columnIndex := firstColumn; columnIndex < lastColumn; columnIndex++ {
 		index := columnIndex - firstColumn
-		minimumWidth := lipgloss.Width(sanitizeText(m.page.Columns[columnIndex])) + tableHorizontalPadding
+		minimumWidth := m.minimumColumnWidth(columnIndex)
 		columnWidths[index] = minimumWidth
 		desiredWidths[index] = minimumWidth
 
@@ -238,7 +325,12 @@ func (m dataModel) dataColumnWidths(width, firstColumn, lastColumn int) []int {
 			}
 			desiredWidths[index] = max(desiredWidths[index], lipgloss.Width(formatCell(value))+tableHorizontalPadding)
 		}
-		usedWidth += minimumWidth
+
+		if width, ok := m.columnWidths[columnIndex]; ok {
+			columnWidths[index] = max(width, minimumWidth)
+			desiredWidths[index] = columnWidths[index]
+		}
+		usedWidth += columnWidths[index]
 	}
 
 	availableWidth := tableWidth(width) - tableOuterBorderWidth - max(0, len(columnWidths)-1)*tableColumnBorderWidth

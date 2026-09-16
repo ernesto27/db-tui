@@ -262,10 +262,12 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		// Grid coordinates can change after a resize, invalidating any
 		// completed selection or drag in progress.
 		m.data.clearTextSelection()
+		m.data.finishColumnResize()
 		m.layout = newAppLayout(msg.Width, msg.Height)
 		m.navigator.resize(m.layout)
 		m.navigator.ensureVisible(m.layout.navigatorListRows)
 		m.data.columnOffset = min(m.data.columnOffset, m.data.maxColumnOffset())
+		m.data.clampColumnWidths(m.layout)
 		m.data.ensureSelectedVisible(m.layout)
 		m.activeFunction.clamp(m.layout)
 		m.query.resize(m.layout)
@@ -965,6 +967,10 @@ func (m *Model) updateMouseClick(msg tea.MouseClickMsg) tea.Cmd {
 		m.focus = focusData
 		return m.query.focusEditor()
 	}
+	if m.panel == panelData && !m.activeFunction.set && msg.Button == tea.MouseLeft && m.data.beginColumnResize(msg.X, msg.Y, m.layout, m.dataGridTop()) {
+		m.focus = focusData
+		return nil
+	}
 	if m.panel == panelData && !m.activeFunction.set && msg.Button == tea.MouseLeft && m.data.beginTextSelection(msg.X, msg.Y, m.layout, m.dataGridTop()) {
 		m.focus = focusData
 		return nil
@@ -981,6 +987,10 @@ func (m *Model) updateMouseMotion(msg tea.MouseMotionMsg) tea.Cmd {
 		m.focus = focusData
 		return nil
 	}
+	if m.panel == panelData && m.data.resizeColumn(msg.X, m.layout) {
+		m.focus = focusData
+		return nil
+	}
 	if m.panel == panelData && m.data.extendTextSelection(msg.X, msg.Y, m.layout, m.dataGridTop()) {
 		m.focus = focusData
 	}
@@ -992,6 +1002,9 @@ func (m *Model) updateMouseRelease(msg tea.MouseReleaseMsg) tea.Cmd {
 		if msg.Button == tea.MouseLeft || msg.Button == tea.MouseNone {
 			m.query.finishSelection(msg.X, msg.Y, m.layout)
 		}
+		return nil
+	}
+	if m.panel == panelData && m.data.finishColumnResize() {
 		return nil
 	}
 	if m.panel != panelData || m.activeFunction.set || !m.data.selection.Dragging() {
@@ -1081,6 +1094,7 @@ func (m *Model) activateHighlightedItem() tea.Cmd {
 	}
 	m.activeFunction = activeFunction{}
 	m.activeExtensions = activeExtensions{}
+	m.data.resetColumnWidths()
 	m.activeRelation.item = item
 	m.activeRelation.set = true
 	return m.startRowLoad(0, 0)
@@ -1176,6 +1190,7 @@ func (m *Model) startExtensionsLoad() tea.Cmd {
 	m.activeExtensions.set = true
 	m.activeRelation = activeRelation{}
 	m.activeFunction = activeFunction{}
+	m.data.resetColumnWidths()
 	m.data.beginLoad(0)
 	return tea.Batch(loadExtensions(extensions, m.session, m.activeExtensions.request), m.startSpinner())
 }
