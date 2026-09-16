@@ -21,9 +21,17 @@ type dataModel struct {
 	viewport     int
 	selected     int
 	columnOffset int
+	columnWidths map[int]int
+	resizing     *columnResize
 	selection    textselection.Selection
 	loading      bool
 	err          error
+}
+
+type columnResize struct {
+	column     int
+	startX     int
+	startWidth int
 }
 
 type dataStatus struct {
@@ -50,9 +58,15 @@ func (m *dataModel) beginLoad(offset int) {
 	m.viewport = 0
 	m.selected = 0
 	m.columnOffset = 0
+	m.resizing = nil
 	m.selection.Clear()
 	m.loading = true
 	m.err = nil
+}
+
+func (m *dataModel) resetColumnWidths() {
+	m.columnWidths = nil
+	m.resizing = nil
 }
 
 func (m *dataModel) finishLoad(page db.RowPage, selectedRow int, err error, layout appLayout) {
@@ -186,6 +200,9 @@ func (m dataModel) title(status dataStatus, layout appLayout) string {
 	title := fmt.Sprintf("%s  •  rows %d–%d  •  columns %d–%d/%d", status.tableName, firstRow, lastRow, firstColumn+1, lastColumn, len(m.page.Columns))
 	if m.page.HasMore {
 		title += "  •  PgUp/PgDown page"
+	}
+	if m.resizing != nil && m.resizing.column >= 0 && m.resizing.column < len(m.page.Columns) {
+		title += "  •  resizing " + sanitizeText(m.page.Columns[m.resizing.column])
 	}
 	return title
 }
