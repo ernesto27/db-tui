@@ -23,7 +23,7 @@ var postgreSQLKeywords = map[string]struct{}{
 	"SELECT": {}, "FROM": {}, "WHERE": {}, "JOIN": {},
 	"INNER": {}, "LEFT": {}, "RIGHT": {}, "FULL": {}, "ON": {}, "AS": {},
 	"INSERT": {}, "INTO": {}, "VALUES": {}, "UPDATE": {}, "SET": {}, "DELETE": {},
-	"CREATE": {}, "ALTER": {}, "DROP": {}, "TABLE": {},
+	"CREATE": {}, "ALTER": {}, "DROP": {}, "TABLE": {}, "TRUNCATE": {},
 	"ORDER": {}, "BY": {}, "GROUP": {}, "HAVING": {}, "LIMIT": {}, "OFFSET": {},
 	"UNION": {}, "ALL": {}, "DISTINCT": {}, "AND": {}, "OR": {}, "NOT": {},
 	"NULL": {}, "CASE": {}, "WHEN": {}, "THEN": {}, "ELSE": {}, "END": {},

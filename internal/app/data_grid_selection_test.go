@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -94,7 +95,7 @@ func TestDataGridColumnResizeHonorsDraggedWidth(t *testing.T) {
 			gridTop := data.gridTop(data.title(status, layout), layout)
 			grid, bounds, ok := data.visibleDataGrid(layout, gridTop)
 			require.True(t, ok)
-			assert.Contains(t, grid, testCase.expectedHeader)
+			assert.Contains(t, ansi.Strip(grid), testCase.expectedHeader)
 			firstColumn, lastColumn := data.visibleColumnRange(layout.data.width)
 			widths := data.dataColumnWidths(layout.data.width, firstColumn, lastColumn)
 			require.GreaterOrEqual(t, len(widths), 2)

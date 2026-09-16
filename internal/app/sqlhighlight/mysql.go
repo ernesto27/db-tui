@@ -47,7 +47,7 @@ var mySQLKeywords = map[string]struct{}{
 	"SQL_BIG_RESULT": {}, "SQL_CALC_FOUND_ROWS": {}, "SQL_SMALL_RESULT": {}, "SSL": {}, "STARTING": {}, "STORED": {},
 	"STRAIGHT_JOIN": {}, "SYSTEM": {}, "TABLE": {}, "TABLESAMPLE": {}, "TERMINATED": {}, "THEN": {},
 	"TINYBLOB": {}, "TINYINT": {}, "TINYTEXT": {}, "TO": {}, "TRAILING": {}, "TRIGGER": {},
-	"TRUE": {}, "UNDO": {}, "UNION": {}, "UNIQUE": {}, "UNLOCK": {}, "UNSIGNED": {},
+	"TRUE": {}, "TRUNCATE": {}, "UNDO": {}, "UNION": {}, "UNIQUE": {}, "UNLOCK": {}, "UNSIGNED": {},
 	"UPDATE": {}, "USAGE": {}, "USE": {}, "USING": {}, "UTC_DATE": {}, "UTC_TIME": {},
 	"UTC_TIMESTAMP": {}, "VALUES": {}, "VARBINARY": {}, "VARCHAR": {}, "VARCHARACTER": {}, "VARYING": {},
 	"VIRTUAL": {}, "WHEN": {}, "WHERE": {}, "WHILE": {}, "WINDOW": {}, "WITH": {},

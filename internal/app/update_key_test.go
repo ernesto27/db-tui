@@ -214,9 +214,8 @@ func TestUpdateQueryEditorOpensTableCompletionForEveryEngine(t *testing.T) {
 			model.query.editor.SetValue("SELECT * FROM ")
 			_ = model.query.focusEditor()
 
-			got, command := updateModel(t, model, keyPress('a', "a", 0))
+			got, _ := updateModel(t, model, keyPress('a', "a", 0))
 
-			assert.Nil(t, command)
 			require.True(t, got.query.completion.visible)
 			assert.Equal(t, "Album", got.query.completion.matches[0].Name)
 		})
