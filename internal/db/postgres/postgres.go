@@ -881,6 +881,19 @@ func NormalizeUUIDValues(fields []pgconn.FieldDescription, values []any) {
 			}
 
 			values[index] = db.JSONValue(string(jsonValue))
+
+		case pgtype.NumericOID:
+			numeric, ok := values[index].(pgtype.Numeric)
+			if !ok {
+				continue
+			}
+
+			text, err := numeric.Value()
+			if err != nil {
+				continue
+			}
+
+			values[index] = text
 		}
 	}
 }
