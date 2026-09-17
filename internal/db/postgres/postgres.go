@@ -17,6 +17,7 @@ import (
 	"github.com/ernestoponce27/db-tui/internal/jsonexport"
 	"github.com/ernestoponce27/db-tui/internal/logger"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -467,6 +468,7 @@ func (p *postgresql) getRows(ctx context.Context, table db.Table, page *db.PageR
 	}
 	defer rows.Close()
 
+	fields := rows.FieldDescriptions()
 	result := db.RowPage{Columns: make([]string, len(rows.FieldDescriptions()))}
 	for index, description := range rows.FieldDescriptions() {
 		result.Columns[index] = description.Name
@@ -477,6 +479,8 @@ func (p *postgresql) getRows(ctx context.Context, table db.Table, page *db.PageR
 		if err != nil {
 			return db.RowPage{}, fmt.Errorf("read PostgreSQL row: %w", err)
 		}
+
+		NormalizeUUIDValues(fields, values)
 		result.Rows = append(result.Rows, values)
 	}
 	if err := rows.Err(); err != nil {
@@ -505,6 +509,7 @@ func (p *postgresql) Execute(ctx context.Context, sql string) (db.QueryResult, e
 func readQueryResult(rows pgx.Rows, rowLimit int) (db.QueryResult, error) {
 	defer rows.Close()
 
+	fields := rows.FieldDescriptions()
 	result := db.QueryResult{Columns: make([]string, len(rows.FieldDescriptions()))}
 	for index, field := range rows.FieldDescriptions() {
 		result.Columns[index] = field.Name
@@ -517,6 +522,8 @@ func readQueryResult(rows pgx.Rows, rowLimit int) (db.QueryResult, error) {
 		if err != nil {
 			return db.QueryResult{}, fmt.Errorf("read PostgreSQL query row: %w", err)
 		}
+
+		NormalizeUUIDValues(fields, values)
 		result.Rows = append(result.Rows, values)
 	}
 	rows.Close()
@@ -845,5 +852,23 @@ func (p *postgresql) ListExtensions(ctx context.Context) ([]db.ExtensionData, er
 	}
 
 	return result, err
+}
 
+// NormalizeUUIDValues converts PostgreSQL UUID byte arrays to canonical UUID strings.
+func NormalizeUUIDValues(fields []pgconn.FieldDescription, values []any) {
+	for index, field := range fields {
+		if field.DataTypeOID != pgtype.UUIDOID || index >= len(values) {
+			continue
+		}
+
+		uuid, ok := values[index].([16]byte)
+		if !ok {
+			continue
+		}
+
+		values[index] = pgtype.UUID{
+			Bytes: uuid,
+			Valid: true,
+		}.String()
+	}
 }

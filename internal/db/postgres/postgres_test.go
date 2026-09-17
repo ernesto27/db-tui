@@ -12,6 +12,8 @@ import (
 
 	"github.com/ernestoponce27/db-tui/internal/db"
 	"github.com/ernestoponce27/db-tui/internal/db/postgres"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -850,6 +852,47 @@ func TestGetRows(t *testing.T) {
 
 	_, err = database.GetRows(ctx, db.Table{Schema: "public", Name: "Album"}, db.PageRequest{Limit: db.MaxPageSize + 1})
 	assert.NoError(t, err)
+}
+
+func TestNormalizeUUIDValues(t *testing.T) {
+	uuid := [16]byte{
+		0x8f, 0xdc, 0x4a, 0x11,
+		0xb6, 0x41,
+		0x4a, 0xc3,
+		0x82, 0x4b,
+		0x91, 0x2e, 0x34, 0xae, 0xd1, 0x7b,
+	}
+	binary := [16]byte{1, 2, 3}
+	fields := []pgconn.FieldDescription{
+		{DataTypeOID: pgtype.UUIDOID},
+		{DataTypeOID: pgtype.ByteaOID},
+		{DataTypeOID: pgtype.UUIDOID},
+	}
+	values := []any{uuid, binary, nil}
+
+	postgres.NormalizeUUIDValues(fields, values)
+
+	assert.Equal(t, "8fdc4a11-b641-4ac3-824b-912e34aed17b", values[0])
+	assert.Equal(t, binary, values[1])
+	assert.Nil(t, values[2])
+}
+
+func TestGetRowsNormalizesUUIDColumn(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	if !assert.NoError(t, err, "connect to local Compose PostgreSQL") {
+		return
+	}
+	t.Cleanup(database.Close)
+
+	page, err := database.GetRows(ctx, db.Table{Schema: "public", Name: "CLIJSONExample"}, db.PageRequest{Limit: 1})
+	if !assert.NoError(t, err) || !assert.Len(t, page.Rows, 1) {
+		return
+	}
+
+	assert.Equal(t, "3234b411-89ab-4cde-8f01-23456789abcd", page.Rows[0][0])
 }
 
 func TestGetRowsUsesTableSchema(t *testing.T) {
