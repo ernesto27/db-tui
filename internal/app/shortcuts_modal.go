@@ -38,6 +38,7 @@ var shortcutSections = []shortcutSection{
 		{key: "Home / End", action: "Jump to first or last object"},
 		{key: "Enter", action: "Open the selected object"},
 		{key: "Ctrl+F", action: "Search database objects"},
+		{key: "R", action: "Reconnect database from navigator"},
 		{key: "Esc", action: "Clear search or close a modal"},
 	}},
 	{title: "Tables and data", shortcuts: []shortcut{

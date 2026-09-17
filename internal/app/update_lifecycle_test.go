@@ -567,6 +567,82 @@ func TestUpdateClosesDatabaseFromStaleConnectionAttempt(t *testing.T) {
 	assert.NotNil(t, updated.modal)
 }
 
+func TestUpdateReconnectReplacesActiveDatabase(t *testing.T) {
+	oldDatabase := &fakeDatabase{name: "old", engine: db.EnginePostgreSQL}
+	newDatabase := &fakeDatabase{name: "chinook", engine: db.EnginePostgreSQL}
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = oldDatabase
+	model.session = 10
+	model.reconnecting = true
+	model.connectionAttempt = 4
+	model.navigator.tables = []db.Table{{Name: "Old"}}
+	model.activeRelation = activeRelation{
+		item:    navigatorItem{name: "Old", section: navigatorTables},
+		request: 4,
+		set:     true,
+	}
+	model.data.page = db.RowPage{Rows: [][]any{{"old"}}}
+	model.query.result = db.QueryResult{CommandTag: "SELECT 1"}
+	settings := ConnectionSettings{DSN: "postgres://new"}
+
+	updated, command := updateModel(t, model, connectionFinishedMsg{
+		database: newDatabase,
+		settings: settings,
+		attempt:  4,
+	})
+
+	require.NotNil(t, command)
+	assert.False(t, updated.reconnecting)
+	assert.NoError(t, updated.reconnectErr)
+	assert.Equal(t, 1, oldDatabase.closeCalls)
+	assert.Same(t, newDatabase, updated.database)
+	assert.Equal(t, settings, updated.savedConnection)
+	assert.Equal(t, uint64(11), updated.session)
+	assert.Empty(t, updated.navigator.tables)
+	assert.False(t, updated.activeRelation.set)
+	assert.Empty(t, updated.data.page.Rows)
+	assert.Empty(t, updated.query.result.CommandTag)
+	assert.True(t, updated.loading)
+}
+
+func TestUpdateReconnectFailurePreservesActiveDatabase(t *testing.T) {
+	oldDatabase := &fakeDatabase{name: "old", engine: db.EnginePostgreSQL}
+	wantErr := errors.New("connection failed")
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = oldDatabase
+	model.reconnecting = true
+	model.connectionAttempt = 4
+	model.navigator.tables = []db.Table{{Name: "Old"}}
+
+	updated, command := updateModel(t, model, connectionFinishedMsg{
+		attempt: 4,
+		err:     wantErr,
+	})
+
+	assert.Nil(t, command)
+	assert.False(t, updated.reconnecting)
+	assert.ErrorIs(t, updated.reconnectErr, wantErr)
+	assert.Same(t, oldDatabase, updated.database)
+	assert.Equal(t, []db.Table{{Name: "Old"}}, updated.navigator.tables)
+	assert.Zero(t, oldDatabase.closeCalls)
+}
+
+func TestUpdateReconnectClosesStaleSuccessfulAttempt(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.reconnecting = true
+	model.connectionAttempt = 4
+	staleDatabase := &fakeDatabase{name: "stale"}
+
+	updated, command := updateModel(t, model, connectionFinishedMsg{
+		database: staleDatabase,
+		attempt:  3,
+	})
+
+	assert.Nil(t, command)
+	assert.True(t, updated.reconnecting)
+	assert.Equal(t, 1, staleDatabase.closeCalls)
+}
+
 func TestUpdateReplacesActiveDatabaseAfterCurrentConnectionAttempt(t *testing.T) {
 	oldDatabase := &fakeDatabase{name: "old", engine: db.EnginePostgreSQL}
 	newDatabase := &fakeDatabase{name: "chinook", engine: db.EnginePostgreSQL}

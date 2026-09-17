@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -60,6 +61,36 @@ func TestUpdateKeyRouting(t *testing.T) {
 				assert.Equal(t, focusNavigator, got.focus)
 				assert.True(t, got.navigator.searching)
 				assert.True(t, got.navigator.filter.Focused())
+			},
+		},
+		{
+			name: "reconnects from navigator focus",
+			setup: func(model *Model) {
+				model.database = &fakeDatabase{name: "chinook", engine: db.EnginePostgreSQL}
+				model.savedConnection = ConnectionSettings{Engine: db.EnginePostgreSQL, DSN: "postgres://chinook"}
+				model.connect = func(context.Context, string, string) (db.Database, error) {
+					return &fakeDatabase{name: "reconnected", engine: db.EnginePostgreSQL}, nil
+				}
+			},
+			message: keyPress('r', "r", 0),
+			assert: func(t *testing.T, got Model, command tea.Cmd) {
+				require.NotNil(t, command)
+				assert.True(t, got.reconnecting)
+				assert.Equal(t, uint64(1), got.connectionAttempt)
+			},
+		},
+		{
+			name: "does not reconnect from data focus",
+			setup: func(model *Model) {
+				model.database = &fakeDatabase{name: "chinook", engine: db.EnginePostgreSQL}
+				model.focus = focusData
+				model.activeRelation = activeRelation{set: true, item: navigatorItem{section: navigatorTables}}
+			},
+			message: keyPress('r', "r", 0),
+			assert: func(t *testing.T, got Model, command tea.Cmd) {
+				require.NotNil(t, command)
+				assert.False(t, got.reconnecting)
+				assert.Zero(t, got.connectionAttempt)
 			},
 		},
 		{

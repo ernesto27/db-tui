@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -58,6 +59,20 @@ func TestBaseViewShowsNavigatorContentWithDatabase(t *testing.T) {
 	assert.Contains(t, view.Content, "● chinook")
 	assert.Contains(t, view.Content, "Filter:")
 	assert.Contains(t, view.Content, "Tables")
+}
+
+func TestBaseViewShowsReconnectFeedback(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook"}
+	model.reconnecting = true
+
+	assert.Contains(t, model.baseView().Content, "Reconnecting…")
+
+	model.reconnecting = false
+	model.reconnectErr = errors.New("connection failed\x1b")
+	view := model.baseView()
+	assert.Contains(t, view.Content, "Unable to reconnect")
+	assert.Contains(t, view.Content, "connection failed�")
 }
 
 func TestBaseViewShowsOracleEngine(t *testing.T) {
@@ -134,6 +149,7 @@ func TestFooterTextDescribesTabNavigation(t *testing.T) {
 
 	assert.Contains(t, model.footerText(), "Tab navigator/data")
 	assert.NotContains(t, model.footerText(), "r refresh")
+	assert.Contains(t, model.footerText(), "r reconnect")
 
 	model.focus = focusData
 	assert.Contains(t, model.footerText(), "r refresh")
@@ -141,4 +157,10 @@ func TestFooterTextDescribesTabNavigation(t *testing.T) {
 	model.panel = panelQuery
 	assert.NotContains(t, model.footerText(), "r refresh")
 	assert.Contains(t, model.footerText(), "Tab editor/results")
+}
+
+func TestShortcutsModalDocumentsNavigatorReconnect(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+
+	assert.Contains(t, strings.Join(newShortcutsModal(model.layout).lines(model.layout), "\n"), "Reconnect database from navigator")
 }

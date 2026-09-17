@@ -59,6 +59,8 @@ type Model struct {
 	creatingConnection     bool
 	connectionAttempt      uint64
 	session                uint64
+	reconnecting           bool
+	reconnectErr           error
 
 	loading                   bool
 	tableLoadErr              error

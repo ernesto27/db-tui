@@ -30,6 +30,7 @@ type keyMap struct {
 	editRow       key.Binding
 	deleteRow     key.Binding
 	refreshTable  key.Binding
+	reconnect     key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -61,5 +62,6 @@ func defaultKeyMap() keyMap {
 		editRow:       key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit row")),
 		deleteRow:     key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete row")),
 		refreshTable:  key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh table")),
+		reconnect:     key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "reconnect database")),
 	}
 }

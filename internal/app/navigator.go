@@ -54,6 +54,9 @@ type navigatorModel struct {
 type navigatorStatus struct {
 	databaseConneced         bool
 	databaseName             string
+	reconnecting             bool
+	reconnectErr             error
+	spinner                  string
 	tablesLoading            bool
 	tableLoadErr             error
 	viewsLoading             bool
@@ -237,6 +240,14 @@ func (m navigatorModel) view(status navigatorStatus, layout appLayout, focused b
 	lines := []string{}
 	if status.databaseConneced {
 		lines = append(lines, lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render("● "+sanitizeText(status.databaseName)), "")
+		if status.reconnecting {
+			lines = append(lines, lipgloss.NewStyle().Foreground(colorTextMuted).Render(status.spinner+" Reconnecting…"))
+		} else if status.reconnectErr != nil {
+			lines = append(lines,
+				lipgloss.NewStyle().Foreground(colorError).Render("✕ Unable to reconnect"),
+				truncateLabel(status.reconnectErr.Error(), max(1, layout.navigator.width-4)),
+			)
+		}
 		lines = append(lines, m.filter.View())
 		lines = append(lines, lipgloss.NewStyle().Bold(true).Foreground(colorTextMuted).Render(m.sectionTitle()))
 	}

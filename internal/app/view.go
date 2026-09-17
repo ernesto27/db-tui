@@ -125,6 +125,9 @@ func (m Model) navigatorStatus() navigatorStatus {
 	return navigatorStatus{
 		databaseConneced:         m.database != nil,
 		databaseName:             m.connectedDatabaseName(),
+		reconnecting:             m.reconnecting,
+		reconnectErr:             m.reconnectErr,
+		spinner:                  m.spinner(),
 		tablesLoading:            m.loading,
 		tableLoadErr:             m.tableLoadErr,
 		viewsLoading:             m.viewsLoading,
@@ -301,6 +304,10 @@ func (m Model) footerText() string {
 			activationHelp += "load rows"
 		}
 	}
+	reconnectHelp := ""
+	if m.focus == focusNavigator && !m.navigator.searching {
+		reconnectHelp = "  •  r reconnect"
+	}
 	refreshHelp := ""
 	if m.panel == panelData && m.focus == focusData && !m.activeFunction.set {
 		refreshHelp = "  •  r refresh"
@@ -309,8 +316,8 @@ func (m Model) footerText() string {
 	if m.activeFunction.set && m.panel == panelData && m.focus == focusData {
 		functionHelp = "  •  ↑/↓ or j/k scroll function"
 	}
-	return fmt.Sprintf("Ctrl+O objects  •  Ctrl+F search%s%s%s%s%s%s  •  Ctrl+S settings  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  Ctrl+K shortcuts  •  q quit",
-		rowStatus, activationHelp, refreshHelp, functionHelp, tableHelp, editHelp)
+	return fmt.Sprintf("Ctrl+O objects  •  Ctrl+F search%s%s%s%s%s%s%s  •  Ctrl+S settings  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  Ctrl+K shortcuts  •  q quit",
+		rowStatus, activationHelp, reconnectHelp, refreshHelp, functionHelp, tableHelp, editHelp)
 }
 
 func panelStyle(width, height int, focused bool) lipgloss.Style {
