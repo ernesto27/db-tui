@@ -4,6 +4,7 @@ package postgres
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -854,21 +855,32 @@ func (p *postgresql) ListExtensions(ctx context.Context) ([]db.ExtensionData, er
 	return result, err
 }
 
-// NormalizeUUIDValues converts PostgreSQL UUID byte arrays to canonical UUID strings.
+// NormalizeUUIDValues converts PostgreSQL UUID byte arrays and JSON values to portable representations.
 func NormalizeUUIDValues(fields []pgconn.FieldDescription, values []any) {
 	for index, field := range fields {
-		if field.DataTypeOID != pgtype.UUIDOID || index >= len(values) {
+		if index >= len(values) || values[index] == nil {
 			continue
 		}
 
-		uuid, ok := values[index].([16]byte)
-		if !ok {
-			continue
-		}
+		switch field.DataTypeOID {
+		case pgtype.UUIDOID:
+			uuid, ok := values[index].([16]byte)
+			if !ok {
+				continue
+			}
 
-		values[index] = pgtype.UUID{
-			Bytes: uuid,
-			Valid: true,
-		}.String()
+			values[index] = pgtype.UUID{
+				Bytes: uuid,
+				Valid: true,
+			}.String()
+
+		case pgtype.JSONOID, pgtype.JSONBOID:
+			jsonValue, err := json.Marshal(values[index])
+			if err != nil {
+				continue
+			}
+
+			values[index] = db.JSONValue(string(jsonValue))
+		}
 	}
 }

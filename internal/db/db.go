@@ -3,6 +3,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -124,6 +125,17 @@ type QueryResult struct {
 	Columns    []string
 	Rows       [][]any
 	CommandTag string
+}
+
+// JSONValue is a valid JSON document represented as compact text.
+type JSONValue string
+
+// MarshalJSON embeds the JSON document rather than encoding it as a string.
+func (value JSONValue) MarshalJSON() ([]byte, error) {
+	if !json.Valid([]byte(value)) {
+		return nil, errors.New("invalid JSON value")
+	}
+	return []byte(value), nil
 }
 
 type Column struct {

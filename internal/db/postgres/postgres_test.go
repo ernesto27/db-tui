@@ -863,18 +863,25 @@ func TestNormalizeUUIDValues(t *testing.T) {
 		0x91, 0x2e, 0x34, 0xae, 0xd1, 0x7b,
 	}
 	binary := [16]byte{1, 2, 3}
+	jsonb := map[string]any{"id": "1", "name": "Coffee"}
 	fields := []pgconn.FieldDescription{
 		{DataTypeOID: pgtype.UUIDOID},
 		{DataTypeOID: pgtype.ByteaOID},
 		{DataTypeOID: pgtype.UUIDOID},
+		{DataTypeOID: pgtype.JSONBOID},
 	}
-	values := []any{uuid, binary, nil}
+	values := []any{uuid, binary, nil, jsonb}
 
 	postgres.NormalizeUUIDValues(fields, values)
 
 	assert.Equal(t, "8fdc4a11-b641-4ac3-824b-912e34aed17b", values[0])
 	assert.Equal(t, binary, values[1])
 	assert.Nil(t, values[2])
+
+	jsonValue, ok := values[3].(db.JSONValue)
+	if assert.True(t, ok, "JSONB value should be db.JSONValue") {
+		assert.JSONEq(t, `{"id":"1","name":"Coffee"}`, string(jsonValue))
+	}
 }
 
 func TestGetRowsNormalizesUUIDColumn(t *testing.T) {

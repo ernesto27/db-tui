@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"encoding/json"
 	"regexp"
 	"testing"
 
@@ -35,4 +36,14 @@ func TestValidateSelectQuery(t *testing.T) {
 	assert.NoError(t, db.ValidateSelectQuery("-- report\nSELECT 1"))
 	assert.NoError(t, db.ValidateSelectQuery("/* report */ SELECT 1"))
 	assert.EqualError(t, db.ValidateSelectQuery("UPDATE Album SET Title = 'x'"), "only SELECT queries can be exported")
+}
+
+func TestJSONValueMarshalJSON(t *testing.T) {
+	encoded, err := json.Marshal(db.JSONValue(`{"id":"1","name":"Coffee"}`))
+
+	assert.NoError(t, err)
+	assert.JSONEq(t, `{"id":"1","name":"Coffee"}`, string(encoded))
+
+	_, err = json.Marshal(db.JSONValue("not JSON"))
+	assert.Error(t, err)
 }
