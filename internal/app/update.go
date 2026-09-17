@@ -126,7 +126,7 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		m.query.executionDuration = msg.elapsed
 		return queryElapsedTick(msg.session, msg.request, m.query.executionStartedAt), true
 	case spinnerTickMsg:
-		if m.loading || m.viewsLoading || m.materializedViewsLoading || m.functionsLoading || m.data.loading ||
+		if m.reconnecting || m.loading || m.viewsLoading || m.materializedViewsLoading || m.functionsLoading || m.data.loading ||
 			(m.ddlModal != nil && m.ddlModal.loading) ||
 			(m.columnsModal != nil && m.columnsModal.loading) ||
 			(m.dumpModal != nil && m.dumpModal.isRunning()) ||
@@ -139,6 +139,11 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		m.spinnerRunning = false
 		return nil, true
+	case connectionFinishedMsg:
+		if !m.reconnecting {
+			return nil, false
+		}
+		return m.finishReconnect(msg), true
 	case tablesLoadedMsg:
 		if msg.session != m.session || (m.navigator.schema != "" && msg.schema != m.navigator.schema) {
 			return nil, true
@@ -490,44 +495,80 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pendingConnectionIndex = -1
 		}
 
-		m.query.cancelExecution()
-		if m.database != nil {
-			m.database.Close()
-		}
-		m.database = msg.database
-		m.savedConnection = msg.settings
-		m.tableLoadErr = nil
-		m.viewLoadErr = nil
-		m.materializedViewLoadErr = nil
-		m.functionLoadErr = nil
-		m.schemaObjectGroups = nil
-		m.schemaObjectGroupsLoading = supportsSchemaObjectGroups(msg.database.Engine())
-		m.navigator.reset()
-		m.activeRelation = activeRelation{}
-		m.activeFunction = activeFunction{}
-		m.activeExtensions = activeExtensions{}
-		m.lastNavigatorClick = navigatorClick{}
-		m.navigator.setMaterializedViewsAvailable(supportsMaterializedViews(msg.database.Engine()))
-		m.navigator.setFunctionsAvailable(supportsFunctions(msg.database.Engine()))
-		m.data.reset()
-		m.query.reset(m.layout)
-		m.rawQueryDeleteModal = nil
-		m.ddlModal = nil
-		m.columnsModal = nil
-		m.indexesModal = nil
-		m.objectsModal = nil
-		m.loading = true
-		m.viewsLoading = true
-		m.materializedViewsLoading = true
-		m.functionsLoading = m.navigator.functionsAvailable
-		m.session++
 		m.modal = nil
-		return m, tea.Batch(m.loadDatabaseObjects(), m.startSpinner())
+		return m, m.adoptConnection(msg.database, msg.settings)
 	default:
 		modal, command := m.modal.update(msg)
 		m.modal = &modal
 		return m, command
 	}
+}
+
+func (m *Model) startReconnect() tea.Cmd {
+	if m.database == nil || m.connect == nil || m.reconnecting {
+		return nil
+	}
+
+	m.reconnecting = true
+	m.reconnectErr = nil
+	m.connectionAttempt++
+	return tea.Batch(
+		connectConnection(m.connect, m.savedConnection, m.connectionAttempt),
+		m.startSpinner(),
+	)
+}
+
+func (m *Model) finishReconnect(msg connectionFinishedMsg) tea.Cmd {
+	if msg.attempt != m.connectionAttempt {
+		if msg.database != nil {
+			msg.database.Close()
+		}
+		return nil
+	}
+
+	m.reconnecting = false
+	if msg.err != nil {
+		m.reconnectErr = msg.err
+		return nil
+	}
+	return m.adoptConnection(msg.database, msg.settings)
+}
+
+func (m *Model) adoptConnection(database db.Database, settings ConnectionSettings) tea.Cmd {
+	m.query.cancelExecution()
+	if m.database != nil {
+		m.database.Close()
+	}
+	m.database = database
+	m.savedConnection = settings
+	m.reconnecting = false
+	m.reconnectErr = nil
+	m.tableLoadErr = nil
+	m.viewLoadErr = nil
+	m.materializedViewLoadErr = nil
+	m.functionLoadErr = nil
+	m.schemaObjectGroups = nil
+	m.schemaObjectGroupsLoading = supportsSchemaObjectGroups(database.Engine())
+	m.navigator.reset()
+	m.activeRelation = activeRelation{}
+	m.activeFunction = activeFunction{}
+	m.activeExtensions = activeExtensions{}
+	m.lastNavigatorClick = navigatorClick{}
+	m.navigator.setMaterializedViewsAvailable(supportsMaterializedViews(database.Engine()))
+	m.navigator.setFunctionsAvailable(supportsFunctions(database.Engine()))
+	m.data.reset()
+	m.query.reset(m.layout)
+	m.rawQueryDeleteModal = nil
+	m.ddlModal = nil
+	m.columnsModal = nil
+	m.indexesModal = nil
+	m.objectsModal = nil
+	m.loading = true
+	m.viewsLoading = true
+	m.materializedViewsLoading = true
+	m.functionsLoading = m.navigator.functionsAvailable
+	m.session++
+	return tea.Batch(m.loadDatabaseObjects(), m.startSpinner())
 }
 
 func supportsMaterializedViews(engine string) bool {
@@ -751,6 +792,8 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 	case m.navigator.searching:
 		return m.updateNavigatorSearch(msg)
+	case m.focus == focusNavigator && key.Matches(msg, m.keys.reconnect):
+		return m.startReconnect()
 	case m.panel == panelData && m.focus == focusNavigator && key.Matches(msg, m.keys.activate):
 		return m.activateHighlightedItem()
 	case key.Matches(msg, m.keys.quit) && !(m.panel == panelQuery && !m.query.resultsFocused && msg.String() == "q"):

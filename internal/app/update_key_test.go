@@ -94,6 +94,20 @@ func TestUpdateKeyRouting(t *testing.T) {
 			},
 		},
 		{
+			name: "ignores reconnect while another reconnect is running",
+			setup: func(model *Model) {
+				model.database = &fakeDatabase{name: "chinook", engine: db.EnginePostgreSQL}
+				model.reconnecting = true
+				model.connectionAttempt = 4
+			},
+			message: keyPress('r', "r", 0),
+			assert: func(t *testing.T, got Model, command tea.Cmd) {
+				assert.Nil(t, command)
+				assert.True(t, got.reconnecting)
+				assert.Equal(t, uint64(4), got.connectionAttempt)
+			},
+		},
+		{
 			name: "opens objects modal",
 			setup: func(model *Model) {
 				model.database = &fakeDatabase{name: "chinook", engine: db.EnginePostgreSQL}
