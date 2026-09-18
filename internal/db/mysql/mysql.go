@@ -702,31 +702,26 @@ func (m *mysqlDatabase) ExportQuery(ctx context.Context, statement string) error
 	return nil
 }
 
-// ExecuteCLI runs a MySQL query in a read-only transaction and returns a JSON
-// array of its rows.
-func (m *mysqlDatabase) ExecuteCLI(ctx context.Context, statement string) (string, error) {
+// ExecuteCLI runs a MySQL query in a read-only transaction and returns its rows
+// serialized as format.
+func (m *mysqlDatabase) ExecuteCLI(ctx context.Context, statement, format string) (string, error) {
 	result, err := m.executeAll(ctx, statement)
 	if err != nil {
 		return "", err
 	}
 
-	data, err := jsonexport.Marshal(result.Columns, result.Rows)
-	if err != nil {
-		return "", fmt.Errorf("encode MySQL query JSON: %w", err)
-	}
-
-	return string(data), nil
+	return db.SerializeCLIResult(m.Engine(), result.Columns, result.Rows, format)
 }
 
-// ExecuteCLI connects to MySQL, runs a query, and returns a JSON array of its rows.
-func ExecuteCLI(ctx context.Context, dsn, statement string) (string, error) {
+// ExecuteCLI connects to MySQL, runs a query, and returns its rows serialized as format.
+func ExecuteCLI(ctx context.Context, dsn, statement, format string) (string, error) {
 	database, err := Connect(ctx, dsn)
 	if err != nil {
 		return "", err
 	}
 	defer database.Close()
 
-	return database.ExecuteCLI(ctx, statement)
+	return database.ExecuteCLI(ctx, statement, format)
 }
 
 func dockerContainerIDForPort(ctx context.Context, port string) (string, error) {

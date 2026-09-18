@@ -503,30 +503,26 @@ func (o *oracleDatabase) ExportQuery(ctx context.Context, statement string) erro
 	return nil
 }
 
-// ExecuteCLI runs an Oracle query in a read-only transaction and returns a JSON
-// array of its rows.
-func (o *oracleDatabase) ExecuteCLI(ctx context.Context, statement string) (string, error) {
+// ExecuteCLI runs an Oracle query in a read-only transaction and returns its
+// rows serialized as format.
+func (o *oracleDatabase) ExecuteCLI(ctx context.Context, statement, format string) (string, error) {
 	result, err := o.executeAll(ctx, statement)
 	if err != nil {
 		return "", err
 	}
 
-	data, err := jsonexport.Marshal(result.Columns, result.Rows)
-	if err != nil {
-		return "", fmt.Errorf("encode Oracle query JSON: %w", err)
-	}
-	return string(data), nil
+	return db.SerializeCLIResult(o.Engine(), result.Columns, result.Rows, format)
 }
 
-// ExecuteCLI connects to Oracle, runs a query, and returns a JSON array of its rows.
-func ExecuteCLI(ctx context.Context, dsn, statement string) (string, error) {
+// ExecuteCLI connects to Oracle, runs a query, and returns its rows serialized as format.
+func ExecuteCLI(ctx context.Context, dsn, statement, format string) (string, error) {
 	database, err := Connect(ctx, dsn)
 	if err != nil {
 		return "", err
 	}
 	defer database.Close()
 
-	return database.ExecuteCLI(ctx, statement)
+	return database.ExecuteCLI(ctx, statement, format)
 }
 
 // Close releases the Oracle connection and query logger.

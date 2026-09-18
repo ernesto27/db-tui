@@ -2,6 +2,7 @@
 package csvexport
 
 import (
+	"bytes"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -15,35 +16,44 @@ func Write(path string, columns []string, rows [][]any) error {
 		return errors.New("CSV export path is required")
 	}
 
-	file, err := os.Create(path)
+	data, err := Marshal(columns, rows)
 	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("create CSV file: %w", err)
 	}
-	defer file.Close()
 
-	writer := csv.NewWriter(file)
+	return nil
+}
+
+// Marshal converts columns and rows to a CSV document with a leading header row.
+//
+// The returned document ends with a record separator.
+func Marshal(columns []string, rows [][]any) ([]byte, error) {
+	var buffer bytes.Buffer
+
+	writer := csv.NewWriter(&buffer)
 	if err := writer.Write(columns); err != nil {
-		return fmt.Errorf("write CSV header: %w", err)
+		return nil, fmt.Errorf("write CSV header: %w", err)
 	}
 
 	for rowIndex, row := range rows {
 		if len(row) != len(columns) {
-			return fmt.Errorf("CSV row %d has %d values; want %d", rowIndex+1, len(row), len(columns))
+			return nil, fmt.Errorf("CSV row %d has %d values; want %d", rowIndex+1, len(row), len(columns))
 		}
 		if err := writer.Write(formatRow(row)); err != nil {
-			return fmt.Errorf("write CSV row %d: %w", rowIndex+1, err)
+			return nil, fmt.Errorf("write CSV row %d: %w", rowIndex+1, err)
 		}
 	}
 
 	writer.Flush()
 	if err := writer.Error(); err != nil {
-		return fmt.Errorf("flush CSV file: %w", err)
-	}
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("close CSV file: %w", err)
+		return nil, fmt.Errorf("flush CSV document: %w", err)
 	}
 
-	return nil
+	return buffer.Bytes(), nil
 }
 
 func formatRow(row []any) []string {

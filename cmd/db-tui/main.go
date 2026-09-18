@@ -22,6 +22,8 @@ import (
 	"github.com/ernestoponce27/db-tui/internal/db/sqlserver"
 )
 
+const usageLine = "Usage: db-tui [-q <SQL> -c <DSN> [-t json|csv]]"
+
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -52,10 +54,11 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) (handl
 	flags.SetOutput(io.Discard)
 	query := flags.String("q", "", "SQL query")
 	dsn := flags.String("c", "", "DSN")
+	format := flags.String("t", db.ExportTypeJSON, "output format: json or csv")
 
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			_, _ = fmt.Fprintln(stdout, "Usage: db-tui [-q <SQL> -c <DSN>]")
+			_, _ = fmt.Fprintln(stdout, usageLine)
 			return true, 0
 		}
 		_, _ = fmt.Fprintf(stderr, "db-tui: %v\n", err)
@@ -66,13 +69,28 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) (handl
 		return true, 2
 	}
 
+	formatProvided := false
+	flags.Visit(func(provided *flag.Flag) {
+		if provided.Name == "t" {
+			formatProvided = true
+		}
+	})
+
 	queryMissing := strings.TrimSpace(*query) == ""
 	dsnMissing := strings.TrimSpace(*dsn) == ""
 	if queryMissing && dsnMissing {
+		if formatProvided {
+			_, _ = fmt.Fprintln(stderr, "db-tui: -t requires -q and -c")
+			return true, 2
+		}
 		return false, 0
 	}
 	if queryMissing || dsnMissing {
 		_, _ = fmt.Fprintln(stderr, "db-tui: -q and -c must be provided together")
+		return true, 2
+	}
+	if err := validateOutputFormat(*format); err != nil {
+		_, _ = fmt.Fprintf(stderr, "db-tui: %v\n", err)
 		return true, 2
 	}
 
@@ -85,15 +103,15 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) (handl
 	var result string
 	switch engine {
 	case db.EnginePostgreSQL:
-		result, err = postgres.ExecuteCLI(ctx, *dsn, *query)
+		result, err = postgres.ExecuteCLI(ctx, *dsn, *query, *format)
 	case db.EngineMySQL:
-		result, err = mysql.ExecuteCLI(ctx, *dsn, *query)
+		result, err = mysql.ExecuteCLI(ctx, *dsn, *query, *format)
 	case db.EngineOracle:
-		result, err = oracle.ExecuteCLI(ctx, *dsn, *query)
+		result, err = oracle.ExecuteCLI(ctx, *dsn, *query, *format)
 	case db.EngineSQLServer:
-		result, err = sqlserver.ExecuteCLI(ctx, *dsn, *query)
+		result, err = sqlserver.ExecuteCLI(ctx, *dsn, *query, *format)
 	case db.EngineSQLite:
-		result, err = sqlite.ExecuteCLI(ctx, *dsn, *query)
+		result, err = sqlite.ExecuteCLI(ctx, *dsn, *query, *format)
 	default:
 		_, _ = fmt.Fprintln(stderr, "db-tui: unsupported DSN")
 		return true, 2
@@ -103,8 +121,29 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) (handl
 		return true, 1
 	}
 
-	_, _ = fmt.Fprintln(stdout, result)
+	writeResult(stdout, result)
 	return true, 0
+}
+
+// validateOutputFormat reports whether format is a supported CLI output format.
+func validateOutputFormat(format string) error {
+	switch format {
+	case db.ExportTypeJSON, db.ExportTypeCSV:
+		return nil
+	default:
+		return fmt.Errorf("unsupported output format %q; want %q or %q", format, db.ExportTypeJSON, db.ExportTypeCSV)
+	}
+}
+
+// writeResult writes result to stdout, terminated by exactly one newline.
+//
+// CSV documents already end with a record separator; JSON documents do not.
+func writeResult(stdout io.Writer, result string) {
+	if strings.HasSuffix(result, "\n") {
+		_, _ = fmt.Fprint(stdout, result)
+		return
+	}
+	_, _ = fmt.Fprintln(stdout, result)
 }
 
 func detectEngine(dsn string) (string, error) {

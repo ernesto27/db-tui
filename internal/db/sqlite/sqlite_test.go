@@ -306,7 +306,7 @@ func TestExecuteCLI(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := database.ExecuteCLI(context.Background(), test.statement)
+			result, err := database.ExecuteCLI(context.Background(), test.statement, db.ExportTypeJSON)
 
 			if test.wantErr != "" {
 				assert.ErrorContains(t, err, test.wantErr)
@@ -324,6 +324,53 @@ func TestExecuteCLI(t *testing.T) {
 			assert.Equal(t, test.wantRows, rows)
 		})
 	}
+}
+
+func TestExecuteCLICSV(t *testing.T) {
+	database := connectEmployee(t)
+
+	for _, test := range []struct {
+		name      string
+		statement string
+		want      string
+	}{
+		{
+			name:      "writes a header row and rows",
+			statement: "SELECT emp_no, first_name FROM employee ORDER BY emp_no LIMIT 2",
+			want:      "emp_no,first_name\n10001,Georgi\n10002,Bezalel\n",
+		},
+		{
+			name:      "writes an empty field for NULL",
+			statement: "SELECT 1 AS emp_no, NULL AS first_name",
+			want:      "emp_no,first_name\n1,\n",
+		},
+		{
+			name:      "quotes a value containing a separator",
+			statement: "SELECT 'Doe, Jane' AS full_name",
+			want:      "full_name\n\"Doe, Jane\"\n",
+		},
+		{
+			name:      "writes a header row without rows",
+			statement: "SELECT emp_no FROM employee WHERE emp_no = -1",
+			want:      "emp_no\n",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := database.ExecuteCLI(context.Background(), test.statement, db.ExportTypeCSV)
+
+			require.NoError(t, err)
+			assert.Equal(t, test.want, result)
+		})
+	}
+}
+
+func TestExecuteCLIRejectsUnsupportedFormat(t *testing.T) {
+	database := connectEmployee(t)
+
+	result, err := database.ExecuteCLI(context.Background(), "SELECT emp_no FROM employee LIMIT 1", "xml")
+
+	assert.ErrorContains(t, err, `unsupported `+db.EngineSQLite+` CLI output format "xml"`)
+	assert.Empty(t, result)
 }
 
 func TestExecuteCancelsRunningQuery(t *testing.T) {

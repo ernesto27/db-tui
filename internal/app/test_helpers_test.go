@@ -242,7 +242,7 @@ func (f *fakeDatabase) ExportQuery(ctx context.Context, query string) error {
 	return f.exportQueryErr
 }
 
-func (f *fakeDatabase) ExecuteCLI(ctx context.Context, statement string) (string, error) {
+func (f *fakeDatabase) ExecuteCLI(ctx context.Context, statement, format string) (string, error) {
 	return "", nil
 }
 

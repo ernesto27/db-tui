@@ -688,31 +688,29 @@ func (p *postgresql) ExportQuery(ctx context.Context, statement string) error {
 	return nil
 }
 
-// ExecuteCLI runs a PostgreSQL CLI query and returns a JSON array of its rows.
-func (p *postgresql) ExecuteCLI(ctx context.Context, statement string) (string, error) {
+// ExecuteCLI runs a PostgreSQL CLI query and returns its rows serialized as format.
+func (p *postgresql) ExecuteCLI(ctx context.Context, statement, format string) (string, error) {
 	result, err := p.executeAll(ctx, statement)
 	if err != nil {
 		return "", err
 	}
 
-	normalizeJSONValues(result.Rows)
-	data, err := jsonexport.Marshal(result.Columns, result.Rows)
-	if err != nil {
-		return "", fmt.Errorf("encode PostgreSQL query JSON: %w", err)
+	if format == db.ExportTypeJSON {
+		normalizeJSONValues(result.Rows)
 	}
 
-	return string(data), nil
+	return db.SerializeCLIResult(p.Engine(), result.Columns, result.Rows, format)
 }
 
-// ExecuteCLI connects to PostgreSQL, runs a CLI query, and returns a JSON array of its rows.
-func ExecuteCLI(ctx context.Context, dsn, statement string) (string, error) {
+// ExecuteCLI connects to PostgreSQL, runs a CLI query, and returns its rows serialized as format.
+func ExecuteCLI(ctx context.Context, dsn, statement, format string) (string, error) {
 	database, err := connect(ctx, dsn)
 	if err != nil {
 		return "", err
 	}
 	defer database.Close()
 
-	return database.ExecuteCLI(ctx, statement)
+	return database.ExecuteCLI(ctx, statement, format)
 }
 
 func dockerContainerIDForPort(ctx context.Context, port int) (string, error) {

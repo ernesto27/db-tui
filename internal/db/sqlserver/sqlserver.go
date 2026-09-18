@@ -572,29 +572,25 @@ func (s *sqlserverDatabase) ExportQuery(ctx context.Context, statement string) e
 	return nil
 }
 
-// ExecuteCLI runs a SQL Server query and returns a JSON array of its rows.
-func (s *sqlserverDatabase) ExecuteCLI(ctx context.Context, statement string) (string, error) {
+// ExecuteCLI runs a SQL Server query and returns its rows serialized as format.
+func (s *sqlserverDatabase) ExecuteCLI(ctx context.Context, statement, format string) (string, error) {
 	result, err := s.executeAll(ctx, statement)
 	if err != nil {
 		return "", err
 	}
 
-	data, err := jsonexport.Marshal(result.Columns, result.Rows)
-	if err != nil {
-		return "", fmt.Errorf("encode SQL Server query JSON: %w", err)
-	}
-	return string(data), nil
+	return db.SerializeCLIResult(s.Engine(), result.Columns, result.Rows, format)
 }
 
-// ExecuteCLI connects to SQL Server, runs a query, and returns a JSON array of its rows.
-func ExecuteCLI(ctx context.Context, dsn, statement string) (string, error) {
+// ExecuteCLI connects to SQL Server, runs a query, and returns its rows serialized as format.
+func ExecuteCLI(ctx context.Context, dsn, statement, format string) (string, error) {
 	database, err := Connect(ctx, dsn)
 	if err != nil {
 		return "", err
 	}
 	defer database.Close()
 
-	return database.ExecuteCLI(ctx, statement)
+	return database.ExecuteCLI(ctx, statement, format)
 }
 
 func (s *sqlserverDatabase) ListColumns(ctx context.Context, table db.Table) ([]db.Column, error) {

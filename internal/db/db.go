@@ -5,9 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/ernestoponce27/db-tui/internal/csvexport"
+	"github.com/ernestoponce27/db-tui/internal/jsonexport"
 )
 
 // MaxPageSize is the default relation-page size and the raw-query row limit.
@@ -65,6 +69,30 @@ const (
 	ExportTypeCSV  = "csv"
 	ExportTypeJSON = "json"
 )
+
+// SerializeCLIResult returns columns and rows serialized as format.
+//
+// The engine must be one of the Engine identifiers; it names the calling
+// adapter in returned errors. The format must be ExportTypeJSON or
+// ExportTypeCSV.
+func SerializeCLIResult(engine string, columns []string, rows [][]any, format string) (string, error) {
+	switch format {
+	case ExportTypeJSON:
+		data, err := jsonexport.Marshal(columns, rows)
+		if err != nil {
+			return "", fmt.Errorf("encode %s query JSON: %w", engine, err)
+		}
+		return string(data), nil
+	case ExportTypeCSV:
+		data, err := csvexport.Marshal(columns, rows)
+		if err != nil {
+			return "", fmt.Errorf("encode %s query CSV: %w", engine, err)
+		}
+		return string(data), nil
+	default:
+		return "", fmt.Errorf("unsupported %s CLI output format %q", engine, format)
+	}
+}
 
 // Table identifies a table available in a database session.
 type Table struct {
@@ -211,8 +239,9 @@ type Database interface {
 	// Execute runs SQL and returns its first rows and command status.
 	Execute(ctx context.Context, sql string, mode QueryExecutionMode) (QueryResult, error)
 	// ExecuteCLI runs a SELECT in a read-only transaction and returns all of
-	// its rows as a JSON array.
-	ExecuteCLI(ctx context.Context, statement string) (string, error)
+	// its rows serialized as format, which must be ExportTypeJSON or
+	// ExportTypeCSV.
+	ExecuteCLI(ctx context.Context, statement, format string) (string, error)
 	Dump(ctx context.Context) error
 	// Export writes all table rows using typeVal as the export format.
 	Export(ctx context.Context, table Table, typeVal string) error

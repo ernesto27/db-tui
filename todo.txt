@@ -13,20 +13,21 @@
 [x] - add refresh tables
 
 QUERY WORKFLOW
-[ ] Add SQL autocomplete for tables
+[x] Add SQL autocomplete for tables
 [ ] Add SQL autocomplete for keywords, schemas, tables, views, functions, and columns.
+[ ] Add SQL autocomplete for columns postgres.
 [x] Add SQL syntax highlighting with engine-specific postgres
 [x] Add SQL syntax highlighting with engine-specific mysql
 po
 [x] Execute only selected SQL when text is selected.
 [x] - show time of execution query
 [x] Add cancellation for long-running queries.
-[ ] Add a read-only safety mode and
+[x] Add a read-only safety mode and
 [x] confirmation before destructive statements.
 
 CLI
 [x] Add a non-interactive CLI mode for executing SQL json
-[x] Add a non-interactive CLI mode for executing SQL csv
+[x] Add a non-interactive CLI mode for executing SQL csv (-t json|csv)
 
 FIXES
 [x] - when open new connectin set table data as default

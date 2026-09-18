@@ -648,6 +648,74 @@ func TestExport(t *testing.T) {
 	assert.NoError(t, database.Export(ctx, db.Table{Schema: "public", Name: "Album"}, db.ExportTypeCSV))
 }
 
+func TestExecuteCLI(t *testing.T) {
+	database := connectQueryTestDatabase(t)
+	ctx := context.Background()
+
+	for _, test := range []struct {
+		name      string
+		statement string
+		format    string
+		want      string
+		wantErr   string
+	}{
+		{
+			name:      "returns JSON rows",
+			statement: `SELECT 1 AS id, 'ACME, Inc.' AS name`,
+			format:    db.ExportTypeJSON,
+			want: `[
+  {
+    "id": 1,
+    "name": "ACME, Inc."
+  }
+]`,
+		},
+		{
+			name:      "returns an empty JSON array without rows",
+			statement: `SELECT "ArtistId" FROM public."Artist" WHERE "ArtistId" = -1`,
+			format:    db.ExportTypeJSON,
+			want:      "[]",
+		},
+		{
+			name:      "returns CSV rows",
+			statement: `SELECT 1 AS id, 'ACME, Inc.' AS name, NULL AS note`,
+			format:    db.ExportTypeCSV,
+			want:      "id,name,note\n1,\"ACME, Inc.\",\n",
+		},
+		{
+			name:      "returns a CSV header row without rows",
+			statement: `SELECT "ArtistId" FROM public."Artist" WHERE "ArtistId" = -1`,
+			format:    db.ExportTypeCSV,
+			want:      "ArtistId\n",
+		},
+		{
+			name:      "validates SELECT only",
+			statement: `DROP TABLE "Album"`,
+			format:    db.ExportTypeJSON,
+			wantErr:   "only SELECT",
+		},
+		{
+			name:      "rejects an unsupported format",
+			statement: "SELECT 1 AS id",
+			format:    "xml",
+			wantErr:   `unsupported ` + db.EnginePostgreSQL + ` CLI output format "xml"`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := database.ExecuteCLI(ctx, test.statement, test.format)
+
+			if test.wantErr != "" {
+				assert.ErrorContains(t, err, test.wantErr)
+				assert.Empty(t, result)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, test.want, result)
+		})
+	}
+}
+
 func TestExportJSON(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

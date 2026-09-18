@@ -84,11 +84,81 @@ expect_cli \
 	-c "$dsn"
 
 expect_cli \
+	"postgres_explicit_json_format" \
+	0 \
+	$'[\n  {\n    "ArtistId": 1,\n    "Name": "AC/DC"\n  }\n]' \
+	"" \
+	-q 'SELECT "ArtistId", "Name" FROM public."Artist" ORDER BY "ArtistId" LIMIT 1' \
+	-c "$dsn" \
+	-t json
+
+expect_cli \
+	"postgres_csv_two_rows" \
+	0 \
+	$'ArtistId,Name\n1,AC/DC\n2,Accept' \
+	"" \
+	-q 'SELECT "ArtistId", "Name" FROM public."Artist" ORDER BY "ArtistId" LIMIT 2' \
+	-c "$dsn" \
+	-t csv
+
+expect_cli \
+	"postgres_csv_header_without_rows" \
+	0 \
+	"ArtistId" \
+	"" \
+	-q 'SELECT "ArtistId" FROM public."Artist" WHERE "ArtistId" = -1' \
+	-c "$dsn" \
+	-t csv
+
+expect_cli \
+	"postgres_csv_quotes_separator" \
+	0 \
+	$'Name\n"Doe, Jane"' \
+	"" \
+	-q $'SELECT \'Doe, Jane\' AS "Name"' \
+	-c "$dsn" \
+	-t csv
+
+expect_cli \
+	"postgres_csv_normalization" \
+	0 \
+	$'Identifier,Measurement,RecordedAt\n3234b411-89ab-4cde-8f01-23456789abcd,NaN,infinity' \
+	"" \
+	-q 'SELECT "Identifier", "Measurement", "RecordedAt" FROM public."CLIJSONExample"' \
+	-c "$dsn" \
+	-t csv
+
+expect_cli \
 	"missing_dsn" \
 	2 \
 	"" \
 	"db-tui: -q and -c must be provided together" \
 	-q 'SELECT 1'
+
+expect_cli \
+	"unsupported_format" \
+	2 \
+	"" \
+	'db-tui: unsupported output format "xml"; want "json" or "csv"' \
+	-q 'SELECT 1' \
+	-c "$dsn" \
+	-t xml
+
+expect_cli \
+	"uppercase_format" \
+	2 \
+	"" \
+	'db-tui: unsupported output format "CSV"; want "json" or "csv"' \
+	-q 'SELECT 1' \
+	-c "$dsn" \
+	-t CSV
+
+expect_cli \
+	"format_without_query_and_dsn" \
+	2 \
+	"" \
+	"db-tui: -t requires -q and -c" \
+	-t csv
 
 expect_cli \
 	"missing_query" \
@@ -138,6 +208,24 @@ expect_cli \
 	-c "$sqlite_path"
 
 expect_cli \
+	"sqlite_csv_two_rows" \
+	0 \
+	$'emp_no,first_name\n10001,Georgi\n10002,Bezalel' \
+	"" \
+	-q 'SELECT emp_no, first_name FROM employee ORDER BY emp_no LIMIT 2' \
+	-c "$sqlite_path" \
+	-t csv
+
+expect_cli \
+	"sqlite_csv_null_is_empty_field" \
+	0 \
+	$'emp_no,first_name\n1,' \
+	"" \
+	-q 'SELECT 1 AS emp_no, NULL AS first_name' \
+	-c "$sqlite_path" \
+	-t csv
+
+expect_cli \
 	"sqlite_non_select_query" \
 	1 \
 	"" \
@@ -160,6 +248,15 @@ expect_cli \
 	"" \
 	-q 'SELECT ID FROM city WHERE ID = -1' \
 	-c "$mysql_dsn"
+
+expect_cli \
+	"mysql_csv_two_rows" \
+	0 \
+	$'ID,Name\n1,Kabul\n2,Qandahar' \
+	"" \
+	-q 'SELECT ID, Name FROM city ORDER BY ID LIMIT 2' \
+	-c "$mysql_dsn" \
+	-t csv
 
 expect_cli \
 	"mysql_non_select_query" \
@@ -186,6 +283,15 @@ expect_cli \
 	-c "$oracle_dsn"
 
 expect_cli \
+	"oracle_csv_result" \
+	0 \
+	$'GREETING\nhello' \
+	"" \
+	-q "SELECT 'hello' AS greeting FROM dual" \
+	-c "$oracle_dsn" \
+	-t csv
+
+expect_cli \
 	"oracle_non_select_query" \
 	1 \
 	"" \
@@ -200,6 +306,15 @@ expect_cli \
 	"" \
 	-q "SELECT CAST('hello' AS nvarchar(5)) AS greeting" \
 	-c "$sqlserver_dsn"
+
+expect_cli \
+	"sqlserver_csv_result" \
+	0 \
+	$'greeting\nhello' \
+	"" \
+	-q "SELECT CAST('hello' AS nvarchar(5)) AS greeting" \
+	-c "$sqlserver_dsn" \
+	-t csv
 
 expect_cli \
 	"sqlserver_non_select_query" \

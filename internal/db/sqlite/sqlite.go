@@ -421,31 +421,26 @@ func (s *sqliteDatabase) ExportQuery(ctx context.Context, statement string) erro
 	return nil
 }
 
-// ExecuteCLI runs a SQLite query in a read-only transaction and returns a JSON
-// array of its rows.
-func (s *sqliteDatabase) ExecuteCLI(ctx context.Context, statement string) (string, error) {
+// ExecuteCLI runs a SQLite query in a read-only transaction and returns its
+// rows serialized as format.
+func (s *sqliteDatabase) ExecuteCLI(ctx context.Context, statement, format string) (string, error) {
 	result, err := s.executeAll(ctx, statement)
 	if err != nil {
 		return "", err
 	}
 
-	data, err := jsonexport.Marshal(result.Columns, result.Rows)
-	if err != nil {
-		return "", fmt.Errorf("encode SQLite query JSON: %w", err)
-	}
-
-	return string(data), nil
+	return db.SerializeCLIResult(s.Engine(), result.Columns, result.Rows, format)
 }
 
-// ExecuteCLI connects to SQLite, runs a query, and returns a JSON array of its rows.
-func ExecuteCLI(ctx context.Context, path, statement string) (string, error) {
+// ExecuteCLI connects to SQLite, runs a query, and returns its rows serialized as format.
+func ExecuteCLI(ctx context.Context, path, statement, format string) (string, error) {
 	database, err := Connect(ctx, path)
 	if err != nil {
 		return "", err
 	}
 	defer database.Close()
 
-	return database.ExecuteCLI(ctx, statement)
+	return database.ExecuteCLI(ctx, statement, format)
 }
 
 // Close releases the database connection and query logger.

@@ -455,7 +455,7 @@ func TestExecuteCLI(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := database.ExecuteCLI(context.Background(), test.statement)
+			result, err := database.ExecuteCLI(context.Background(), test.statement, db.ExportTypeJSON)
 
 			if test.wantErr != "" {
 				assert.ErrorContains(t, err, test.wantErr)
