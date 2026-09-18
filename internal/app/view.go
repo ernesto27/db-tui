@@ -14,6 +14,8 @@ import (
 	"github.com/ernestoponce27/db-tui/internal/version"
 )
 
+const readOnlyModeText = "READ ONLY"
+
 // View implements tea.Model.
 func (m Model) View() tea.View {
 	view := m.baseView()
@@ -32,6 +34,9 @@ func (m Model) baseView() tea.View {
 			headerTitle,
 			sanitizeText(databaseName),
 			engineDisplayName(m.database.Engine()),
+		}
+		if m.readOnly {
+			segments = append([]string{headerTitle, readOnlyHeaderLabel()}, segments[1:]...)
 		}
 		if environment != "" {
 			segments = append([]string{headerTitle, strings.ToUpper(string(environment))}, segments[1:]...)
@@ -63,6 +68,10 @@ func (m Model) baseView() tea.View {
 	view.MouseMode = tea.MouseModeCellMotion
 	view.WindowTitle = "db-tui"
 	return view
+}
+
+func readOnlyHeaderLabel() string {
+	return lipgloss.NewStyle().Foreground(colorAccent).Render(readOnlyModeText)
 }
 
 func rawQueryHighlighter(database db.Database) sqlhighlight.Highlighter {
@@ -239,16 +248,7 @@ func (m Model) footerText() string {
 		return "Ctrl+S settings  •  Ctrl+N new connection  •  Ctrl+L open connections  •  Ctrl+R raw query  •  Ctrl+K shortcuts  •  q quit"
 	}
 	if m.panel == panelQuery {
-		exportHelp := ""
-		if !m.query.loading && m.query.err == nil && len(m.query.result.Columns) > 0 && strings.TrimSpace(m.query.lastExecutedSQL) != "" {
-			exportHelp = "  •  Ctrl+E export results"
-		}
-		ddlHelp := ""
-		_, tableSelected := m.navigator.selectedTable()
-		if !m.navigator.selectedIsView() && (tableSelected || (m.activeConnectionIndex >= 0 && m.activeConnectionIndex < len(m.config.Connections))) {
-			ddlHelp = "  •  Ctrl+G actions"
-		}
-		return "raw query  •  Ctrl+N new script  •  Ctrl+P execute  •  Ctrl+H saved scripts" + exportHelp + ddlHelp + "  •  Tab editor/results  •  ↑/↓, j/k, or wheel scroll results  •  Ctrl+S settings  •  Ctrl+T table data  •  Ctrl+L connections  •  Ctrl+K shortcuts  •  q quit"
+		return "Ctrl+P execute  •  Alt+R read only  •  Ctrl+K shortcuts  •  q quit"
 	}
 	if m.activeExtensions.set {
 		status := ""
@@ -261,7 +261,7 @@ func (m Model) footerText() string {
 		if m.focus == focusData && !m.data.loading {
 			refresh = "  •  r refresh"
 		}
-		return "PostgreSQL extensions" + status + refresh + "  •  Ctrl+O objects  •  Ctrl+R raw query  •  Tab navigator/data  •  Ctrl+K shortcuts  •  q quit"
+		return "PostgreSQL extensions" + status + refresh + "  •  Ctrl+O objects  •  Ctrl+R raw query  •  Alt+R read only  •  Tab navigator/data  •  Ctrl+K shortcuts  •  q quit"
 	}
 	if (m.loading || m.viewsLoading || m.materializedViewsLoading || m.functionsLoading) && !m.navigator.hasObjects() {
 		return "loading database objects  •  Ctrl+K shortcuts  •  q quit"
@@ -316,7 +316,7 @@ func (m Model) footerText() string {
 	if m.activeFunction.set && m.panel == panelData && m.focus == focusData {
 		functionHelp = "  •  ↑/↓ or j/k scroll function"
 	}
-	return fmt.Sprintf("Ctrl+O objects  •  Ctrl+F search%s%s%s%s%s%s%s  •  Ctrl+S settings  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Tab navigator/data  •  Ctrl+K shortcuts  •  q quit",
+	return fmt.Sprintf("Ctrl+O objects  •  Ctrl+F search%s%s%s%s%s%s%s  •  Ctrl+S settings  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Alt+R read only  •  Tab navigator/data  •  Ctrl+K shortcuts  •  q quit",
 		rowStatus, activationHelp, reconnectHelp, refreshHelp, functionHelp, tableHelp, editHelp)
 }
 

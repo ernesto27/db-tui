@@ -12,6 +12,7 @@ type keyMap struct {
 	tableSearch   key.Binding
 	objects       key.Binding
 	settings      key.Binding
+	readOnly      key.Binding
 	activate      key.Binding
 	executeQuery  key.Binding
 	sqlScripts    key.Binding
@@ -44,6 +45,7 @@ func defaultKeyMap() keyMap {
 		tableSearch:   key.NewBinding(key.WithKeys("ctrl+f"), key.WithHelp("ctrl+f", "search tables")),
 		objects:       key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "objects")),
 		settings:      key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "settings")),
+		readOnly:      key.NewBinding(key.WithKeys("alt+r"), key.WithHelp("alt+r", "toggle read-only")),
 		activate:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "load rows")),
 		executeQuery:  key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "execute query")),
 		sqlScripts:    key.NewBinding(key.WithKeys("ctrl+h"), key.WithHelp("ctrl+h", "saved scripts")),

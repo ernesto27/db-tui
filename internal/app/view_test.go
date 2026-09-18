@@ -29,6 +29,17 @@ func TestBaseViewShowsConnectedEngine(t *testing.T) {
 	assert.Contains(t, view.Content, "chinook  /  MySQL")
 }
 
+func TestBaseViewShowsReadOnlyMode(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook", engine: db.EngineMySQL}
+	model.readOnly = true
+
+	view := model.baseView()
+
+	assert.Contains(t, view.Content, readOnlyModeText)
+	assert.Contains(t, view.Content, readOnlyHeaderLabel())
+}
+
 func TestViewRendersRawQueryDeleteConfirmation(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	modal := newRawQueryDeleteModal("DELETE FROM album")
@@ -156,11 +167,12 @@ func TestFooterTextDescribesTabNavigation(t *testing.T) {
 
 	model.panel = panelQuery
 	assert.NotContains(t, model.footerText(), "r refresh")
-	assert.Contains(t, model.footerText(), "Tab editor/results")
+	assert.Equal(t, "Ctrl+P execute  •  Alt+R read only  •  Ctrl+K shortcuts  •  q quit", model.footerText())
 }
 
 func TestShortcutsModalDocumentsNavigatorReconnect(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 
 	assert.Contains(t, strings.Join(newShortcutsModal(model.layout).lines(model.layout), "\n"), "Reconnect database from navigator")
+	assert.Contains(t, strings.Join(newShortcutsModal(model.layout).lines(model.layout), "\n"), "Toggle session read-only mode")
 }

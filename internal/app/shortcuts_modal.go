@@ -24,6 +24,7 @@ var shortcutSections = []shortcutSection{
 		{key: "Ctrl+L", action: "Open connections"},
 		{key: "Ctrl+N", action: "New connection / new query script"},
 		{key: "Ctrl+S", action: "Open settings"},
+		{key: "Alt+R", action: "Toggle session read-only mode"},
 		{key: "Ctrl+R", action: "Open raw query"},
 		{key: "Ctrl+T", action: "Open table data"},
 		{key: "Ctrl+O", action: "Select database objects"},

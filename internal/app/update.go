@@ -540,6 +540,7 @@ func (m *Model) adoptConnection(database db.Database, settings ConnectionSetting
 		m.database.Close()
 	}
 	m.database = database
+	m.readOnly = false
 	m.savedConnection = settings
 	m.reconnecting = false
 	m.reconnectErr = nil
@@ -702,6 +703,11 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		modal := newSettingsModal(m.config.PageSize())
 		m.settingsModal = &modal
 		return m.settingsModal.maxPageSize.Focus()
+	case key.Matches(msg, m.keys.readOnly):
+		if m.database != nil {
+			m.readOnly = !m.readOnly
+		}
+		return nil
 	case key.Matches(msg, m.keys.connections):
 		modal := newConnectionsModal(m.config)
 		m.connectionsModal = &modal
@@ -1243,6 +1249,10 @@ func (m *Model) startQuery() tea.Cmd {
 	if m.database == nil || m.query.loading || strings.TrimSpace(sql) == "" {
 		return nil
 	}
+	if m.readOnly && m.database.Engine() == db.EngineSQLServer && rawQueryContainsSQLServerWrite(sql) {
+		m.query.finishExecute(db.QueryResult{}, 0, errReadOnlySQLServerQuery)
+		return nil
+	}
 	if rawQueryContainsDelete(sql) {
 		modal := newRawQueryDeleteModal(sql)
 		m.rawQueryDeleteModal = &modal
@@ -1261,7 +1271,7 @@ func (m *Model) executeRawQuery(sql string) tea.Cmd {
 	request := m.query.beginExecute(sql)
 	m.query.cancel = cancel
 	session := m.session
-	commands := []tea.Cmd{executeQuery(ctx, m.database, sql, session, request), queryElapsedTick(session, request, m.query.executionStartedAt)}
+	commands := []tea.Cmd{executeQuery(ctx, m.database, sql, m.queryExecutionMode(), session, request), queryElapsedTick(session, request, m.query.executionStartedAt)}
 	if m.activeConnectionIndex >= 0 && m.activeConnectionIndex < len(m.config.Connections) {
 		connectionName := m.config.Connections[m.activeConnectionIndex].Name
 		fileName := m.query.loadedScriptName
@@ -1269,6 +1279,13 @@ func (m *Model) executeRawQuery(sql string) tea.Cmd {
 		commands = append(commands, saveSQLScript(m.sqlScripts, connectionName, fileName, content, session, request))
 	}
 	return tea.Batch(commands...)
+}
+
+func (m Model) queryExecutionMode() db.QueryExecutionMode {
+	if m.readOnly {
+		return db.QueryExecutionReadOnly
+	}
+	return db.QueryExecutionDefault
 }
 
 func (m *Model) updateSQLScriptsModal(msg tea.Msg) tea.Cmd {

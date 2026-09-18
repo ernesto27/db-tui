@@ -54,6 +54,21 @@ func TestUpdateKeyRouting(t *testing.T) {
 			},
 		},
 		{
+			name:    "toggles read-only for a connected database",
+			setup:   func(model *Model) { model.database = &fakeDatabase{name: "chinook"} },
+			message: keyPress('r', "", tea.ModAlt),
+			assert: func(t *testing.T, got Model, _ tea.Cmd) {
+				assert.True(t, got.readOnly)
+			},
+		},
+		{
+			name:    "ignores read-only toggle without a database",
+			message: keyPress('r', "", tea.ModAlt),
+			assert: func(t *testing.T, got Model, _ tea.Cmd) {
+				assert.False(t, got.readOnly)
+			},
+		},
+		{
 			name:    "starts navigator search",
 			setup:   func(model *Model) { model.database = &fakeDatabase{name: "chinook"} },
 			message: keyPress('f', "", tea.ModCtrl),
@@ -241,6 +256,17 @@ func TestUpdateKeyRouting(t *testing.T) {
 			test.assert(t, got, command)
 		})
 	}
+}
+
+func TestReadOnlyToggleIsReversible(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook"}
+
+	model, _ = updateModel(t, model, keyPress('r', "", tea.ModAlt))
+	assert.True(t, model.readOnly)
+
+	model, _ = updateModel(t, model, keyPress('r', "", tea.ModAlt))
+	assert.False(t, model.readOnly)
 }
 
 func TestUpdateQueryEditorOpensTableCompletionForEveryEngine(t *testing.T) {

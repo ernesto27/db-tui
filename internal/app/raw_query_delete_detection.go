@@ -1,6 +1,20 @@
 package app
 
-import "strings"
+import (
+	"errors"
+	"strings"
+)
+
+var errReadOnlySQLServerQuery = errors.New("read-only mode prevents this SQL Server statement")
+
+var sqlServerReadOnlyRejectedKeywords = map[string]struct{}{
+	"alter": {}, "backup": {}, "begin": {}, "bulk": {}, "commit": {}, "create": {},
+	"dbcc": {}, "delete": {}, "deny": {}, "drop": {}, "exec": {}, "execute": {},
+	"grant": {}, "insert": {}, "into": {}, "kill": {}, "merge": {}, "reconfigure": {},
+	"restore": {}, "revoke": {}, "rollback": {}, "set": {}, "shutdown": {}, "truncate": {},
+	"update": {}, "use": {}, "waitfor": {}, "xlock": {}, "updlock": {}, "holdlock": {},
+	"tablockx": {},
+}
 
 type rawQueryTokenKind uint8
 
@@ -16,6 +30,18 @@ const (
 type rawQueryToken struct {
 	kind rawQueryTokenKind
 	text string
+}
+
+func rawQueryContainsSQLServerWrite(sql string) bool {
+	for _, token := range rawQueryTokens(sql) {
+		if token.kind != rawQueryTokenWord {
+			continue
+		}
+		if _, rejected := sqlServerReadOnlyRejectedKeywords[token.text]; rejected {
+			return true
+		}
+	}
+	return false
 }
 
 func rawQueryContainsDelete(sql string) bool {

@@ -230,6 +230,7 @@ func TestExecuteQuery(t *testing.T) {
 		name       string
 		database   *fakeDatabase
 		sql        string
+		mode       db.QueryExecutionMode
 		session    uint64
 		request    uint64
 		wantResult db.QueryResult
@@ -243,6 +244,7 @@ func TestExecuteQuery(t *testing.T) {
 				CommandTag: "SELECT 1",
 			}},
 			sql:     "SELECT count(*)",
+			mode:    db.QueryExecutionDefault,
 			session: 4,
 			request: 12,
 			wantResult: db.QueryResult{
@@ -255,6 +257,7 @@ func TestExecuteQuery(t *testing.T) {
 			name:     "error",
 			database: &fakeDatabase{queryErr: wantErr},
 			sql:      "broken",
+			mode:     db.QueryExecutionReadOnly,
 			session:  4,
 			request:  12,
 			wantErr:  wantErr,
@@ -269,6 +272,7 @@ func TestExecuteQuery(t *testing.T) {
 				ctx,
 				test.database,
 				test.sql,
+				test.mode,
 				test.session,
 				test.request,
 			)().(queryFinishedMsg)
@@ -276,6 +280,7 @@ func TestExecuteQuery(t *testing.T) {
 
 			assert.Equal(t, 1, test.database.executeCalls)
 			assert.Equal(t, test.sql, test.database.executedSQL)
+			assert.Equal(t, test.mode, test.database.executeMode)
 			assert.True(t, test.database.executeDeadline)
 			assert.Equal(t, test.wantResult, message.result)
 			assert.Equal(t, test.session, message.session)

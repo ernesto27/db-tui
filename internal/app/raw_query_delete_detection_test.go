@@ -32,3 +32,29 @@ func TestRawQueryContainsDelete(t *testing.T) {
 		})
 	}
 }
+
+func TestRawQueryContainsSQLServerWrite(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+		want bool
+	}{
+		{name: "select", sql: "SELECT * FROM album", want: false},
+		{name: "cte select", sql: "WITH recent AS (SELECT 1) SELECT * FROM recent", want: false},
+		{name: "insert", sql: "INSERT INTO album VALUES (1)", want: true},
+		{name: "select into", sql: "SELECT * INTO archive FROM album", want: true},
+		{name: "delete in CTE", sql: "WITH removed AS (DELETE FROM album OUTPUT deleted.id) SELECT * FROM removed", want: true},
+		{name: "session control", sql: "SET NOCOUNT ON", want: true},
+		{name: "procedure execution", sql: "EXEC sp_rename 'album', 'records'", want: true},
+		{name: "lock hint", sql: "SELECT * FROM album WITH (UPDLOCK)", want: true},
+		{name: "comment", sql: "/* DELETE FROM album */ SELECT 1", want: false},
+		{name: "string literal", sql: "SELECT 'DELETE FROM album'", want: false},
+		{name: "quoted identifier", sql: "SELECT [DELETE] FROM album", want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, rawQueryContainsSQLServerWrite(test.sql))
+		})
+	}
+}

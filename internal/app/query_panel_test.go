@@ -369,6 +369,47 @@ func TestModelStartQueryRequiresDeleteConfirmation(t *testing.T) {
 	assert.Zero(t, model.query.request)
 }
 
+func TestModelStartQueryRejectsSQLServerWriteInReadOnlyMode(t *testing.T) {
+	database := &fakeDatabase{name: "chinook", engine: db.EngineSQLServer}
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = database
+	model.readOnly = true
+	model.query.editor.SetValue("DELETE FROM album")
+
+	command := model.startQuery()
+
+	assert.Nil(t, command)
+	assert.ErrorIs(t, model.query.err, errReadOnlySQLServerQuery)
+	assert.Nil(t, model.rawQueryDeleteModal)
+	assert.Zero(t, database.executeCalls)
+	assert.False(t, model.query.loading)
+}
+
+func TestModelStartQueryAllowsSQLServerReadInReadOnlyMode(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook", engine: db.EngineSQLServer}
+	model.readOnly = true
+	model.query.editor.SetValue("SELECT * FROM album")
+
+	command := model.startQuery()
+
+	assert.NotNil(t, command)
+	assert.True(t, model.query.loading)
+}
+
+func TestModelStartQueryDefersNonSQLServerWritesToBackend(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "chinook", engine: db.EnginePostgreSQL}
+	model.readOnly = true
+	model.query.editor.SetValue("DELETE FROM album")
+
+	command := model.startQuery()
+
+	assert.Nil(t, command)
+	require.NotNil(t, model.rawQueryDeleteModal)
+	assert.NoError(t, model.query.err)
+}
+
 func TestRawQueryDeleteConfirmationExecutesOriginalSQL(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.database = &fakeDatabase{name: "chinook"}

@@ -99,6 +99,7 @@ type fakeDatabase struct {
 	getRowsDeadline                bool
 	executeCalls                   int
 	executedSQL                    string
+	executeMode                    db.QueryExecutionMode
 	executeDeadline                bool
 	blockExecuteUntilCanceled      bool
 	executeStarted                 chan struct{}
@@ -197,10 +198,11 @@ func (f *fakeDatabase) GetRows(
 func (f *fakeDatabase) Execute(
 	ctx context.Context,
 	sql string,
-	_ db.QueryExecutionMode,
+	mode db.QueryExecutionMode,
 ) (db.QueryResult, error) {
 	f.executeCalls++
 	f.executedSQL = sql
+	f.executeMode = mode
 	_, f.executeDeadline = ctx.Deadline()
 	if f.blockExecuteUntilCanceled {
 		f.executeContext = ctx

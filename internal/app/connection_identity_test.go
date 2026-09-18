@@ -56,6 +56,16 @@ func TestSelectConnectionRecordsActiveIndex(t *testing.T) {
 	assert.Equal(t, -1, model.pendingConnectionIndex)
 }
 
+func TestAdoptConnectionResetsReadOnly(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model.database = &fakeDatabase{name: "old"}
+	model.readOnly = true
+
+	_ = model.adoptConnection(&fakeDatabase{name: "new"}, ConnectionSettings{})
+
+	assert.False(t, model.readOnly)
+}
+
 func TestEditConnectionSetsActiveIndex(t *testing.T) {
 	cfg := config.Config{
 		Connections: []config.Connection{

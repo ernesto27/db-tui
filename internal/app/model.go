@@ -46,6 +46,7 @@ type navigatorClick struct {
 // Model is the root Bubble Tea application model.
 type Model struct {
 	database               db.Database
+	readOnly               bool
 	savedConnection        ConnectionSettings
 	sqlScripts             ListSqlScript
 	activeConnectionIndex  int
