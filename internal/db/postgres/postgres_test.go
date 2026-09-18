@@ -16,9 +16,99 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const chinookDSN = "postgres://db_tui@127.0.0.1:5433/chinook?sslmode=disable"
+
+func TestExecute(t *testing.T) {
+	tests := []struct {
+		name        string
+		sql         string
+		mode        db.QueryExecutionMode
+		wantColumns []string
+		wantRows    int
+		wantFirst   any
+		wantLast    any
+		wantTag     string
+		wantErr     bool
+		wantErrText string
+	}{
+		{
+			name:        "returns rows",
+			sql:         "SELECT 7 AS number",
+			wantColumns: []string{"number"},
+			wantRows:    1,
+			wantFirst:   int32(7),
+			wantLast:    int32(7),
+			wantTag:     "SELECT 1",
+		},
+		{
+			name:    "returns command tag",
+			sql:     "CREATE TEMPORARY TABLE raw_query_test (id integer)",
+			wantTag: "CREATE TABLE",
+		},
+		{
+			name:        "rejects delete in read-only mode",
+			sql:         `DELETE FROM "Artist" WHERE "ArtistId" = -1`,
+			mode:        db.QueryExecutionReadOnly,
+			wantErr:     true,
+			wantErrText: "execute read-only PostgreSQL query",
+		},
+		{
+			name:        "limits rows",
+			sql:         "SELECT generate_series(1, 101) AS number",
+			wantColumns: []string{"number"},
+			wantRows:    db.MaxPageSize,
+			wantFirst:   int32(1),
+			wantLast:    int32(db.MaxPageSize),
+			wantTag:     "SELECT 101",
+		},
+		{
+			name:        "wraps database errors",
+			sql:         "SELECT * FROM raw_query_table_that_does_not_exist",
+			wantErr:     true,
+			wantErrText: "execute PostgreSQL query",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			database := connectQueryTestDatabase(t)
+
+			result, err := database.Execute(context.Background(), test.sql, test.mode)
+
+			if test.wantErr {
+				assert.Error(t, err)
+				assert.ErrorContains(t, err, test.wantErrText)
+				return
+			}
+			require.NoError(t, err)
+			if len(test.wantColumns) == 0 {
+				assert.Empty(t, result.Columns)
+			} else {
+				assert.Equal(t, test.wantColumns, result.Columns)
+			}
+			assert.Len(t, result.Rows, test.wantRows)
+			assert.Equal(t, test.wantTag, result.CommandTag)
+			if test.wantRows > 0 {
+				assert.Equal(t, test.wantFirst, result.Rows[0][0])
+				assert.Equal(t, test.wantLast, result.Rows[len(result.Rows)-1][0])
+			}
+		})
+	}
+}
+
+func connectQueryTestDatabase(t *testing.T) db.Database {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+
+	database, err := postgres.Connect(ctx, chinookDSN)
+	require.NoError(t, err)
+	t.Cleanup(database.Close)
+	return database
+}
 
 func TestListTables(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -294,7 +384,7 @@ func TestTableOperationsUseSelectedSchema(t *testing.T) {
 			INSERT INTO analytics."DailyRevenue" ("RevenueDate", "InvoiceCount", "Revenue")
 			VALUES ('2024-01-01', 12, 34.87)
 			ON CONFLICT ("RevenueDate") DO UPDATE
-			SET "InvoiceCount" = EXCLUDED."InvoiceCount", "Revenue" = EXCLUDED."Revenue"`)
+			SET "InvoiceCount" = EXCLUDED."InvoiceCount", "Revenue" = EXCLUDED."Revenue"`, db.QueryExecutionDefault)
 	})
 
 	table := db.Table{Schema: schema, Name: tableName}
@@ -322,7 +412,7 @@ func TestTableOperationsUseSelectedSchema(t *testing.T) {
 	if !assert.NoError(t, err, "update selected-schema row") {
 		return
 	}
-	updatedRow, err := database.Execute(ctx, `SELECT "InvoiceCount" FROM analytics."DailyRevenue" WHERE "RevenueDate" = '2024-01-01'`)
+	updatedRow, err := database.Execute(ctx, `SELECT "InvoiceCount" FROM analytics."DailyRevenue" WHERE "RevenueDate" = '2024-01-01'`, db.QueryExecutionDefault)
 	if !assert.NoError(t, err, "read selected-schema row after update") {
 		return
 	}
@@ -332,7 +422,7 @@ func TestTableOperationsUseSelectedSchema(t *testing.T) {
 	if !assert.NoError(t, err, "delete selected-schema row") {
 		return
 	}
-	remainingRows, err := database.Execute(ctx, `SELECT COUNT(*) FROM analytics."DailyRevenue" WHERE "RevenueDate" = '2024-01-01'`)
+	remainingRows, err := database.Execute(ctx, `SELECT COUNT(*) FROM analytics."DailyRevenue" WHERE "RevenueDate" = '2024-01-01'`, db.QueryExecutionDefault)
 	if assert.NoError(t, err, "read selected-schema row after delete") {
 		assert.EqualValues(t, 0, remainingRows.Rows[0][0])
 	}
@@ -348,14 +438,14 @@ func TestListColumnsCompactsDroppedColumnPositions(t *testing.T) {
 	}
 	t.Cleanup(database.Close)
 
-	_, err = database.Execute(ctx, "CREATE TABLE public.list_columns_gap_demo (first int, middle int, last int)")
+	_, err = database.Execute(ctx, "CREATE TABLE public.list_columns_gap_demo (first int, middle int, last int)", db.QueryExecutionDefault)
 	if !assert.NoError(t, err, "create ListColumns test table") {
 		return
 	}
 	t.Cleanup(func() {
-		_, _ = database.Execute(context.Background(), "DROP TABLE IF EXISTS public.list_columns_gap_demo")
+		_, _ = database.Execute(context.Background(), "DROP TABLE IF EXISTS public.list_columns_gap_demo", db.QueryExecutionDefault)
 	})
-	_, err = database.Execute(ctx, "ALTER TABLE public.list_columns_gap_demo DROP COLUMN middle")
+	_, err = database.Execute(ctx, "ALTER TABLE public.list_columns_gap_demo DROP COLUMN middle", db.QueryExecutionDefault)
 	if !assert.NoError(t, err, "drop middle column") {
 		return
 	}
@@ -381,12 +471,12 @@ func TestListColumnsNormalizesArrayTypeNames(t *testing.T) {
 	}
 	t.Cleanup(database.Close)
 
-	_, err = database.Execute(ctx, "CREATE TABLE public.list_columns_array_demo (tags varchar(10)[], codes char(3)[])")
+	_, err = database.Execute(ctx, "CREATE TABLE public.list_columns_array_demo (tags varchar(10)[], codes char(3)[])", db.QueryExecutionDefault)
 	if !assert.NoError(t, err, "create ListColumns array test table") {
 		return
 	}
 	t.Cleanup(func() {
-		_, _ = database.Execute(context.Background(), "DROP TABLE IF EXISTS public.list_columns_array_demo")
+		_, _ = database.Execute(context.Background(), "DROP TABLE IF EXISTS public.list_columns_array_demo", db.QueryExecutionDefault)
 	})
 
 	columns, err := database.ListColumns(ctx, db.Table{Schema: "public", Name: "list_columns_array_demo"})
@@ -458,12 +548,12 @@ func TestTableDDLIncludesColumnClauses(t *testing.T) {
 		label varchar(20) COLLATE "C" DEFAULT 'x',
 		total int GENERATED ALWAYS AS (id * 2) STORED,
 		external_id int GENERATED ALWAYS AS IDENTITY
-	)`)
+	)`, db.QueryExecutionDefault)
 	if !assert.NoError(t, err, "create DDL regression table") {
 		return
 	}
 	t.Cleanup(func() {
-		_, _ = database.Execute(context.Background(), "DROP TABLE IF EXISTS public.ddl_review_demo")
+		_, _ = database.Execute(context.Background(), "DROP TABLE IF EXISTS public.ddl_review_demo", db.QueryExecutionDefault)
 	})
 
 	ddl, err := database.TableDDL(ctx, db.Table{Schema: "public", Name: "ddl_review_demo"})
@@ -511,7 +601,7 @@ func TestExecuteCancelsRunningQuery(t *testing.T) {
 	FROM "Track" AS t
 	CROSS JOIN delay
 	ORDER BY t."TrackId"
-	LIMIT 100;`)
+	LIMIT 100;`, db.QueryExecutionDefault)
 
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.Less(t, time.Since(started), 2*time.Second, "canceled query should not wait for pg_sleep")
@@ -715,7 +805,7 @@ func TestDeleteRow(t *testing.T) {
 
 	result, err := database.Execute(ctx, `INSERT INTO "Artist" ("ArtistId", "Name")
 		SELECT COALESCE(MAX("ArtistId"), 0) + 1, 'delete_row_test' FROM "Artist"
-		RETURNING "ArtistId"`)
+		RETURNING "ArtistId"`, db.QueryExecutionDefault)
 	if !assert.NoError(t, err, "insert row to delete") || !assert.Len(t, result.Rows, 1) {
 		return
 	}
@@ -723,7 +813,7 @@ func TestDeleteRow(t *testing.T) {
 	t.Cleanup(func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cleanupCancel()
-		_, _ = database.Execute(cleanupCtx, fmt.Sprintf(`DELETE FROM "Artist" WHERE "ArtistId" = %v`, artistID))
+		_, _ = database.Execute(cleanupCtx, fmt.Sprintf(`DELETE FROM "Artist" WHERE "ArtistId" = %v`, artistID), db.QueryExecutionDefault)
 	})
 
 	tests := []struct {
@@ -917,22 +1007,22 @@ func TestGetRowsUsesTableSchema(t *testing.T) {
 	t.Cleanup(database.Close)
 
 	const schema = "schema_object_picker_test"
-	_, err = database.Execute(ctx, "DROP SCHEMA IF EXISTS "+schema+" CASCADE")
+	_, err = database.Execute(ctx, "DROP SCHEMA IF EXISTS "+schema+" CASCADE", db.QueryExecutionDefault)
 	if !assert.NoError(t, err, "remove prior test schema") {
 		return
 	}
 	t.Cleanup(func() {
-		_, _ = database.Execute(context.Background(), "DROP SCHEMA IF EXISTS "+schema+" CASCADE")
+		_, _ = database.Execute(context.Background(), "DROP SCHEMA IF EXISTS "+schema+" CASCADE", db.QueryExecutionDefault)
 	})
-	_, err = database.Execute(ctx, "CREATE SCHEMA "+schema)
+	_, err = database.Execute(ctx, "CREATE SCHEMA "+schema, db.QueryExecutionDefault)
 	if !assert.NoError(t, err, "create test schema") {
 		return
 	}
-	_, err = database.Execute(ctx, "CREATE TABLE "+schema+".event (id integer)")
+	_, err = database.Execute(ctx, "CREATE TABLE "+schema+".event (id integer)", db.QueryExecutionDefault)
 	if !assert.NoError(t, err, "create test table") {
 		return
 	}
-	_, err = database.Execute(ctx, "INSERT INTO "+schema+".event (id) VALUES (7)")
+	_, err = database.Execute(ctx, "INSERT INTO "+schema+".event (id) VALUES (7)", db.QueryExecutionDefault)
 	if !assert.NoError(t, err, "insert test row") {
 		return
 	}

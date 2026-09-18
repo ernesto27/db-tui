@@ -16,6 +16,105 @@ import (
 
 const freePDBDSN = "oracle://db_tui:db_tui@127.0.0.1:1522/FREEPDB1"
 
+func TestExecute(t *testing.T) {
+	tests := []struct {
+		name        string
+		sql         string
+		mode        db.QueryExecutionMode
+		wantColumns []string
+		wantRows    int
+		wantFirst   any
+		wantLast    any
+		wantTag     string
+		wantErr     bool
+		wantErrText string
+	}{
+		{
+			name:        "returns rows",
+			sql:         "SELECT 7 AS value FROM dual",
+			wantColumns: []string{"VALUE"},
+			wantRows:    1,
+			wantFirst:   "7",
+			wantLast:    "7",
+			wantTag:     "SELECT",
+		},
+		{
+			name:    "returns command tag",
+			sql:     "CREATE TABLE raw_query_test (id NUMBER)",
+			wantTag: "CREATE TABLE",
+		},
+		{
+			name:        "rejects delete in read-only mode",
+			sql:         "DELETE FROM CITIES WHERE 1 = 0",
+			mode:        db.QueryExecutionReadOnly,
+			wantErr:     true,
+			wantErrText: "execute read-only Oracle query",
+		},
+		{
+			name:        "limits rows",
+			sql:         "SELECT level AS value FROM dual CONNECT BY level <= 101",
+			wantColumns: []string{"VALUE"},
+			wantRows:    db.MaxPageSize,
+			wantFirst:   "1",
+			wantLast:    "100",
+			wantTag:     "SELECT",
+		},
+		{
+			name:        "wraps database errors",
+			sql:         "SELECT * FROM raw_query_table_that_does_not_exist",
+			wantErr:     true,
+			wantErrText: "execute Oracle query",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			database := connectQueryTestDatabase(t)
+			if test.name == "returns command tag" {
+				_, _ = database.Execute(ctx, "DROP TABLE raw_query_test PURGE", db.QueryExecutionDefault)
+				t.Cleanup(func() {
+					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cleanupCancel()
+					_, _ = database.Execute(cleanupCtx, "DROP TABLE raw_query_test PURGE", db.QueryExecutionDefault)
+				})
+			}
+
+			result, err := database.Execute(ctx, test.sql, test.mode)
+
+			if test.wantErr {
+				assert.Error(t, err)
+				assert.ErrorContains(t, err, test.wantErrText)
+				return
+			}
+			require.NoError(t, err)
+			if len(test.wantColumns) == 0 {
+				assert.Empty(t, result.Columns)
+			} else {
+				assert.Equal(t, test.wantColumns, result.Columns)
+			}
+			assert.Len(t, result.Rows, test.wantRows)
+			assert.Equal(t, test.wantTag, result.CommandTag)
+			if test.wantRows > 0 {
+				assert.Equal(t, test.wantFirst, result.Rows[0][0])
+				assert.Equal(t, test.wantLast, result.Rows[len(result.Rows)-1][0])
+			}
+		})
+	}
+}
+
+func connectQueryTestDatabase(t *testing.T) db.Database {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+
+	database, err := oracle.Connect(ctx, freePDBDSN)
+	require.NoError(t, err)
+	t.Cleanup(database.Close)
+	return database
+}
+
 func TestListTables(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -271,7 +370,7 @@ func TestExecuteCancelsRunningQuery(t *testing.T) {
 	defer cancelTimer.Stop()
 
 	started := time.Now()
-	_, err = database.Execute(queryCtx, "BEGIN LOOP NULL; END LOOP; END;")
+	_, err = database.Execute(queryCtx, "BEGIN LOOP NULL; END LOOP; END;", db.QueryExecutionDefault)
 
 	assert.ErrorContains(t, err, "ORA-01013")
 	assert.Less(t, time.Since(started), 2*time.Second, "canceled query should not finish the PL/SQL loop")
@@ -504,12 +603,12 @@ func TestDeleteRow(t *testing.T) {
 	}
 	t.Cleanup(database.Close)
 
-	_, err = database.Execute(ctx, "INSERT INTO COUNTRIES (COUNTRY_ID, COUNTRY_CODE, NAME, REGION_ID) VALUES ('ZZZ', 'ZZ', 'delete_row_test', 'EU')")
+	_, err = database.Execute(ctx, "INSERT INTO COUNTRIES (COUNTRY_ID, COUNTRY_CODE, NAME, REGION_ID) VALUES ('ZZZ', 'ZZ', 'delete_row_test', 'EU')", db.QueryExecutionDefault)
 	if !assert.NoError(t, err, "insert row to delete") {
 		return
 	}
 	t.Cleanup(func() {
-		_, _ = database.Execute(context.Background(), "DELETE FROM COUNTRIES WHERE COUNTRY_ID = 'ZZZ'")
+		_, _ = database.Execute(context.Background(), "DELETE FROM COUNTRIES WHERE COUNTRY_ID = 'ZZZ'", db.QueryExecutionDefault)
 	})
 
 	tests := []struct {

@@ -497,11 +497,28 @@ func (p *postgresql) getRows(ctx context.Context, table db.Table, page *db.PageR
 }
 
 // Execute runs arbitrary SQL and returns its first 100 rows and command status.
-func (p *postgresql) Execute(ctx context.Context, sql string) (db.QueryResult, error) {
-	p.logger.Log(sql)
-	rows, err := p.pool.Query(ctx, sql, pgx.QueryExecModeSimpleProtocol)
-	if err != nil {
-		return db.QueryResult{}, fmt.Errorf("execute PostgreSQL query: %w", err)
+func (p *postgresql) Execute(ctx context.Context, sql string, typeQuery db.QueryExecutionMode) (db.QueryResult, error) {
+	var rows pgx.Rows
+	var err error
+
+	if typeQuery == db.QueryExecutionReadOnly {
+		tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{
+			AccessMode: pgx.ReadOnly,
+		})
+		if err != nil {
+			return db.QueryResult{}, fmt.Errorf("begin read-only transaction: %w", err)
+		}
+		defer tx.Rollback(ctx)
+
+		rows, err = tx.Query(ctx, sql, pgx.QueryExecModeSimpleProtocol)
+		if err != nil {
+			return db.QueryResult{}, fmt.Errorf("execute read-only PostgreSQL query: %w", err)
+		}
+	} else {
+		rows, err = p.pool.Query(ctx, sql, pgx.QueryExecModeSimpleProtocol)
+		if err != nil {
+			return db.QueryResult{}, fmt.Errorf("execute PostgreSQL query: %w", err)
+		}
 	}
 
 	return readQueryResult(rows, db.MaxPageSize)

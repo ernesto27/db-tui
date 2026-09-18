@@ -307,11 +307,39 @@ func (s *sqliteDatabase) TableDDL(ctx context.Context, table db.Table) (string, 
 }
 
 // Execute runs arbitrary SQL and returns up to db.MaxPageSize rows.
-func (s *sqliteDatabase) Execute(ctx context.Context, statement string) (db.QueryResult, error) {
-	s.logger.Log(statement)
-	rows, err := s.database.QueryContext(ctx, statement)
-	if err != nil {
-		return db.QueryResult{}, fmt.Errorf("execute SQLite query: %w", err)
+func (s *sqliteDatabase) Execute(ctx context.Context, statement string, typeQuery db.QueryExecutionMode) (db.QueryResult, error) {
+	var rows *sql.Rows
+	var err error
+
+	if typeQuery == db.QueryExecutionReadOnly {
+		conn, err := s.database.Conn(ctx)
+		if err != nil {
+			return db.QueryResult{}, fmt.Errorf("acquire SQLite read-only connection: %w", err)
+		}
+		defer conn.Close()
+
+		if _, err := conn.ExecContext(ctx, "PRAGMA query_only = ON"); err != nil {
+			return db.QueryResult{}, fmt.Errorf("enable SQLite query-only mode: %w", err)
+		}
+		defer func() {
+			_, _ = conn.ExecContext(context.Background(), "PRAGMA query_only = OFF")
+		}()
+
+		tx, err := conn.BeginTx(ctx, nil)
+		if err != nil {
+			return db.QueryResult{}, fmt.Errorf("begin SQLite read-only transaction: %w", err)
+		}
+		defer tx.Rollback()
+
+		rows, err = tx.QueryContext(ctx, statement)
+		if err != nil {
+			return db.QueryResult{}, fmt.Errorf("execute read-only SQLite query: %w", err)
+		}
+	} else {
+		rows, err = s.database.QueryContext(ctx, statement)
+		if err != nil {
+			return db.QueryResult{}, fmt.Errorf("execute SQLite query: %w", err)
+		}
 	}
 	return readQueryResult(rows, db.MaxPageSize, commandTag(statement))
 }

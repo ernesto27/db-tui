@@ -457,11 +457,28 @@ func (m *mysqlDatabase) getRows(ctx context.Context, table db.Table, page *db.Pa
 }
 
 // Execute runs arbitrary SQL and returns its first 100 rows and command status.
-func (m *mysqlDatabase) Execute(ctx context.Context, statement string) (db.QueryResult, error) {
-	m.logger.Log(statement)
-	rows, err := m.database.QueryContext(ctx, statement)
-	if err != nil {
-		return db.QueryResult{}, fmt.Errorf("execute MySQL query: %w", err)
+func (m *mysqlDatabase) Execute(ctx context.Context, statement string, typeQuery db.QueryExecutionMode) (db.QueryResult, error) {
+	var rows *sql.Rows
+	var err error
+
+	if typeQuery == db.QueryExecutionReadOnly {
+		tx, err := m.database.BeginTx(ctx, &sql.TxOptions{
+			ReadOnly: true,
+		})
+		if err != nil {
+			return db.QueryResult{}, fmt.Errorf("begin read-only MySQL transaction: %w", err)
+		}
+		defer tx.Rollback()
+
+		rows, err = tx.QueryContext(ctx, statement)
+		if err != nil {
+			return db.QueryResult{}, fmt.Errorf("execute read-only MySQL query: %w", err)
+		}
+	} else {
+		rows, err = m.database.QueryContext(ctx, statement)
+		if err != nil {
+			return db.QueryResult{}, fmt.Errorf("execute MySQL query: %w", err)
+		}
 	}
 
 	return readQueryResult(rows, db.MaxPageSize, commandTag(statement))
@@ -711,8 +728,6 @@ func ExecuteCLI(ctx context.Context, dsn, statement string) (string, error) {
 
 	return database.ExecuteCLI(ctx, statement)
 }
-
-
 
 func dockerContainerIDForPort(ctx context.Context, port string) (string, error) {
 	command := exec.CommandContext(

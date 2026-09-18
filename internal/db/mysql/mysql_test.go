@@ -343,45 +343,81 @@ func TestExportQuery(t *testing.T) {
 }
 
 func TestExecute(t *testing.T) {
+	tests := []struct {
+		name        string
+		statement   string
+		mode        db.QueryExecutionMode
+		wantColumns []string
+		wantRows    int
+		wantFirst   any
+		wantTag     string
+		wantErrText string
+	}{
+		{
+			name:        "returns bounded rows",
+			statement:   "SELECT ID FROM city ORDER BY ID",
+			wantColumns: []string{"ID"},
+			wantRows:    db.MaxPageSize,
+			wantFirst:   int64(1),
+			wantTag:     "SELECT",
+		},
+		{
+			name:      "returns command tag",
+			statement: "CREATE TEMPORARY TABLE integration_example (id integer)",
+			wantTag:   "CREATE TABLE",
+		},
+		{
+			name:        "rejects delete in read-only mode",
+			statement:   "DELETE FROM city WHERE ID = -1",
+			mode:        db.QueryExecutionReadOnly,
+			wantErrText: "execute read-only MySQL query",
+		},
+		{
+			name:        "wraps query errors",
+			statement:   "SELECT * FROM missing",
+			wantErrText: "execute MySQL query",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			database := connectWorld(t)
+
+			result, err := database.Execute(context.Background(), test.statement, test.mode)
+
+			if test.wantErrText != "" {
+				assert.ErrorContains(t, err, test.wantErrText)
+				return
+			}
+			require.NoError(t, err)
+			if len(test.wantColumns) == 0 {
+				assert.Empty(t, result.Columns)
+			} else {
+				assert.Equal(t, test.wantColumns, result.Columns)
+			}
+			assert.Len(t, result.Rows, test.wantRows)
+			assert.Equal(t, test.wantTag, result.CommandTag)
+			if test.wantRows > 0 {
+				assert.Equal(t, test.wantFirst, result.Rows[0][0])
+			}
+		})
+	}
+}
+
+func TestExecuteCancelsRunningQuery(t *testing.T) {
 	database := connectWorld(t)
-
-	t.Run("returns bounded rows", func(t *testing.T) {
-		result, err := database.Execute(context.Background(), "SELECT ID FROM city")
-
-		require.NoError(t, err)
-		assert.Equal(t, []string{"ID"}, result.Columns)
-		assert.Len(t, result.Rows, db.MaxPageSize)
-		assert.IsType(t, int64(0), result.Rows[0][0])
-		assert.Equal(t, "SELECT", result.CommandTag)
+	queryCtx, cancelQuery := context.WithCancel(context.Background())
+	t.Cleanup(cancelQuery)
+	cancelTimer := time.AfterFunc(250*time.Millisecond, cancelQuery)
+	t.Cleanup(func() {
+		cancelTimer.Stop()
 	})
 
-	t.Run("returns command tag", func(t *testing.T) {
-		result, err := database.Execute(context.Background(), "CREATE TEMPORARY TABLE integration_example (id integer)")
+	started := time.Now()
+	_, err := database.Execute(queryCtx, "SELECT SLEEP(10)", db.QueryExecutionDefault)
 
-		require.NoError(t, err)
-		assert.Empty(t, result.Columns)
-		assert.Empty(t, result.Rows)
-		assert.Equal(t, "CREATE TABLE", result.CommandTag)
-	})
-
-	t.Run("wraps query errors", func(t *testing.T) {
-		_, err := database.Execute(context.Background(), "SELECT * FROM missing")
-
-		assert.ErrorContains(t, err, "execute MySQL query")
-	})
-
-	t.Run("cancels a running query", func(t *testing.T) {
-		queryCtx, cancelQuery := context.WithCancel(context.Background())
-		defer cancelQuery()
-		cancelTimer := time.AfterFunc(250*time.Millisecond, cancelQuery)
-		defer cancelTimer.Stop()
-
-		started := time.Now()
-		_, err := database.Execute(queryCtx, "SELECT SLEEP(10)")
-
-		assert.ErrorIs(t, err, context.Canceled)
-		assert.Less(t, time.Since(started), 2*time.Second, "canceled query should not wait for SLEEP")
-	})
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Less(t, time.Since(started), 2*time.Second, "canceled query should not wait for SLEEP")
 }
 
 func TestExecuteCLI(t *testing.T) {

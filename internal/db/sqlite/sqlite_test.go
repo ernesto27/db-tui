@@ -139,9 +139,9 @@ func TestGetRows(t *testing.T) {
 
 	t.Run("preserves SQL NULL", func(t *testing.T) {
 		isolated := connectSQLiteFile(t, newSQLiteFile(t))
-		_, err := isolated.Execute(context.Background(), "CREATE TABLE nullable (value TEXT)")
+		_, err := isolated.Execute(context.Background(), "CREATE TABLE nullable (value TEXT)", db.QueryExecutionDefault)
 		require.NoError(t, err)
-		_, err = isolated.Execute(context.Background(), "INSERT INTO nullable VALUES (NULL)")
+		_, err = isolated.Execute(context.Background(), "INSERT INTO nullable VALUES (NULL)", db.QueryExecutionDefault)
 		require.NoError(t, err)
 		page, err := isolated.GetRows(context.Background(), db.Table{Name: "nullable"}, db.PageRequest{Limit: 1})
 
@@ -189,21 +189,86 @@ func TestTableDDL(t *testing.T) {
 }
 
 func TestExecute(t *testing.T) {
-	database := connectEmployee(t)
+	tests := []struct {
+		name        string
+		sql         string
+		mode        db.QueryExecutionMode
+		wantColumns []string
+		wantRows    int
+		wantFirst   any
+		wantLast    any
+		wantTag     string
+		wantErr     bool
+		wantErrText string
+	}{
+		{
+			name:        "returns rows",
+			sql:         "SELECT 7 AS number",
+			wantColumns: []string{"number"},
+			wantRows:    1,
+			wantFirst:   int64(7),
+			wantLast:    int64(7),
+			wantTag:     "SELECT",
+		},
+		{
+			name:    "returns command tag",
+			sql:     "CREATE TABLE temp.raw_query_test (id INTEGER)",
+			wantTag: "CREATE TABLE",
+		},
+		{
+			name:        "rejects delete in read-only mode",
+			sql:         "DELETE FROM employee WHERE emp_no = -1",
+			mode:        db.QueryExecutionReadOnly,
+			wantErr:     true,
+			wantErrText: "execute read-only SQLite query",
+		},
+		{
+			name: "limits rows",
+			sql: `WITH RECURSIVE counter(value) AS (
+				SELECT 1
+				UNION ALL
+				SELECT value + 1 FROM counter WHERE value <= 100
+			)
+			SELECT value FROM counter`,
+			wantColumns: []string{"value"},
+			wantRows:    db.MaxPageSize,
+			wantFirst:   int64(1),
+			wantLast:    int64(db.MaxPageSize),
+			wantTag:     "WITH",
+		},
+		{
+			name:        "wraps database errors",
+			sql:         "SELECT * FROM raw_query_table_that_does_not_exist",
+			wantErr:     true,
+			wantErrText: "execute SQLite query",
+		},
+	}
 
-	result, err := database.Execute(context.Background(), "SELECT emp_no FROM employee")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			database := connectEmployee(t)
 
-	require.NoError(t, err)
-	assert.Equal(t, []string{"emp_no"}, result.Columns)
-	assert.Len(t, result.Rows, db.MaxPageSize)
-	assert.Equal(t, "SELECT", result.CommandTag)
+			result, err := database.Execute(context.Background(), test.sql, test.mode)
 
-	isolated := connectSQLiteFile(t, newSQLiteFile(t))
-	result, err = isolated.Execute(context.Background(), "CREATE TABLE example (id INTEGER)")
-	require.NoError(t, err)
-	assert.Empty(t, result.Columns)
-	assert.Empty(t, result.Rows)
-	assert.Equal(t, "CREATE TABLE", result.CommandTag)
+			if test.wantErr {
+				assert.Error(t, err)
+				assert.ErrorContains(t, err, test.wantErrText)
+				return
+			}
+			require.NoError(t, err)
+			if len(test.wantColumns) == 0 {
+				assert.Empty(t, result.Columns)
+			} else {
+				assert.Equal(t, test.wantColumns, result.Columns)
+			}
+			assert.Len(t, result.Rows, test.wantRows)
+			assert.Equal(t, test.wantTag, result.CommandTag)
+			if test.wantRows > 0 {
+				assert.Equal(t, test.wantFirst, result.Rows[0][0])
+				assert.Equal(t, test.wantLast, result.Rows[len(result.Rows)-1][0])
+			}
+		})
+	}
 }
 
 func TestExecuteCLI(t *testing.T) {
@@ -274,7 +339,7 @@ func TestExecuteCancelsRunningQuery(t *testing.T) {
 		UNION ALL
 		SELECT value + 1 FROM counter WHERE value < 1000000000
 	)
-	SELECT MAX(value) FROM counter`)
+	SELECT MAX(value) FROM counter`, db.QueryExecutionDefault)
 
 	assert.Error(t, err)
 	assert.True(t, errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "interrupted"))
@@ -285,13 +350,13 @@ func TestUpdateRow(t *testing.T) {
 	ctx := context.Background()
 	database := connectSQLiteFile(t, newSQLiteFile(t))
 
-	_, err := database.Execute(ctx, "CREATE TABLE keyed_row (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+	_, err := database.Execute(ctx, "CREATE TABLE keyed_row (id INTEGER PRIMARY KEY, name TEXT NOT NULL)", db.QueryExecutionDefault)
 	require.NoError(t, err)
-	_, err = database.Execute(ctx, "INSERT INTO keyed_row (id, name) VALUES (1, 'before')")
+	_, err = database.Execute(ctx, "INSERT INTO keyed_row (id, name) VALUES (1, 'before')", db.QueryExecutionDefault)
 	require.NoError(t, err)
-	_, err = database.Execute(ctx, "CREATE TABLE without_primary_key (id INTEGER NOT NULL, name TEXT NOT NULL)")
+	_, err = database.Execute(ctx, "CREATE TABLE without_primary_key (id INTEGER NOT NULL, name TEXT NOT NULL)", db.QueryExecutionDefault)
 	require.NoError(t, err)
-	_, err = database.Execute(ctx, "INSERT INTO without_primary_key (id, name) VALUES (1, 'unchanged')")
+	_, err = database.Execute(ctx, "INSERT INTO without_primary_key (id, name) VALUES (1, 'unchanged')", db.QueryExecutionDefault)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -380,13 +445,13 @@ func TestDeleteRow(t *testing.T) {
 	ctx := context.Background()
 	database := connectSQLiteFile(t, newSQLiteFile(t))
 
-	_, err := database.Execute(ctx, "CREATE TABLE keyed_row (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+	_, err := database.Execute(ctx, "CREATE TABLE keyed_row (id INTEGER PRIMARY KEY, name TEXT NOT NULL)", db.QueryExecutionDefault)
 	require.NoError(t, err)
-	_, err = database.Execute(ctx, "INSERT INTO keyed_row (id, name) VALUES (1, 'delete_row_test')")
+	_, err = database.Execute(ctx, "INSERT INTO keyed_row (id, name) VALUES (1, 'delete_row_test')", db.QueryExecutionDefault)
 	require.NoError(t, err)
-	_, err = database.Execute(ctx, "CREATE TABLE without_primary_key (id INTEGER NOT NULL, name TEXT NOT NULL)")
+	_, err = database.Execute(ctx, "CREATE TABLE without_primary_key (id INTEGER NOT NULL, name TEXT NOT NULL)", db.QueryExecutionDefault)
 	require.NoError(t, err)
-	_, err = database.Execute(ctx, "INSERT INTO without_primary_key (id, name) VALUES (1, 'unchanged')")
+	_, err = database.Execute(ctx, "INSERT INTO without_primary_key (id, name) VALUES (1, 'unchanged')", db.QueryExecutionDefault)
 	require.NoError(t, err)
 
 	tests := []struct {

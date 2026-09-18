@@ -187,6 +187,13 @@ type IndexColumns struct {
 	AccessMethod string
 }
 
+type QueryExecutionMode uint8
+
+const (
+	QueryExecutionDefault QueryExecutionMode = iota
+	QueryExecutionReadOnly
+)
+
 // Database provides operations supported by a connected database.
 type Database interface {
 	// Name returns the connected database name for display.
@@ -202,7 +209,7 @@ type Database interface {
 	// TableDDL returns a fresh executable structural DDL script for table.
 	TableDDL(ctx context.Context, table Table) (string, error)
 	// Execute runs SQL and returns its first rows and command status.
-	Execute(ctx context.Context, sql string) (QueryResult, error)
+	Execute(ctx context.Context, sql string, mode QueryExecutionMode) (QueryResult, error)
 	// ExecuteCLI runs a SELECT in a read-only transaction and returns all of
 	// its rows as a JSON array.
 	ExecuteCLI(ctx context.Context, statement string) (string, error)

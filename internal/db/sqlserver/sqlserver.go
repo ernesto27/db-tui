@@ -385,7 +385,7 @@ func (s *sqlserverDatabase) TableDDL(ctx context.Context, table db.Table) (strin
 }
 
 // Execute runs arbitrary SQL and returns up to db.MaxPageSize rows.
-func (s *sqlserverDatabase) Execute(ctx context.Context, statement string) (db.QueryResult, error) {
+func (s *sqlserverDatabase) Execute(ctx context.Context, statement string, _ db.QueryExecutionMode) (db.QueryResult, error) {
 	rows, err := s.database.QueryContext(ctx, statement)
 	if err != nil {
 		return db.QueryResult{}, fmt.Errorf("execute SQL Server query: %w", err)

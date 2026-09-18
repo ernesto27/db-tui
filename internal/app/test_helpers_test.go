@@ -197,6 +197,7 @@ func (f *fakeDatabase) GetRows(
 func (f *fakeDatabase) Execute(
 	ctx context.Context,
 	sql string,
+	_ db.QueryExecutionMode,
 ) (db.QueryResult, error) {
 	f.executeCalls++
 	f.executedSQL = sql

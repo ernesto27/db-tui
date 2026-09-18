@@ -318,7 +318,7 @@ func TestExecute(t *testing.T) {
 			cancelTimer = time.AfterFunc(250*time.Millisecond, cancelQuery)
 		}
 
-		result, err := database.Execute(queryCtx, test.statement)
+		result, err := database.Execute(queryCtx, test.statement, db.QueryExecutionDefault)
 		if cancelTimer != nil {
 			cancelTimer.Stop()
 		}
@@ -350,7 +350,7 @@ func TestUpdateRow(t *testing.T) {
 	ctx, database := connectLocalSQLServer(t)
 	table := db.Table{Schema: "dbo", Name: "cities"}
 
-	result, err := database.Execute(ctx, "SELECT name FROM dbo.cities WHERE city_id = 1")
+	result, err := database.Execute(ctx, "SELECT name FROM dbo.cities WHERE city_id = 1", db.QueryExecutionDefault)
 	require.NoError(t, err)
 	require.Len(t, result.Rows, 1)
 	originalName, ok := result.Rows[0][0].(string)
@@ -426,7 +426,7 @@ func TestUpdateRow(t *testing.T) {
 		})
 	}
 
-	result, err = database.Execute(ctx, "SELECT name FROM dbo.cities WHERE city_id = 1")
+	result, err = database.Execute(ctx, "SELECT name FROM dbo.cities WHERE city_id = 1", db.QueryExecutionDefault)
 	require.NoError(t, err)
 	require.Len(t, result.Rows, 1)
 	assert.Equal(t, "update_test", result.Rows[0][0])
@@ -436,14 +436,14 @@ func TestDeleteRow(t *testing.T) {
 	ctx, database := connectLocalSQLServer(t)
 	table := db.Table{Schema: "dbo", Name: "cities"}
 
-	_, err := database.Execute(ctx, "DELETE FROM dbo.cities WHERE city_id = 999999")
+	_, err := database.Execute(ctx, "DELETE FROM dbo.cities WHERE city_id = 999999", db.QueryExecutionDefault)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		_, err := database.Execute(context.Background(), "DELETE FROM dbo.cities WHERE city_id = 999999")
+		_, err := database.Execute(context.Background(), "DELETE FROM dbo.cities WHERE city_id = 999999", db.QueryExecutionDefault)
 		assert.NoError(t, err)
 	})
 
-	_, err = database.Execute(ctx, "INSERT INTO dbo.cities (city_id, country_code, name, population) VALUES (999999, 'AR', 'delete_test', 0)")
+	_, err = database.Execute(ctx, "INSERT INTO dbo.cities (city_id, country_code, name, population) VALUES (999999, 'AR', 'delete_test', 0)", db.QueryExecutionDefault)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -493,7 +493,7 @@ func TestDeleteRow(t *testing.T) {
 		})
 	}
 
-	result, err := database.Execute(ctx, "SELECT city_id FROM dbo.cities WHERE city_id = 999999")
+	result, err := database.Execute(ctx, "SELECT city_id FROM dbo.cities WHERE city_id = 999999", db.QueryExecutionDefault)
 	require.NoError(t, err)
 	assert.Empty(t, result.Rows)
 }

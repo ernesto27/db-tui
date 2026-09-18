@@ -404,11 +404,30 @@ func (o *oracleDatabase) TableDDL(ctx context.Context, table db.Table) (string, 
 }
 
 // Execute runs arbitrary SQL and returns up to db.MaxPageSize rows.
-func (o *oracleDatabase) Execute(ctx context.Context, statement string) (db.QueryResult, error) {
-	o.logger.Log(statement)
-	rows, err := o.database.QueryContext(ctx, statement)
-	if err != nil {
-		return db.QueryResult{}, fmt.Errorf("execute Oracle query: %w", err)
+func (o *oracleDatabase) Execute(ctx context.Context, statement string, typeQuery db.QueryExecutionMode) (db.QueryResult, error) {
+	var rows *sql.Rows
+	var err error
+
+	if typeQuery == db.QueryExecutionReadOnly {
+		tx, err := o.database.BeginTx(ctx, nil)
+		if err != nil {
+			return db.QueryResult{}, fmt.Errorf("begin read-only Oracle transaction: %w", err)
+		}
+		defer tx.Rollback()
+
+		if _, err := tx.ExecContext(ctx, "SET TRANSACTION READ ONLY"); err != nil {
+			return db.QueryResult{}, fmt.Errorf("set Oracle transaction read-only: %w", err)
+		}
+
+		rows, err = tx.QueryContext(ctx, statement)
+		if err != nil {
+			return db.QueryResult{}, fmt.Errorf("execute read-only Oracle query: %w", err)
+		}
+	} else {
+		rows, err = o.database.QueryContext(ctx, statement)
+		if err != nil {
+			return db.QueryResult{}, fmt.Errorf("execute Oracle query: %w", err)
+		}
 	}
 	return readQueryResult(rows, db.MaxPageSize, commandTag(statement))
 }

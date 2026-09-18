@@ -1,5 +1,24 @@
 # Glossary
 
+## Read-only query execution
+
+The backend capability that runs one validated raw SQL read query without
+allowing ordinary persistent schema or data changes. PostgreSQL, MySQL, Oracle,
+and SQLite enforce it with a scoped adapter mechanism. SQL Server instead uses
+the same conservative client-side SQL validation before ordinary execution, so
+it is a safety guard rather than an authorization boundary. The capability does
+not prevent every possible temporary or function side effect; least-privilege
+database credentials remain required.
+
+## Read-only query validation
+
+The engine-aware, fail-closed lexical policy used before read-only query
+execution. It accepts one supported read statement with an optional trailing
+semicolon, ignores keywords inside comments, literals, and quoted identifiers,
+and rejects multi-statement, mutating, transaction-control, locking, and
+ambiguous SQL. Its precise accepted forms belong to the read-only query
+execution specification.
+
 ## PostgreSQL extension metadata
 
 The installed-extension catalog data exposed only for PostgreSQL through the

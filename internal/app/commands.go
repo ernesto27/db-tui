@@ -275,7 +275,7 @@ func executeQuery(ctx context.Context, database db.Database, sql string, session
 	return func() tea.Msg {
 
 		started := time.Now()
-		result, err := database.Execute(ctx, sql)
+		result, err := database.Execute(ctx, sql, db.QueryExecutionDefault)
 		return queryFinishedMsg{
 			result:  result,
 			session: session,

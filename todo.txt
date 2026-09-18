@@ -10,7 +10,7 @@
 [] - postgresql requires "" in table name and colums prevent that , add automatically
 [x] - fix how uuuid is show in data panel - postgresql
 [x] - fix how price is show in data panel  - postgresql
-[] - add refresh tables
+[x] - add refresh tables
 
 QUERY WORKFLOW
 [ ] Add SQL autocomplete for tables
