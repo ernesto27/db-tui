@@ -33,23 +33,23 @@ the form fields or an engine-specific DSN.
 
 ## Run a query without the TUI
 
-Pass both `-q` (the SQL query) and `-c` (the connection DSN) to print rows to
-standard output. This mode accepts `postgres://` or `postgresql://`,
+Use the `query` subcommand with both `-q` (the SQL query) and `-c` (the
+connection DSN) to print rows to standard output. This mode accepts `postgres://` or `postgresql://`,
 `mysql://`, `oracle://`, and `sqlserver://` DSNs, or the path to an existing
 SQLite database file. The query must contain `SELECT` and runs in a read-only
 transaction.
 
 ```sh
-db-tui \
+db-tui query \
   -q 'SELECT id, name FROM customers ORDER BY id LIMIT 10' \
   -c 'postgres://user:password@localhost:5432/appdb?sslmode=disable'
 ```
 
-Add `-t` to choose the output format: `json` (the default) prints an array of
+Add `-t` or `--format` to choose the output format: `json` (the default) prints an array of
 row objects, and `csv` prints a header row followed by one record per row.
 
 ```sh
-db-tui \
+db-tui query \
   -q 'SELECT id, name FROM customers ORDER BY id LIMIT 10' \
   -c 'postgres://user:password@localhost:5432/appdb?sslmode=disable' \
   -t csv
@@ -58,8 +58,8 @@ db-tui \
 CSV writes an empty field for SQL `NULL` and preserves the column order of the
 query.
 
-Run `db-tui -h` for the concise command usage. Omit `-q` and `-c` to start the
-interactive application.
+Run `db-tui query -h` for query-command usage. Run `db-tui` without a
+subcommand to start the interactive application.
 
 ## Features
 

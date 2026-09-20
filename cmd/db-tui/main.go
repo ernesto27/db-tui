@@ -3,187 +3,20 @@ package main
 
 import (
 	"context"
-	"errors"
-	"flag"
-	"fmt"
-	"io"
 	"os"
-	"strings"
-
-	tea "charm.land/bubbletea/v2"
-
-	"github.com/ernestoponce27/db-tui/internal/app"
-	"github.com/ernestoponce27/db-tui/internal/config"
-	"github.com/ernestoponce27/db-tui/internal/db"
-	"github.com/ernestoponce27/db-tui/internal/db/mysql"
-	"github.com/ernestoponce27/db-tui/internal/db/oracle"
-	"github.com/ernestoponce27/db-tui/internal/db/postgres"
-	"github.com/ernestoponce27/db-tui/internal/db/sqlite"
-	"github.com/ernestoponce27/db-tui/internal/db/sqlserver"
 )
-
-const usageLine = "Usage: db-tui [-q <SQL> -c <DSN> [-t json|csv]]"
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	handled, exitCode := runCLI(ctx, os.Args[1:], os.Stdout, os.Stderr)
-	if handled {
-		os.Exit(exitCode)
-	}
-
-	appConfig, err := config.Load()
-	if err != nil {
-		panic(err)
-	}
-
-	model := app.New(appConfig, app.ConnectionSettings{}, connectDatabase)
-	finalModel, err := tea.NewProgram(model).Run()
-	if finalApp, ok := finalModel.(app.Model); ok {
-		finalApp.Close()
-	}
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "db-tui: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) (handled bool, exitCode int) {
-	flags := flag.NewFlagSet("db-tui", flag.ContinueOnError)
-	flags.SetOutput(io.Discard)
-	query := flags.String("q", "", "SQL query")
-	dsn := flags.String("c", "", "DSN")
-	format := flags.String("t", db.ExportTypeJSON, "output format: json or csv")
-
-	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			_, _ = fmt.Fprintln(stdout, usageLine)
-			return true, 0
-		}
-		_, _ = fmt.Fprintf(stderr, "db-tui: %v\n", err)
-		return true, 2
-	}
-	if len(flags.Args()) != 0 {
-		_, _ = fmt.Fprintf(stderr, "db-tui: unexpected arguments: %s\n", strings.Join(flags.Args(), " "))
-		return true, 2
-	}
-
-	formatProvided := false
-	flags.Visit(func(provided *flag.Flag) {
-		if provided.Name == "t" {
-			formatProvided = true
-		}
+	cmd := newRootCmd(cliDependencies{
+		startInteractive: runInteractive,
+		executeQuery:     executeCLI,
 	})
-
-	queryMissing := strings.TrimSpace(*query) == ""
-	dsnMissing := strings.TrimSpace(*dsn) == ""
-	if queryMissing && dsnMissing {
-		if formatProvided {
-			_, _ = fmt.Fprintln(stderr, "db-tui: -t requires -q and -c")
-			return true, 2
-		}
-		return false, 0
-	}
-	if queryMissing || dsnMissing {
-		_, _ = fmt.Fprintln(stderr, "db-tui: -q and -c must be provided together")
-		return true, 2
-	}
-	if err := validateOutputFormat(*format); err != nil {
-		_, _ = fmt.Fprintf(stderr, "db-tui: %v\n", err)
-		return true, 2
-	}
-
-	engine, err := detectEngine(*dsn)
-	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "db-tui: %v\n", err)
-		return true, 2
-	}
-
-	var result string
-	switch engine {
-	case db.EnginePostgreSQL:
-		result, err = postgres.ExecuteCLI(ctx, *dsn, *query, *format)
-	case db.EngineMySQL:
-		result, err = mysql.ExecuteCLI(ctx, *dsn, *query, *format)
-	case db.EngineOracle:
-		result, err = oracle.ExecuteCLI(ctx, *dsn, *query, *format)
-	case db.EngineSQLServer:
-		result, err = sqlserver.ExecuteCLI(ctx, *dsn, *query, *format)
-	case db.EngineSQLite:
-		result, err = sqlite.ExecuteCLI(ctx, *dsn, *query, *format)
-	default:
-		_, _ = fmt.Fprintln(stderr, "db-tui: unsupported DSN")
-		return true, 2
-	}
-	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "db-tui: query: %v\n", err)
-		return true, 1
-	}
-
-	writeResult(stdout, result)
-	return true, 0
-}
-
-// validateOutputFormat reports whether format is a supported CLI output format.
-func validateOutputFormat(format string) error {
-	switch format {
-	case db.ExportTypeJSON, db.ExportTypeCSV:
-		return nil
-	default:
-		return fmt.Errorf("unsupported output format %q; want %q or %q", format, db.ExportTypeJSON, db.ExportTypeCSV)
-	}
-}
-
-// writeResult writes result to stdout, terminated by exactly one newline.
-//
-// CSV documents already end with a record separator; JSON documents do not.
-func writeResult(stdout io.Writer, result string) {
-	if strings.HasSuffix(result, "\n") {
-		_, _ = fmt.Fprint(stdout, result)
-		return
-	}
-	_, _ = fmt.Fprintln(stdout, result)
-}
-
-func detectEngine(dsn string) (string, error) {
-	dsn = strings.TrimSpace(dsn)
-	lowerDSN := strings.ToLower(dsn)
-
-	switch {
-	case strings.HasPrefix(lowerDSN, "postgres://"), strings.HasPrefix(lowerDSN, "postgresql://"):
-		return db.EnginePostgreSQL, nil
-	case strings.HasPrefix(lowerDSN, "mysql://"):
-		return db.EngineMySQL, nil
-	case strings.HasPrefix(lowerDSN, "oracle://"):
-		return db.EngineOracle, nil
-	case strings.HasPrefix(lowerDSN, "sqlserver://"):
-		return db.EngineSQLServer, nil
-	case isRegularFile(dsn):
-		return db.EngineSQLite, nil
-	default:
-		return "", errors.New("unsupported DSN")
-	}
-}
-
-func isRegularFile(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.Mode().IsRegular()
-}
-
-func connectDatabase(ctx context.Context, engine, dsn string) (db.Database, error) {
-	switch strings.ToLower(strings.TrimSpace(engine)) {
-	case db.EnginePostgreSQL:
-		return postgres.Connect(ctx, dsn)
-	case db.EngineMySQL:
-		return mysql.Connect(ctx, dsn)
-	case db.EngineOracle:
-		return oracle.Connect(ctx, dsn)
-	case db.EngineSQLite:
-		return sqlite.Connect(ctx, dsn)
-	case db.EngineSQLServer:
-		return sqlserver.Connect(ctx, dsn)
-	default:
-		return nil, fmt.Errorf("unsupported database engine %q", engine)
+	cmd.SetArgs(os.Args[1:])
+	cmd.SetErr(os.Stderr)
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		os.Exit(commandExitCode(err))
 	}
 }

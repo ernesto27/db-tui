@@ -30,7 +30,7 @@ expect_cli() {
 	local stderr_file="$temp_dir/$name.stderr"
 	local actual_exit
 
-	if "$binary" "$@" >"$stdout_file" 2>"$stderr_file"; then
+	if "$binary" query "$@" >"$stdout_file" 2>"$stderr_file"; then
 		actual_exit=0
 	else
 		actual_exit=$?
@@ -43,11 +43,20 @@ expect_cli() {
 
 	[[ "$actual_exit" == "$expected_exit" ]] ||
 		fail "$name exit code is $actual_exit; want $expected_exit"
-	[[ "$actual_stdout" == "$expected_stdout" ]] ||
+	if [[ "$expected_stdout" == contains:* ]]; then
+		local expected_stdout_fragment="${expected_stdout#contains:}"
+		[[ "$actual_stdout" == *"$expected_stdout_fragment"* ]] ||
+			fail "$name stdout is $actual_stdout; want it to contain $expected_stdout_fragment"
+	elif [[ "$actual_stdout" != "$expected_stdout" ]]; then
 		fail "$name stdout is $actual_stdout; want $expected_stdout"
+	fi
 
 	if [[ "$expected_stderr" == "*" ]]; then
 		[[ -n "$actual_stderr" ]] || fail "$name stderr is empty"
+	elif [[ "$expected_stderr" == contains:* ]]; then
+		local expected_fragment="${expected_stderr#contains:}"
+		[[ "$actual_stderr" == *"$expected_fragment"* ]] ||
+			fail "$name stderr is $actual_stderr; want it to contain $expected_fragment"
 	elif [[ "$actual_stderr" != "$expected_stderr" ]]; then
 		fail "$name stderr is $actual_stderr; want $expected_stderr"
 	fi
@@ -93,6 +102,15 @@ expect_cli \
 	-t json
 
 expect_cli \
+	"postgres_long_flags" \
+	0 \
+	$'ArtistId,Name\n1,AC/DC' \
+	"" \
+	--query 'SELECT "ArtistId", "Name" FROM public."Artist" ORDER BY "ArtistId" LIMIT 1' \
+	--dsn "$dsn" \
+	--format csv
+
+expect_cli \
 	"postgres_csv_two_rows" \
 	0 \
 	$'ArtistId,Name\n1,AC/DC\n2,Accept' \
@@ -132,14 +150,14 @@ expect_cli \
 	"missing_dsn" \
 	2 \
 	"" \
-	"db-tui: -q and -c must be provided together" \
+	"contains:Error: if any flags in the group [query dsn] are set they must all be set; missing [dsn]" \
 	-q 'SELECT 1'
 
 expect_cli \
 	"unsupported_format" \
 	2 \
 	"" \
-	'db-tui: unsupported output format "xml"; want "json" or "csv"' \
+	'contains:Error: unsupported output format "xml"; want "json" or "csv"' \
 	-q 'SELECT 1' \
 	-c "$dsn" \
 	-t xml
@@ -148,7 +166,7 @@ expect_cli \
 	"uppercase_format" \
 	2 \
 	"" \
-	'db-tui: unsupported output format "CSV"; want "json" or "csv"' \
+	'contains:Error: unsupported output format "CSV"; want "json" or "csv"' \
 	-q 'SELECT 1' \
 	-c "$dsn" \
 	-t CSV
@@ -157,21 +175,21 @@ expect_cli \
 	"format_without_query_and_dsn" \
 	2 \
 	"" \
-	"db-tui: -t requires -q and -c" \
+	"contains:Error: --query and --dsn must be provided together" \
 	-t csv
 
 expect_cli \
 	"missing_query" \
 	2 \
 	"" \
-	"db-tui: -q and -c must be provided together" \
+	"contains:Error: if any flags in the group [query dsn] are set they must all be set; missing [query]" \
 	-c "$dsn"
 
 expect_cli \
 	"unsupported_dsn" \
 	2 \
 	"" \
-	"db-tui: unsupported DSN" \
+	"contains:Error: unsupported DSN" \
 	-q 'SELECT 1' \
 	-c 'unsupported://example'
 
@@ -179,7 +197,7 @@ expect_cli \
 	"postgres_non_select_query" \
 	1 \
 	"" \
-	"db-tui: query: only SELECT queries can be exported" \
+	"contains:Error: query: only SELECT queries can be exported" \
 	-q 'UPDATE public."Artist" SET "Name" = "unchanged" WHERE false' \
 	-c "$dsn"
 
@@ -229,7 +247,7 @@ expect_cli \
 	"sqlite_non_select_query" \
 	1 \
 	"" \
-	"db-tui: query: only SELECT queries can be exported" \
+	"contains:Error: query: only SELECT queries can be exported" \
 	-q 'UPDATE employee SET first_name = first_name WHERE false' \
 	-c "$sqlite_path"
 
@@ -262,7 +280,7 @@ expect_cli \
 	"mysql_non_select_query" \
 	1 \
 	"" \
-	"db-tui: query: only SELECT queries can be exported" \
+	"contains:Error: query: only SELECT queries can be exported" \
 	-q 'UPDATE city SET Name = Name WHERE false' \
 	-c "$mysql_dsn"
 
@@ -295,7 +313,7 @@ expect_cli \
 	"oracle_non_select_query" \
 	1 \
 	"" \
-	"db-tui: query: only SELECT queries can be exported" \
+	"contains:Error: query: only SELECT queries can be exported" \
 	-q 'DROP TABLE countries' \
 	-c "$oracle_dsn"
 
@@ -320,7 +338,7 @@ expect_cli \
 	"sqlserver_non_select_query" \
 	1 \
 	"" \
-	"db-tui: query: only SELECT queries can be exported" \
+	"contains:Error: query: only SELECT queries can be exported" \
 	-q 'DROP TABLE dbo.cities' \
 	-c "$sqlserver_dsn"
 
