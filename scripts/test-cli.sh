@@ -64,9 +64,43 @@ expect_cli() {
 	echo "PASS: $name"
 }
 
+expect_dump() {
+	local name="$1"
+	local expected_file_pattern="$2"
+	shift 2
+
+	local dump_dir="$temp_dir/$name"
+	local stdout_file="$temp_dir/$name.stdout"
+	local stderr_file="$temp_dir/$name.stderr"
+	local actual_exit
+	mkdir -p "$dump_dir"
+
+	if (cd "$dump_dir" && "$binary" dump "$@") >"$stdout_file" 2>"$stderr_file"; then
+		actual_exit=0
+	else
+		actual_exit=$?
+	fi
+
+	[[ "$actual_exit" == "0" ]] ||
+		fail "$name exit code is $actual_exit; want 0"
+	[[ -z "$(<"$stdout_file")" ]] ||
+		fail "$name wrote unexpected stdout"
+	[[ -z "$(<"$stderr_file")" ]] ||
+		fail "$name wrote unexpected stderr"
+	compgen -G "$dump_dir/$expected_file_pattern" >/dev/null ||
+		fail "$name did not create a dump matching $expected_file_pattern"
+
+	echo "PASS: $name"
+}
+
 cd "$repo_root"
 docker compose up -d --wait postgres mysql oracle sqlserver
 go build -o "$binary" ./cmd/db-tui
+
+expect_dump "postgres_dump" "chinook_*.sql" --dsn "$dsn"
+expect_dump "mysql_dump" "world_*.sql" --dsn "$mysql_dsn"
+expect_dump "sqlite_dump" "employee.db_*.sql" --dsn "$sqlite_path"
+expect_dump "sqlserver_dump" "db_tui_*.bak" --dsn "$sqlserver_dsn"
 
 expect_cli \
 	"postgres_two_rows" \

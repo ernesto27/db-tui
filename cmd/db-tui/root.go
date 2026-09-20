@@ -15,6 +15,7 @@ const (
 type cliDependencies struct {
 	startInteractive func() error
 	executeQuery     queryExecutor
+	dumpDatabase     dumpExecutor
 }
 
 type commandError struct {
@@ -43,7 +44,10 @@ func newRootCmd(dependencies cliDependencies) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.AddCommand(newQueryCmd(dependencies.executeQuery))
+	cmd.AddCommand(
+		newQueryCmd(dependencies.executeQuery),
+		newDumpCmd(dependencies.dumpDatabase),
+	)
 
 	return cmd
 }

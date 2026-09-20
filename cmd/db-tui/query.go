@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -100,29 +99,4 @@ func writeResult(stdout io.Writer, result string) {
 		return
 	}
 	_, _ = fmt.Fprintln(stdout, result)
-}
-
-func detectEngine(dsn string) (string, error) {
-	dsn = strings.TrimSpace(dsn)
-	lowerDSN := strings.ToLower(dsn)
-
-	switch {
-	case strings.HasPrefix(lowerDSN, "postgres://"), strings.HasPrefix(lowerDSN, "postgresql://"):
-		return db.EnginePostgreSQL, nil
-	case strings.HasPrefix(lowerDSN, "mysql://"):
-		return db.EngineMySQL, nil
-	case strings.HasPrefix(lowerDSN, "oracle://"):
-		return db.EngineOracle, nil
-	case strings.HasPrefix(lowerDSN, "sqlserver://"):
-		return db.EngineSQLServer, nil
-	case isRegularFile(dsn):
-		return db.EngineSQLite, nil
-	default:
-		return "", errors.New("unsupported DSN")
-	}
-}
-
-func isRegularFile(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.Mode().IsRegular()
 }

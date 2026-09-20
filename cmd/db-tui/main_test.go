@@ -124,6 +124,23 @@ func TestQueryCommandRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+func TestDumpCommandUsesDSNFlag(t *testing.T) {
+	const dsn = "postgres://localhost/test"
+	var receivedDSN string
+	cmd := newDumpCmd(func(_ context.Context, received string) error {
+		receivedDSN = received
+		return nil
+	})
+	cmd.SetArgs([]string{"--dsn", dsn})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+
+	err := cmd.ExecuteContext(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, dsn, receivedDSN)
+}
+
 func TestQueryCommandHelpDoesNotStartWorkflow(t *testing.T) {
 	var output bytes.Buffer
 	interactiveStarted := false
