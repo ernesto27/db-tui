@@ -9,6 +9,11 @@ mysql_dsn="mysql://db_tui:db_tui@127.0.0.1:3307/world"
 oracle_dsn="oracle://db_tui:db_tui@127.0.0.1:1522/FREEPDB1"
 sqlserver_dsn="sqlserver://sa:DbTuiSql2026%21@127.0.0.1:1434?database=db_tui&encrypt=true&trustservercertificate=true"
 sqlite_path="$repo_root/docker/sqlite/employee.db"
+postgres_query_file="$repo_root/data/postgres-test-query.sql"
+mysql_query_file="$repo_root/data/mysql-test-query.sql"
+oracle_query_file="$repo_root/data/oracle-test-query.sql"
+sqlserver_query_file="$repo_root/data/sqlserver-test-query.sql"
+sqlite_query_file="$repo_root/data/sqlite-test-query.sql"
 
 temp_dir="$(mktemp -d)"
 trap 'rm -rf "$temp_dir"' EXIT
@@ -119,6 +124,14 @@ expect_cli \
 	-c "$dsn"
 
 expect_cli \
+	"postgres_file_query" \
+	0 \
+	'contains:"ArtistId": 1' \
+	"" \
+	-f "$postgres_query_file" \
+	-c "$dsn"
+
+expect_cli \
 	"postgres_json_normalization" \
 	0 \
 	$'[\n  {\n    "Identifier": "3234b411-89ab-4cde-8f01-23456789abcd",\n    "Measurement": "NaN",\n    "RecordedAt": "infinity"\n  }\n]' \
@@ -184,8 +197,17 @@ expect_cli \
 	"missing_dsn" \
 	2 \
 	"" \
-	"contains:Error: if any flags in the group [query dsn] are set they must all be set; missing [dsn]" \
+	"contains:Error: --query or --fileQuery and --dsn must be provided" \
 	-q 'SELECT 1'
+
+expect_cli \
+	"query_and_file_query" \
+	2 \
+	"" \
+	"contains:were all set" \
+	-q 'SELECT 1' \
+	-f "$postgres_query_file" \
+	-c "$dsn"
 
 expect_cli \
 	"unsupported_format" \
@@ -209,14 +231,14 @@ expect_cli \
 	"format_without_query_and_dsn" \
 	2 \
 	"" \
-	"contains:Error: --query and --dsn must be provided together" \
+	"contains:Error: --query or --fileQuery and --dsn must be provided" \
 	-t csv
 
 expect_cli \
 	"missing_query" \
 	2 \
 	"" \
-	"contains:Error: if any flags in the group [query dsn] are set they must all be set; missing [query]" \
+	"contains:Error: --query or --fileQuery and --dsn must be provided" \
 	-c "$dsn"
 
 expect_cli \
@@ -257,6 +279,14 @@ expect_cli \
 	"[]" \
 	"" \
 	-q 'SELECT emp_no FROM employee WHERE emp_no = -1' \
+	-c "$sqlite_path"
+
+expect_cli \
+	"sqlite_file_query" \
+	0 \
+	'contains:"emp_no": 10001' \
+	"" \
+	-f "$sqlite_query_file" \
 	-c "$sqlite_path"
 
 expect_cli \
@@ -302,6 +332,14 @@ expect_cli \
 	-c "$mysql_dsn"
 
 expect_cli \
+	"mysql_file_query" \
+	0 \
+	'contains:"Name": "Kabul"' \
+	"" \
+	-f "$mysql_query_file" \
+	-c "$mysql_dsn"
+
+expect_cli \
 	"mysql_csv_two_rows" \
 	0 \
 	$'ID,Name\n1,Kabul\n2,Qandahar' \
@@ -344,6 +382,14 @@ expect_cli \
 	-t csv
 
 expect_cli \
+	"oracle_file_query" \
+	0 \
+	'contains:"GREETING": "hello"' \
+	"" \
+	-f "$oracle_query_file" \
+	-c "$oracle_dsn"
+
+expect_cli \
 	"oracle_non_select_query" \
 	1 \
 	"" \
@@ -367,6 +413,14 @@ expect_cli \
 	-q "SELECT CAST('hello' AS nvarchar(5)) AS greeting" \
 	-c "$sqlserver_dsn" \
 	-t csv
+
+expect_cli \
+	"sqlserver_file_query" \
+	0 \
+	'contains:"greeting": "hello"' \
+	"" \
+	-f "$sqlserver_query_file" \
+	-c "$sqlserver_dsn"
 
 expect_cli \
 	"sqlserver_non_select_query" \

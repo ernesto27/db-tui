@@ -33,15 +33,35 @@ the form fields or an engine-specific DSN.
 
 ## Run a query without the TUI
 
-Use the `query` subcommand with both `-q` (the SQL query) and `-c` (the
-connection DSN) to print rows to standard output. This mode accepts `postgres://` or `postgresql://`,
-`mysql://`, `oracle://`, and `sqlserver://` DSNs, or the path to an existing
-SQLite database file. The query must contain `SELECT` and runs in a read-only
-transaction.
+Use the `query` subcommand with either `-q` (the SQL query) or `-f` (a file
+containing the SQL query), plus `-c` (the connection DSN), to print rows to
+standard output. This mode accepts `postgres://` or `postgresql://`, `mysql://`,
+`oracle://`, and `sqlserver://` DSNs, or the path to an existing SQLite database
+file. The query must contain `SELECT` and runs in a read-only transaction.
+
+### DSN examples
+
+| Engine | DSN |
+| --- | --- |
+| PostgreSQL | `postgres://user:password@db.example.com:5432/appdb?sslmode=require` |
+| MySQL | `mysql://user:password@db.example.com:3306/appdb` |
+| SQLite | `/path/to/app.db` |
+| SQL Server | `sqlserver://user:password@db.example.com:1433?database=appdb&encrypt=true` |
 
 ```sh
 db-tui query \
   -q 'SELECT id, name FROM customers ORDER BY id LIMIT 10' \
+  -c 'postgres://user:password@localhost:5432/appdb?sslmode=disable'
+```
+
+### Read a query from a file
+
+Use `-f` or `--fileQuery` with the connection DSN to run SQL stored in a file.
+Do not combine it with `-q` or `--query`.
+
+```sh
+db-tui query \
+  -f ./report.sql \
   -c 'postgres://user:password@localhost:5432/appdb?sslmode=disable'
 ```
 
@@ -61,6 +81,20 @@ query.
 Run `db-tui query -h` for query-command usage. Run `db-tui` without a
 subcommand to start the interactive application.
 
+## Create a database dump without the TUI
+
+Use the `dump` subcommand with `-d` or `--dsn` to write a timestamped database
+dump in the current directory.
+
+```sh
+db-tui dump \
+  -d 'postgres://user:password@example.com:5432/appdb?sslmode=require'
+```
+
+
+
+Run `db-tui dump -h` for dump-command usage.
+
 ## Features
 
 - Save and switch between PostgreSQL, MySQL, Oracle, SQLite, and SQL Server connections.
@@ -75,9 +109,9 @@ subcommand to start the interactive application.
 - Autocomplete current-schema PostgreSQL table names in the raw-query editor.
 - Save and reopen SQL scripts for each connection.
 - Export a table or successful query results as CSV or JSON.
-- Create timestamped SQL dumps for PostgreSQL, MySQL, SQLite, and SQL Server.
-  SQL Server dumps require access to the database's local Docker container;
-  Oracle dumps are not supported.
+- Create timestamped database dumps from the TUI or `db-tui dump` for
+  PostgreSQL, MySQL, SQLite, and SQL Server. SQL Server dumps require access
+  to the database's local Docker container; Oracle dumps are not supported.
 - Rename saved connections and set their environment label.
 
 ## Keyboard reference

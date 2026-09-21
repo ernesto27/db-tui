@@ -28,6 +28,8 @@ po
 CLI
 [x] Add a non-interactive CLI mode for executing SQL json
 [x] Add a non-interactive CLI mode for executing SQL csv (-t json|csv)
+[] - read query for file
+[ ] Allow CLI commands to use a saved named connection instead of requiring a DSN.
 
 FIXES
 [x] - when open new connectin set table data as default

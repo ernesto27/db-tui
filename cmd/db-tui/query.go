@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -18,9 +19,10 @@ import (
 )
 
 type queryOptions struct {
-	query  string
-	dsn    string
-	format string
+	query     string
+	dsn       string
+	format    string
+	fileQuery string
 }
 
 func newQueryCmd(execute queryExecutor) *cobra.Command {
@@ -44,22 +46,32 @@ func configureQueryFlags(cmd *cobra.Command, options *queryOptions) {
 	flags.StringVarP(&options.query, "query", "q", "", "SQL query")
 	flags.StringVarP(&options.dsn, "dsn", "c", "", "DSN")
 	flags.StringVarP(&options.format, "format", "t", db.ExportTypeJSON, "output format: json or csv")
-	cmd.MarkFlagsRequiredTogether("query", "dsn")
+	flags.StringVarP(&options.fileQuery, "fileQuery", "f", "", "path of file with query content")
+	cmd.MarkFlagsMutuallyExclusive("query", "fileQuery")
 }
 
 func runQuery(ctx context.Context, cmd *cobra.Command, options queryOptions, execute queryExecutor) error {
-	if strings.TrimSpace(options.query) == "" || strings.TrimSpace(options.dsn) == "" {
-		return usageError(errors.New("--query and --dsn must be provided together"))
-	}
 	if err := validateOutputFormat(options.format); err != nil {
 		return usageError(err)
+	}
+
+	query := options.query
+	if options.fileQuery != "" {
+		data, err := os.ReadFile(options.fileQuery)
+		if err != nil {
+			return err
+		}
+		query = string(data)
+	}
+	if strings.TrimSpace(query) == "" || strings.TrimSpace(options.dsn) == "" {
+		return usageError(errors.New("--query or --fileQuery and --dsn must be provided"))
 	}
 
 	engine, err := detectEngine(options.dsn)
 	if err != nil {
 		return usageError(err)
 	}
-	result, err := execute(ctx, engine, options.dsn, options.query, options.format)
+	result, err := execute(ctx, engine, options.dsn, query, options.format)
 	if err != nil {
 		return runtimeError(fmt.Errorf("query: %w", err))
 	}

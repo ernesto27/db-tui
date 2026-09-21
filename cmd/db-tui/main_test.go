@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ernestoponce27/db-tui/internal/db"
@@ -81,6 +83,26 @@ func TestRootCommandRoutesWorkflows(t *testing.T) {
 	}
 }
 
+func TestQueryCommandReadsQueryFromFile(t *testing.T) {
+	const query = "SELECT 1;"
+	queryFile := filepath.Join(t.TempDir(), "query.sql")
+	require.NoError(t, os.WriteFile(queryFile, []byte(query), 0o600))
+
+	var receivedQuery string
+	cmd := newQueryCmd(func(_ context.Context, _, _, gotQuery, _ string) (string, error) {
+		receivedQuery = gotQuery
+		return "[]", nil
+	})
+	cmd.SetArgs([]string{"--dsn", "postgres://localhost/test", "--fileQuery", queryFile})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+
+	err := cmd.ExecuteContext(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, query, receivedQuery)
+}
+
 func TestQueryCommandRejectsInvalidInput(t *testing.T) {
 	tests := []struct {
 		name string
@@ -88,6 +110,7 @@ func TestQueryCommandRejectsInvalidInput(t *testing.T) {
 	}{
 		{name: "query without DSN", args: []string{"query", "-q", "select 1"}},
 		{name: "DSN without query", args: []string{"query", "--dsn", "postgres://localhost/test"}},
+		{name: "query and file query", args: []string{"query", "--query", "select 1", "--fileQuery", "query.sql", "--dsn", "postgres://localhost/test"}},
 		{name: "format without query and DSN", args: []string{"query", "--format", "csv"}},
 		{name: "unsupported format", args: []string{"query", "-q", "select 1", "-c", "postgres://localhost/test", "-t", "xml"}},
 		{name: "unsupported DSN", args: []string{"query", "-q", "select 1", "-c", "redis://localhost"}},
