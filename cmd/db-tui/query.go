@@ -19,10 +19,11 @@ import (
 )
 
 type queryOptions struct {
-	query     string
-	dsn       string
-	format    string
-	fileQuery string
+	query      string
+	dsn        string
+	connection string
+	format     string
+	fileQuery  string
 }
 
 func newQueryCmd(execute queryExecutor) *cobra.Command {
@@ -45,6 +46,7 @@ func configureQueryFlags(cmd *cobra.Command, options *queryOptions) {
 	flags := cmd.Flags()
 	flags.StringVarP(&options.query, "query", "q", "", "SQL query")
 	flags.StringVarP(&options.dsn, "dsn", "c", "", "DSN")
+	flags.StringVar(&options.connection, "connection", "", "saved connection name")
 	flags.StringVarP(&options.format, "format", "t", db.ExportTypeJSON, "output format: json or csv")
 	flags.StringVarP(&options.fileQuery, "fileQuery", "f", "", "path of file with query content")
 	cmd.MarkFlagsMutuallyExclusive("query", "fileQuery")
@@ -63,16 +65,19 @@ func runQuery(ctx context.Context, cmd *cobra.Command, options queryOptions, exe
 		}
 		query = string(data)
 	}
-	if strings.TrimSpace(query) == "" || strings.TrimSpace(options.dsn) == "" {
-		return usageError(errors.New("--query or --fileQuery and --dsn must be provided"))
+	if strings.TrimSpace(query) == "" {
+		return usageError(errors.New("--query or --fileQuery must be provided"))
 	}
 
-	engine, err := detectEngine(options.dsn)
+	engine, dsn, err := resolveCLIConnection(options.dsn, options.connection)
 	if err != nil {
-		return usageError(err)
+		return err
 	}
-	result, err := execute(ctx, engine, options.dsn, query, options.format)
+	result, err := execute(ctx, engine, dsn, query, options.format)
 	if err != nil {
+		if options.dsn == "" {
+			return savedConnectionError("query")
+		}
 		return runtimeError(fmt.Errorf("query: %w", err))
 	}
 	writeResult(cmd.OutOrStdout(), result)

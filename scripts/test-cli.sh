@@ -102,10 +102,103 @@ cd "$repo_root"
 docker compose up -d --wait postgres mysql oracle sqlserver
 go build -o "$binary" ./cmd/db-tui
 
+saved_home="$temp_dir/home"
+mkdir -p "$saved_home/.config/db-tui"
+cat >"$saved_home/.config/db-tui/config.json" <<EOF
+{
+  "connections": [
+    {"name":"saved-postgres","engine":"postgres","settings":{"hostname":"127.0.0.1","database":"chinook","username":"db_tui","port":"5433"}},
+    {"name":"saved-mysql","engine":"mysql","settings":{"dsn":"$mysql_dsn"}},
+    {"name":"saved-oracle","engine":"oracle","settings":{"dsn":"$oracle_dsn"}},
+    {"name":"saved-sqlite","engine":"sqlite","settings":{"dsn":"$sqlite_path"}},
+    {"name":"saved-sqlserver","engine":"sqlserver","settings":{"dsn":"$sqlserver_dsn"}},
+    {"name":"duplicate","engine":"postgres","settings":{"dsn":"$dsn"}},
+    {"name":"duplicate","engine":"mysql","settings":{"dsn":"$mysql_dsn"}}
+  ]
+}
+EOF
+chmod 600 "$saved_home/.config/db-tui/config.json"
+export HOME="$saved_home"
+
 expect_dump "postgres_dump" "chinook_*.sql" --dsn "$dsn"
 expect_dump "mysql_dump" "world_*.sql" --dsn "$mysql_dsn"
 expect_dump "sqlite_dump" "employee.db_*.sql" --dsn "$sqlite_path"
 expect_dump "sqlserver_dump" "db_tui_*.bak" --dsn "$sqlserver_dsn"
+expect_dump "saved_sqlite_dump" "employee.db_*.sql" --connection saved-sqlite
+expect_dump "dump_dsn_takes_precedence" "employee.db_*.sql" --connection saved-mysql --dsn "$sqlite_path"
+
+expect_cli \
+	"saved_postgres_query" \
+	0 \
+	'contains:"Name": "AC/DC"' \
+	"" \
+	--connection saved-postgres \
+	-q 'SELECT "ArtistId", "Name" FROM public."Artist" ORDER BY "ArtistId" LIMIT 2'
+
+expect_cli \
+	"saved_postgres_file_query" \
+	0 \
+	'contains:"ArtistId": 1' \
+	"" \
+	--connection saved-postgres \
+	-f "$postgres_query_file"
+
+expect_cli \
+	"saved_mysql_query" \
+	0 \
+	'contains:"Name": "Kabul"' \
+	"" \
+	--connection saved-mysql \
+	-q 'SELECT ID, Name FROM city ORDER BY ID LIMIT 2'
+
+expect_cli \
+	"saved_oracle_query" \
+	0 \
+	'contains:"NAME": "Africa"' \
+	"" \
+	--connection saved-oracle \
+	-q "SELECT region_id, name FROM regions WHERE region_id = 'AF'"
+
+expect_cli \
+	"saved_sqlite_query" \
+	0 \
+	'contains:"first_name": "Georgi"' \
+	"" \
+	--connection saved-sqlite \
+	-q 'SELECT emp_no, first_name FROM employee ORDER BY emp_no LIMIT 2'
+
+expect_cli \
+	"saved_sqlserver_query" \
+	0 \
+	'contains:"name": "Argentina"' \
+	"" \
+	--connection saved-sqlserver \
+	-q 'SELECT TOP (2) country_code, name FROM dbo.countries ORDER BY country_code'
+
+expect_cli \
+	"saved_duplicate_uses_first" \
+	0 \
+	'contains:"Name": "AC/DC"' \
+	"" \
+	--connection duplicate \
+	-q 'SELECT "ArtistId", "Name" FROM public."Artist" ORDER BY "ArtistId" LIMIT 1'
+
+expect_cli \
+	"dsn_takes_precedence_over_saved_name" \
+	0 \
+	'contains:"Name": "Kabul"' \
+	"" \
+	--connection saved-postgres \
+	--dsn "$mysql_dsn" \
+	-q 'SELECT ID, Name FROM city ORDER BY ID LIMIT 1'
+
+expect_cli \
+	"saved_name_is_case_sensitive" \
+	2 \
+	"" \
+	'contains:saved connection "Saved-Postgres" not found' \
+	--connection Saved-Postgres \
+	-q 'SELECT 1'
 
 expect_cli \
 	"postgres_two_rows" \
@@ -197,7 +290,7 @@ expect_cli \
 	"missing_dsn" \
 	2 \
 	"" \
-	"contains:Error: --query or --fileQuery and --dsn must be provided" \
+	"contains:Error: --dsn or --connection must be provided" \
 	-q 'SELECT 1'
 
 expect_cli \
@@ -231,14 +324,14 @@ expect_cli \
 	"format_without_query_and_dsn" \
 	2 \
 	"" \
-	"contains:Error: --query or --fileQuery and --dsn must be provided" \
+	"contains:Error: --query or --fileQuery must be provided" \
 	-t csv
 
 expect_cli \
 	"missing_query" \
 	2 \
 	"" \
-	"contains:Error: --query or --fileQuery and --dsn must be provided" \
+	"contains:Error: --query or --fileQuery must be provided" \
 	-c "$dsn"
 
 expect_cli \

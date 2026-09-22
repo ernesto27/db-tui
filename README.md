@@ -65,6 +65,17 @@ db-tui query \
   -c 'postgres://user:password@localhost:5432/appdb?sslmode=disable'
 ```
 
+To use a connection already saved in the TUI, pass its exact name with
+`--connection`. The CLI reads the current user's
+`~/.config/db-tui/config.json`:
+
+```sh
+db-tui query --connection reporting -f ./report.sql
+```
+
+If both `--connection` and a nonempty `--dsn` are supplied, `--dsn` takes
+precedence.
+
 Add `-t` or `--format` to choose the output format: `json` (the default) prints an array of
 row objects, and `csv` prints a header row followed by one record per row.
 
@@ -83,12 +94,17 @@ subcommand to start the interactive application.
 
 ## Create a database dump without the TUI
 
-Use the `dump` subcommand with `-d` or `--dsn` to write a timestamped database
-dump in the current directory.
+Use the `dump` subcommand with `-d` or `--dsn`, or with `--connection` and an
+exact saved connection name, to write a timestamped database dump in the
+current directory.
 
 ```sh
 db-tui dump \
   -d 'postgres://user:password@example.com:5432/appdb?sslmode=require'
+```
+
+```sh
+db-tui dump --connection reporting
 ```
 
 

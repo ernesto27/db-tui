@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ernestoponce27/db-tui/internal/config"
 	"github.com/ernestoponce27/db-tui/internal/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -150,7 +151,7 @@ func TestQueryCommandRejectsInvalidInput(t *testing.T) {
 func TestDumpCommandUsesDSNFlag(t *testing.T) {
 	const dsn = "postgres://localhost/test"
 	var receivedDSN string
-	cmd := newDumpCmd(func(_ context.Context, received string) error {
+	cmd := newDumpCmd(func(_ context.Context, _, received string) error {
 		receivedDSN = received
 		return nil
 	})
@@ -162,6 +163,175 @@ func TestDumpCommandUsesDSNFlag(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, dsn, receivedDSN)
+}
+
+func TestSavedConnectionCommands(t *testing.T) {
+	const (
+		formDSN   = "postgres://reader@localhost:5432/app"
+		nativeDSN = "reader@tcp(localhost:3306)/app"
+		directDSN = "postgres://localhost/direct"
+	)
+	tests := []struct {
+		name         string
+		args         []string
+		noConfig     bool
+		wantEngine   string
+		wantDSN      string
+		wantError    string
+		wantExitCode int
+	}{
+		{
+			name:       "query uses saved form fields",
+			args:       []string{"query", "--connection", "form", "-q", "SELECT 1"},
+			wantEngine: db.EnginePostgreSQL,
+			wantDSN:    formDSN,
+		},
+		{
+			name:       "dump uses saved explicit DSN and engine",
+			args:       []string{"dump", "--connection", "native-mysql"},
+			wantEngine: db.EngineMySQL,
+			wantDSN:    nativeDSN,
+		},
+		{
+			name:       "duplicate name uses first entry",
+			args:       []string{"query", "--connection", "duplicate", "-q", "SELECT 1"},
+			wantEngine: db.EnginePostgreSQL,
+			wantDSN:    formDSN,
+		},
+		{
+			name:       "nonempty DSN takes precedence without reading config",
+			args:       []string{"query", "--connection", "missing", "--dsn", directDSN, "-q", "SELECT 1"},
+			noConfig:   true,
+			wantEngine: db.EnginePostgreSQL,
+			wantDSN:    directDSN,
+		},
+		{
+			name:       "empty DSN falls back to saved name",
+			args:       []string{"query", "--connection", "form", "--dsn", "", "-q", "SELECT 1"},
+			wantEngine: db.EnginePostgreSQL,
+			wantDSN:    formDSN,
+		},
+		{
+			name:         "name is case sensitive",
+			args:         []string{"query", "--connection", "Form", "-q", "SELECT 1"},
+			wantError:    `saved connection "Form" not found`,
+			wantExitCode: exitCodeUsage,
+		},
+		{
+			name:         "missing config does not create a file",
+			args:         []string{"dump", "--connection", "form"},
+			noConfig:     true,
+			wantError:    "load saved connections",
+			wantExitCode: exitCodeRuntime,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			configDir, err := config.ConfigDir()
+			require.NoError(t, err)
+			if !test.noConfig {
+				require.NoError(t, os.MkdirAll(configDir, 0o700))
+				appConfig := config.Config{Connections: []config.Connection{
+					{Name: "form", Engine: db.EnginePostgreSQL, Settings: config.Settings{
+						Hostname: "localhost", Port: "5432", Database: "app", Username: "reader",
+					}},
+					{Name: "native-mysql", Engine: db.EngineMySQL, Settings: config.Settings{DSN: nativeDSN}},
+					{Name: "duplicate", Engine: db.EnginePostgreSQL, Settings: config.Settings{DSN: formDSN}},
+					{Name: "duplicate", Engine: db.EngineMySQL, Settings: config.Settings{DSN: nativeDSN}},
+				}}
+				require.NoError(t, appConfig.Save())
+			}
+
+			called := false
+			var gotEngine, gotDSN string
+			capture := func(engine, dsn string) {
+				called = true
+				gotEngine, gotDSN = engine, dsn
+			}
+			cmd := newRootCmd(cliDependencies{
+				startInteractive: func() error { return nil },
+				executeQuery: func(_ context.Context, engine, dsn, _, _ string) (string, error) {
+					capture(engine, dsn)
+					return "[]", nil
+				},
+				dumpDatabase: func(_ context.Context, engine, dsn string) error {
+					capture(engine, dsn)
+					return nil
+				},
+			})
+			cmd.SetArgs(test.args)
+			cmd.SetOut(io.Discard)
+			cmd.SetErr(io.Discard)
+
+			err = cmd.ExecuteContext(context.Background())
+			if test.wantError != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, test.wantError)
+				assert.Equal(t, test.wantExitCode, commandExitCode(err))
+				assert.False(t, called)
+				if test.noConfig {
+					_, statErr := os.Stat(filepath.Join(configDir, "config.json"))
+					assert.ErrorIs(t, statErr, os.ErrNotExist)
+				}
+				return
+			}
+
+			require.NoError(t, err)
+			assert.True(t, called)
+			assert.Equal(t, test.wantEngine, gotEngine)
+			assert.Equal(t, test.wantDSN, gotDSN)
+		})
+	}
+}
+
+func TestSavedConnectionAdapterErrorsHideCredentials(t *testing.T) {
+	const (
+		password = "FAKE_PASSWORD"
+		dsn      = "mysql://review:" + password + "@localhost:bad/db"
+	)
+	t.Setenv("HOME", t.TempDir())
+	configDir, err := config.ConfigDir()
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(configDir, 0o700))
+	appConfig := config.Config{Connections: []config.Connection{{
+		Name:     "reporting",
+		Engine:   db.EngineMySQL,
+		Settings: config.Settings{DSN: dsn},
+	}}}
+	require.NoError(t, appConfig.Save())
+
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "query", args: []string{"query", "--connection", "reporting", "-q", "SELECT 1"}},
+		{name: "dump", args: []string{"dump", "--connection", "reporting"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			cmd := newRootCmd(cliDependencies{
+				executeQuery: executeCLI,
+				dumpDatabase: runDump,
+			})
+			cmd.SetArgs(test.args)
+			cmd.SetOut(&stdout)
+			cmd.SetErr(&stderr)
+
+			err := cmd.ExecuteContext(context.Background())
+
+			require.Error(t, err)
+			assert.Equal(t, exitCodeRuntime, commandExitCode(err))
+			assert.ErrorContains(t, err, test.name+" using saved connection failed")
+			assert.Contains(t, stderr.String(), test.name+" using saved connection failed")
+			assert.NotContains(t, err.Error(), password)
+			assert.NotContains(t, stderr.String(), password)
+			assert.NotContains(t, stderr.String(), dsn)
+			assert.Empty(t, stdout.String())
+		})
+	}
 }
 
 func TestQueryCommandHelpDoesNotStartWorkflow(t *testing.T) {

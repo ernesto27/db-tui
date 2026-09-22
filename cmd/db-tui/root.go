@@ -60,6 +60,12 @@ func runtimeError(err error) error {
 	return &commandError{err: err, exitCode: exitCodeRuntime}
 }
 
+// Adapter errors may include the full DSN, including credentials. Do not
+// retain the cause when a saved connection supplied the DSN.
+func savedConnectionError(operation string) error {
+	return runtimeError(errors.New(operation + " using saved connection failed"))
+}
+
 func commandExitCode(err error) int {
 	var commandErr *commandError
 	if errors.As(err, &commandErr) {

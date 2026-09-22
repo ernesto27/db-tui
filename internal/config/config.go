@@ -5,8 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/ernestoponce27/db-tui/internal/db"
 )
@@ -74,7 +78,23 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("read config: %w", err)
 	}
+	return decodeConfig(data)
+}
 
+// LoadExisting reads the current user's config without creating it when absent.
+func LoadExisting() (Config, error) {
+	path, err := configPath()
+	if err != nil {
+		return Config{}, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Config{}, fmt.Errorf("read config: %w", err)
+	}
+	return decodeConfig(data)
+}
+
+func decodeConfig(data []byte) (Config, error) {
 	var config Config
 	if err := json.Unmarshal(data, &config); err != nil {
 		return Config{}, fmt.Errorf("decode config: %w", err)
@@ -97,6 +117,80 @@ func (config *Config) Save() error {
 	}
 	config.MaxPageSize = config.PageSize()
 	return writeConfig(path, *config)
+}
+
+// FindConnection returns the first saved connection with the exact name.
+func (config Config) FindConnection(name string) (Connection, error) {
+	for _, connection := range config.Connections {
+		if connection.Name == name {
+			return connection, nil
+		}
+	}
+	return Connection{}, fmt.Errorf("saved connection %q not found", name)
+}
+
+// Target returns the adapter engine and DSN for a saved connection.
+func (connection Connection) Target() (string, string, error) {
+	engine := strings.TrimSpace(connection.Engine)
+	switch engine {
+	case db.EnginePostgreSQL, db.EngineMySQL, db.EngineOracle, db.EngineSQLite, db.EngineSQLServer:
+	default:
+		return "", "", fmt.Errorf("unsupported database engine %q", engine)
+	}
+
+	settings := connection.Settings
+	if dsn := strings.TrimSpace(settings.DSN); dsn != "" {
+		return engine, dsn, nil
+	}
+	if engine == db.EngineSQLite {
+		return "", "", errors.New("SQLite database file is required")
+	}
+
+	host := strings.TrimSpace(settings.Hostname)
+	databaseName := strings.TrimSpace(settings.Database)
+	username := strings.TrimSpace(settings.Username)
+	if host == "" {
+		return "", "", errors.New("host is required")
+	}
+	if databaseName == "" {
+		return "", "", errors.New("database name is required")
+	}
+	if username == "" {
+		return "", "", errors.New("username is required")
+	}
+	port, err := strconv.Atoi(strings.TrimSpace(settings.Port))
+	if err != nil || port < 1 || port > 65535 {
+		return "", "", errors.New("port must be between 1 and 65535")
+	}
+
+	user := url.User(username)
+	if settings.Password != "" {
+		user = url.UserPassword(username, settings.Password)
+	}
+	address := net.JoinHostPort(host, strconv.Itoa(port))
+	if engine == db.EngineSQLServer {
+		// SQL Server interprets a URL path as an instance name.
+		return engine, (&url.URL{
+			Scheme:   "sqlserver",
+			User:     user,
+			Host:     address,
+			RawQuery: url.Values{"database": {databaseName}}.Encode(),
+		}).String(), nil
+	}
+
+	scheme := "postgres"
+	if engine == db.EngineMySQL {
+		scheme = "mysql"
+	}
+	if engine == db.EngineOracle {
+		scheme = "oracle"
+	}
+	return engine, (&url.URL{
+		Scheme: scheme,
+		User:   user,
+		Host:   address,
+		Path:   "/" + databaseName,
+	}).String(), nil
 }
 
 func createEmptyConfig(path string) ([]byte, error) {

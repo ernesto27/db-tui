@@ -4,11 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"net/url"
 	"os"
-	"strconv"
-	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -42,59 +38,11 @@ func (s ConnectionSettings) connectionDSN() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if dsn := strings.TrimSpace(s.DSN); dsn != "" {
-		return dsn, nil
-	}
-	if engine == db.EngineSQLite {
-		return "", errors.New("SQLite database file is required")
-	}
-
-	host := strings.TrimSpace(s.Host)
-	databaseName := strings.TrimSpace(s.DatabaseName)
-	username := strings.TrimSpace(s.Username)
-	if host == "" {
-		return "", errors.New("host is required")
-	}
-	if databaseName == "" {
-		return "", errors.New("database name is required")
-	}
-	if username == "" {
-		return "", errors.New("username is required")
-	}
-	if s.Port < 1 || s.Port > 65535 {
-		return "", errors.New("port must be between 1 and 65535")
-	}
-
-	user := url.User(username)
-	if s.Password != "" {
-		user = url.UserPassword(username, s.Password)
-	}
-	address := net.JoinHostPort(host, strconv.Itoa(s.Port))
-	if engine == db.EngineSQLServer {
-		// SQL Server reads the URL path as an instance name, so the database
-		// must travel as a query parameter. A path segment would connect
-		// silently to the server's default database instead.
-		return (&url.URL{
-			Scheme:   "sqlserver",
-			User:     user,
-			Host:     address,
-			RawQuery: url.Values{"database": {databaseName}}.Encode(),
-		}).String(), nil
-	}
-
-	scheme := "postgres"
-	if engine == db.EngineMySQL {
-		scheme = "mysql"
-	}
-	if engine == db.EngineOracle {
-		scheme = "oracle"
-	}
-	return (&url.URL{
-		Scheme: scheme,
-		User:   user,
-		Host:   address,
-		Path:   "/" + databaseName,
-	}).String(), nil
+	_, dsn, err := (config.Connection{
+		Engine:   engine,
+		Settings: configSettingsFromConnectionSettings(s),
+	}).Target()
+	return dsn, err
 }
 
 func (s ConnectionSettings) normalizedEngine() (string, error) {
