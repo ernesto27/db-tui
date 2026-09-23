@@ -56,6 +56,7 @@ type navigatorStatus struct {
 	databaseName             string
 	reconnecting             bool
 	reconnectErr             error
+	lastConnectionSaveErr    error
 	spinner                  string
 	tablesLoading            bool
 	tableLoadErr             error

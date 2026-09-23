@@ -47,8 +47,9 @@ type Connection struct {
 
 // Config contains db-tui connection settings.
 type Config struct {
-	Connections []Connection `json:"connections,omitempty"`
-	MaxPageSize int          `json:"maxPageSize"`
+	Connections        []Connection `json:"connections,omitempty"`
+	MaxPageSize        int          `json:"maxPageSize"`
+	LastConnectionName string       `json:"lastConnectionName,omitempty"`
 }
 
 // PageSize returns the configured page size or the default when it is invalid.

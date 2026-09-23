@@ -33,6 +33,22 @@ type connectionFinishedMsg struct {
 	err      error
 }
 
+type lastConnectionSavedMsg struct {
+	name    string
+	session uint64
+	err     error
+}
+
+const lastConnectionOpenErrorText = "Unable to open last used connection"
+
+func saveLastConnection(cfg config.Config, name string, session uint64) tea.Cmd {
+	return func() tea.Msg {
+		cfg.LastConnectionName = name
+		err := cfg.Save()
+		return lastConnectionSavedMsg{name: name, session: session, err: err}
+	}
+}
+
 func (s ConnectionSettings) connectionDSN() (string, error) {
 	engine, err := s.normalizedEngine()
 	if err != nil {

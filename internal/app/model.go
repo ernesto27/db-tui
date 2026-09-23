@@ -43,6 +43,8 @@ type navigatorClick struct {
 	recorded bool
 }
 
+type openLastConnectionMsg struct{}
+
 // Model is the root Bubble Tea application model.
 type Model struct {
 	database               db.Database
@@ -62,6 +64,8 @@ type Model struct {
 	session                uint64
 	reconnecting           bool
 	reconnectErr           error
+	lastConnectionSaveErr  error
+	openingLastConnection  bool
 
 	loading                   bool
 	tableLoadErr              error
@@ -111,6 +115,8 @@ type Model struct {
 	editRowModal        *editRowModal
 	deleteRowModal      *deleteRowModal
 	rawQueryDeleteModal *rawQueryDeleteModal
+
+	startupErr string
 }
 
 // New creates the root Bubble Tea application model.
@@ -136,10 +142,17 @@ func New(config config.Config, savedConnection ConnectionSettings, connect Conne
 
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
-	if m.database == nil {
+	if m.database != nil {
+		return tea.Batch(m.loadDatabaseObjects(), spinnerTick())
+	}
+
+	if m.config.LastConnectionName == "" {
 		return nil
 	}
-	return tea.Batch(m.loadDatabaseObjects(), spinnerTick())
+	return func() tea.Msg {
+		return openLastConnectionMsg{}
+	}
+
 }
 
 func (m Model) loadDatabaseObjects() tea.Cmd {

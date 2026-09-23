@@ -39,6 +39,7 @@ type dataStatus struct {
 	highlightedName string
 	active          bool
 	disconnected    bool
+	startupError    string
 	tablesLoading   bool
 	tableLoadErr    error
 	noTables        bool
@@ -144,7 +145,12 @@ func (m dataModel) maxColumnOffset() int {
 func (m dataModel) view(status dataStatus, layout appLayout, focused bool) string {
 	switch {
 	case status.disconnected:
-		return panelStyle(layout.data.width, layout.data.height, focused).Render("Welcome to db-tui\n\nPress Ctrl+N to create a connection.\nPress Ctrl+L to open saved connections.")
+		content := "Welcome to db-tui"
+		if status.startupError != "" {
+			content += "\n\n" + lipgloss.NewStyle().Foreground(colorError).Render(sanitizeText(status.startupError))
+		}
+		content += "\n\nPress Ctrl+N to create a connection.\nPress Ctrl+L to open saved connections."
+		return panelStyle(layout.data.width, layout.data.height, focused).Render(content)
 	case status.tablesLoading:
 		return panelStyle(layout.data.width, layout.data.height, focused).Render("Loading database objects…")
 	case status.tableLoadErr != nil:

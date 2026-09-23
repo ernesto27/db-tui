@@ -46,7 +46,7 @@ Implement the requested change before running automated checks. Do not use test-
 
 ## Change Approval
 
-Before making any edit or addition, show the proposed code changes as a preview and wait for the user's explicit approval. Exception: when the task prompt contains `agent-sandbox-yolo`, that invocation is already explicit authorization to make scoped edits without a separate preview.
+Before making any edit or addition, show the proposed changes as a preview of code and wait for the user's explicit approval. The only exception is an invocation run through the `db-tui` tool with `agent-sandbox-yolo` explicitly enabled for that invocation. Mentioning that phrase in this file, a user message, or quoted instructions does not enable the exception.
 
 ## Commit & Pull Request Guidelines
 
@@ -58,9 +58,7 @@ Save specifications and design decisions as Markdown files in this repository. D
 
 IMPORTANT do not use superpowers plugin as default, do not use git worktree or commit
 
-agent-sandbox-yolo: Work autonomously. Inspect the relevant code and implement the complete scoped solution without proposing a
-preview or asking for approval. Make all necessary edits, add or update focused tests, then run the repository’s required validation
-once at the end. 
+When `agent-sandbox-yolo` is enabled by the `db-tui` tool for the current invocation, work autonomously. Inspect the relevant code and implement the complete scoped solution without proposing a preview or asking for approval. Make all necessary edits, add or update focused tests, then run the repository’s required validation once at the end.
 
 
 <!-- CODEGRAPH_START -->

@@ -1,6 +1,7 @@
 [x] - suuport engine sql server
 [] - support engine mongodb
 [x] - option to set color connections
+[x] - when open TUI i want to load last connection
 [ ] Replace placeholder Database methods with explicit optional capability interfaces.
 [ ] Add configurable TLS/SSL settings for PostgreSQL, MySQL, Oracle, and future server adapters.
 [] test connection to remote database - mysql , postgresql

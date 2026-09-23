@@ -144,6 +144,41 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 			return nil, false
 		}
 		return m.finishReconnect(msg), true
+	case lastConnectionSavedMsg:
+		if msg.session != m.session {
+			return nil, true
+		}
+		m.lastConnectionSaveErr = msg.err
+		if msg.err == nil {
+			m.config.LastConnectionName = msg.name
+		}
+		return nil, true
+	case openLastConnectionMsg:
+		index := -1
+		for i, connection := range m.config.Connections {
+			if connection.Name != m.config.LastConnectionName {
+				continue
+			}
+			if index >= 0 {
+				m.startupErr = lastConnectionOpenErrorText
+				return nil, true
+			}
+			index = i
+		}
+
+		if index == -1 {
+			m.startupErr = lastConnectionOpenErrorText
+			return nil, true
+		}
+
+		m.startupErr = ""
+		m.openingLastConnection = true
+		modal := newConnectionModal(
+			connectionSettingsFromConfig(m.config.Connections[index]),
+		)
+		m.modal = &modal
+		m.pendingConnectionIndex = index
+		return func() tea.Msg { return submitConnectionMsg{} }, true
 	case tablesLoadedMsg:
 		if msg.session != m.session || (m.navigator.schema != "" && msg.schema != m.navigator.schema) {
 			return nil, true
@@ -430,7 +465,13 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case submitConnectionMsg:
 		settings, err := m.modal.connectionSettings()
 		if err != nil {
-			m.modal.errorText = err.Error()
+			if m.openingLastConnection {
+				m.modal.errorText = lastConnectionOpenErrorText
+				m.startupErr = lastConnectionOpenErrorText
+				m.openingLastConnection = false
+			} else {
+				m.modal.errorText = err.Error()
+			}
 			return m, nil
 		}
 		m.modal.errorText = ""
@@ -440,6 +481,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, connectConnection(m.connect, settings, m.connectionAttempt)
 	case cancelConnectionMsg:
 		m.modal = nil
+		m.openingLastConnection = false
 		m.editingConnection = -1
 		m.creatingConnection = false
 		m.pendingConnectionIndex = -1
@@ -456,9 +498,18 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.modal.connecting = false
 		if msg.err != nil {
-			m.modal.errorText = msg.err.Error()
+			if m.openingLastConnection {
+				m.modal.errorText = lastConnectionOpenErrorText
+				m.startupErr = lastConnectionOpenErrorText
+				m.openingLastConnection = false
+			} else {
+				m.modal.errorText = msg.err.Error()
+			}
 			return m, nil
 		}
+		m.openingLastConnection = false
+		m.startupErr = ""
+
 		if m.editingConnection >= 0 || m.creatingConnection {
 			updatedConfig := m.config
 			updatedConfig.Connections = slices.Clone(m.config.Connections)
@@ -467,6 +518,7 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.modal.errorText = "selected connection no longer exists"
 				return m, nil
 			}
+
 			var nextActiveIndex int
 			if m.editingConnection >= 0 {
 				updatedConnection := updatedConfig.Connections[m.editingConnection]
@@ -474,10 +526,15 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 				updatedConnection.Settings = configSettingsFromConnectionSettings(msg.settings)
 				updatedConfig.Connections[m.editingConnection] = updatedConnection
 				nextActiveIndex = m.editingConnection
+
 			} else {
 				updatedConfig.Connections = append(updatedConfig.Connections, newConfigConnection(msg.settings))
 				nextActiveIndex = len(updatedConfig.Connections) - 1
 			}
+
+			updatedConfig.LastConnectionName =
+				updatedConfig.Connections[nextActiveIndex].Name
+
 			if err := updatedConfig.Save(); err != nil {
 				msg.database.Close()
 				m.modal.errorText = "save connection: " + err.Error()
@@ -490,13 +547,20 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Commit the pending index for a plain select (non-edit, non-create).
+		selectedSavedConnection := m.pendingConnectionIndex >= 0
+		var lastConnectionName string
 		if m.pendingConnectionIndex >= 0 {
 			m.activeConnectionIndex = m.pendingConnectionIndex
 			m.pendingConnectionIndex = -1
+			lastConnectionName = m.config.Connections[m.activeConnectionIndex].Name
 		}
 
 		m.modal = nil
-		return m, m.adoptConnection(msg.database, msg.settings)
+		command := m.adoptConnection(msg.database, msg.settings)
+		if selectedSavedConnection {
+			return m, tea.Batch(command, saveLastConnection(m.config, lastConnectionName, m.session))
+		}
+		return m, command
 	default:
 		modal, command := m.modal.update(msg)
 		m.modal = &modal
@@ -544,6 +608,7 @@ func (m *Model) adoptConnection(database db.Database, settings ConnectionSetting
 	m.savedConnection = settings
 	m.reconnecting = false
 	m.reconnectErr = nil
+	m.lastConnectionSaveErr = nil
 	m.tableLoadErr = nil
 	m.viewLoadErr = nil
 	m.materializedViewLoadErr = nil

@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,71 @@ import (
 	"github.com/ernestoponce27/db-tui/internal/config"
 	"github.com/ernestoponce27/db-tui/internal/db"
 )
+
+func TestLastConnectionStartupErrors(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      config.Config
+		connectErr  error
+		wantInModal bool
+	}{
+		{
+			name: "saved connection was removed",
+			config: config.Config{
+				LastConnectionName: "removed",
+			},
+		},
+		{
+			name: "saved connection cannot open",
+			config: config.Config{
+				LastConnectionName: "local",
+				Connections: []config.Connection{{
+					Name:   "local",
+					Engine: db.EnginePostgreSQL,
+					Settings: config.Settings{
+						DSN: "postgres://localhost/example",
+					},
+				}},
+			},
+			connectErr:  errors.New("SENSITIVE_MARKER"),
+			wantInModal: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			model := New(test.config, ConnectionSettings{}, nil)
+
+			start := model.Init()
+			require.NotNil(t, start)
+			model, next := updateModel(t, model, start())
+
+			if test.connectErr != nil {
+				require.NotNil(t, next)
+				model, next = updateModel(t, model, next())
+				require.NotNil(t, next)
+
+				model, _ = updateModel(t, model, connectionFinishedMsg{
+					attempt: model.connectionAttempt,
+					err:     test.connectErr,
+				})
+			}
+
+			view := model.View().Content
+			assert.True(t, strings.Contains(view, "Unable to open last used connection"), "startup error is not visible")
+
+			if test.wantInModal {
+				require.NotNil(t, model.modal)
+				assert.NotContains(t, model.modal.errorText, "SENSITIVE_MARKER")
+				model, _ = updateModel(t, model, cancelConnectionMsg{})
+				assert.Contains(t, model.View().Content, "Ctrl+L")
+			} else {
+				assert.Nil(t, model.modal)
+				assert.Contains(t, view, "Ctrl+L")
+			}
+		})
+	}
+}
 
 func TestUpdateIgnoresTablesFromOldSession(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
