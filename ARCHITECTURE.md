@@ -19,22 +19,29 @@ defines the contribution workflow
 ```text
 cmd/db-tui
   |-- internal/app ------> internal/db
+  |                `-----> internal/redis
   |       |-- internal/config
   |       `-- internal/version
-  `-- internal/db/{postgres,mysql,oracle,sqlite}
+  `-- internal/db/{postgres,mysql,oracle,sqlite,sqlserver}
           |-- internal/db
           |-- internal/{csvexport,jsonexport}
           `-- internal/logger
+  `-- internal/redis
 ```
 
 - `cmd/db-tui` is the composition root: load configuration, select an adapter,
   construct the model, run Bubble Tea, and close the final database session.
 - `internal/app` owns TUI state, messages, commands, updates, layout, views,
-  panels, and modals. It must not import a database adapter.
+  panels, and modals. SQL behavior depends on `internal/db`; Redis behavior
+  uses the concrete `internal/redis.Client` because Redis does not implement
+  the SQL-oriented `db.Database` interface.
 - `internal/db` owns engine-neutral types and the `Database` interface. It
   must not depend on the application or an adapter.
 - Adapters own driver, catalog, SQL dialect, DSN, export, and dump behavior.
   They implement `db.Database` and must not import `internal/app`.
+- `internal/redis` owns standalone Redis connections, logical databases, key
+  scanning, value formatting, and raw command execution. It must not import
+  `internal/app` or implement `db.Database`. `cmd/db-tui` wires its connector.
 - Config, export, logging, and version packages remain focused support code.
 - `docker/` contains local fixtures, not production logic.
 - Do not expand `utils/` when code has a clearer owner.
@@ -73,6 +80,12 @@ Results must carry enough identity to reject stale work:
 - `session` for the active database session; and
 - feature request counters for work within a session.
 
+Redis key loads also carry the selected logical database, page index, and a load
+request counter. Each first-page load refreshes the sidebar from Redis `INFO keyspace`,
+which lists only logical databases with keys. An empty database selected through
+`SELECT` remains active in the grid but does not appear in the sidebar.
+Switching databases or connections cancels the prior load.
+
 Apply results only when their identities still match current state. Close a
 stale successful connection instead of adopting or leaking it.
 
@@ -87,6 +100,10 @@ driver-specific types through it. Changing it requires neutral types, all four
 adapter implementations, updated fakes and callers, and focused tests.
 
 - Keep interactive rows and query results bounded.
+- Redis's TUI key view loads 400 keys per page in scan order using an opaque
+  scan cursor. Previous pages are cached for backward navigation. Switching
+  databases, refreshing, and running a command reset the cursor and page cache.
+  Scanning remains cancellable.
 - Validate page offsets and limits before building SQL.
 - Preserve column/value order and represent SQL `NULL` as `nil`.
 - Validate and engine-quote identifiers; bind data values as parameters.
@@ -113,6 +130,10 @@ adapter implementations, updated fakes and callers, and focused tests.
 - Restrict export names to one safe filename component.
 - Never log passwords or complete DSNs.
 - Require confirmation for destructive operations.
+- The Redis raw command panel executes immediately, including destructive
+  commands, as an explicit exception requested for the initial Redis version.
+- Redis command replies render as terminal-safe, scrollable plain text; SQL
+  query results continue to use the tabular result grid.
 - Use `gofmt`, standard Go names, and consistent initialisms.
 - Document exported declarations and non-obvious intent.
 - Handle errors explicitly and wrap propagated errors with context and `%w`.

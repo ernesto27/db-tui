@@ -75,6 +75,7 @@ func TestConnectionEnginesIncludeSQLServer(t *testing.T) {
 		db.EngineOracle,
 		db.EngineSQLite,
 		db.EngineSQLServer,
+		db.EngineRedis,
 	}, connectionEngines)
 }
 
@@ -91,7 +92,11 @@ func TestConnectionModalCyclesToSQLServer(t *testing.T) {
 	assert.Equal(t, "1433", modal.inputs[portInput].Value())
 	assert.Equal(t, "sqlserver://user:password@host:1433?database=name", modal.inputs[dsnInput].Placeholder)
 
-	// Wrapping forward returns to the first engine.
+	// Redis follows SQL Server, then wrapping returns to the first engine.
+	modal.selectEngine(1)
+	assert.Equal(t, db.EngineRedis, modal.engine())
+	assert.Equal(t, "6379", modal.inputs[portInput].Value())
+	assert.Equal(t, "redis://user:password@host:6379", modal.inputs[dsnInput].Placeholder)
 	modal.selectEngine(1)
 	assert.Equal(t, db.EnginePostgreSQL, modal.engine())
 }

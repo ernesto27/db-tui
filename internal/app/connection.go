@@ -10,10 +10,14 @@ import (
 
 	"github.com/ernestoponce27/db-tui/internal/config"
 	"github.com/ernestoponce27/db-tui/internal/db"
+	"github.com/ernestoponce27/db-tui/internal/redis"
 )
 
 // ConnectFunc opens a database session for an engine and dsn.
 type ConnectFunc func(context.Context, string, string) (db.Database, error)
+
+// RedisConnectFunc opens a concrete Redis session for the interactive app.
+type RedisConnectFunc func(context.Context, redis.Settings) (*redis.Client, error)
 
 // ConnectionSettings identifies a database connection entered in the TUI.
 type ConnectionSettings struct {
@@ -28,6 +32,7 @@ type ConnectionSettings struct {
 
 type connectionFinishedMsg struct {
 	database db.Database
+	redis    *redis.Client
 	settings ConnectionSettings
 	attempt  uint64
 	err      error
@@ -73,12 +78,14 @@ func (s ConnectionSettings) normalizedEngine() (string, error) {
 		return db.EngineSQLite, nil
 	case db.EngineSQLServer:
 		return db.EngineSQLServer, nil
+	case db.EngineRedis:
+		return db.EngineRedis, nil
 	default:
 		return "", fmt.Errorf("unsupported database engine %q", s.Engine)
 	}
 }
 
-func connectConnection(connect ConnectFunc, settings ConnectionSettings, attempt uint64) tea.Cmd {
+func connectConnection(connect ConnectFunc, settings ConnectionSettings, attempt uint64, redisConnect ...RedisConnectFunc) tea.Cmd {
 	return func() tea.Msg {
 		engine, err := settings.normalizedEngine()
 		if err != nil {
@@ -92,6 +99,13 @@ func connectConnection(connect ConnectFunc, settings ConnectionSettings, attempt
 
 		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
 		defer cancel()
+		if engine == db.EngineRedis {
+			if len(redisConnect) == 0 || redisConnect[0] == nil {
+				return connectionFinishedMsg{attempt: attempt, err: errors.New("Redis connector is unavailable")}
+			}
+			client, err := redisConnect[0](ctx, redis.Settings{DSN: dsn})
+			return connectionFinishedMsg{redis: client, settings: settings, attempt: attempt, err: err}
+		}
 
 		database, err := connect(ctx, engine, dsn)
 		if err != nil {

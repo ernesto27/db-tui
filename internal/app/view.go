@@ -33,7 +33,7 @@ func (m Model) baseView() tea.View {
 		segments := []string{
 			headerTitle,
 			sanitizeText(databaseName),
-			engineDisplayName(m.database.Engine()),
+			engineDisplayName(m.activeEngine()),
 		}
 		if m.readOnly {
 			segments = append([]string{headerTitle, readOnlyHeaderLabel()}, segments[1:]...)
@@ -41,7 +41,13 @@ func (m Model) baseView() tea.View {
 		if environment != "" {
 			segments = append([]string{headerTitle, strings.ToUpper(string(environment))}, segments[1:]...)
 		}
-		if host := m.database.Host(); host != "" {
+		host := ""
+		if m.redis.client != nil {
+			host = m.redis.client.Host()
+		} else if m.database != nil {
+			host = m.database.Host()
+		}
+		if host != "" {
 			segments = append(segments, host)
 		}
 		headerTitle = strings.Join(segments, "  /  ")
@@ -49,15 +55,24 @@ func (m Model) baseView() tea.View {
 	header := lipgloss.NewStyle().Width(m.layout.width).Padding(0, 1).Bold(true).
 		Foreground(colorTitle).Background(headerBackgroundForEnvironment(environment)).
 		Render(headerTitle)
-	rightPanel := m.data.view(m.dataStatus(), m.layout, m.focus == focusData)
+	var rightPanel string
+	if m.redis.client != nil {
+		rightPanel = m.data.view(m.redisDataStatus(), m.layout, m.focus == focusData)
+	} else {
+		rightPanel = m.data.view(m.dataStatus(), m.layout, m.focus == focusData)
+	}
 	if m.activeFunction.set {
 		rightPanel = m.activeFunction.view(m.layout, m.focus == focusData)
 	}
 	if m.panel == panelQuery {
-		rightPanel = m.query.view(m.layout, m.focus == focusData, m.database != nil, rawQueryHighlighter(m.database))
+		rightPanel = m.query.view(m.layout, m.focus == focusData, m.database != nil || m.redis.client != nil, rawQueryHighlighter(m.database), m.redis.client != nil)
+	}
+	navigatorView := m.navigator.view(m.navigatorStatus(), m.layout, m.focus == focusNavigator)
+	if m.redis.client != nil {
+		navigatorView = m.redisNavigatorView()
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top,
-		m.navigator.view(m.navigatorStatus(), m.layout, m.focus == focusNavigator), " ",
+		navigatorView, " ",
 		rightPanel,
 	)
 	footer := lipgloss.NewStyle().Width(m.layout.width).Padding(0, 1).
@@ -125,6 +140,8 @@ func engineDisplayName(engine string) string {
 		return "SQLite"
 	case db.EngineSQLServer:
 		return "SQL Server"
+	case db.EngineRedis:
+		return "Redis"
 	default:
 		return sanitizeText(engine)
 	}
@@ -150,13 +167,29 @@ func (m Model) navigatorStatus() navigatorStatus {
 }
 
 func (m Model) connectedDatabaseName() string {
+	if m.redis.client != nil {
+		return fmt.Sprintf("db%d", m.redis.database)
+	}
 	if m.database == nil {
 		return ""
 	}
 	return m.database.Name()
 }
 
+func (m Model) activeEngine() string {
+	if m.redis.client != nil {
+		return db.EngineRedis
+	}
+	if m.database == nil {
+		return ""
+	}
+	return m.database.Engine()
+}
+
 func (m Model) dataStatus() dataStatus {
+	if m.redis.client != nil {
+		return m.redisDataStatus()
+	}
 	if m.activeExtensions.set {
 		return dataStatus{
 			tableName:    extensionPanelTitle,
@@ -243,6 +276,12 @@ func (m Model) renderModalOverlay(base string) string {
 }
 
 func (m Model) footerText() string {
+	if m.redis.client != nil {
+		if m.panel == panelQuery {
+			return "Ctrl+P execute command  •  Ctrl+T key data  •  Ctrl+K shortcuts  •  q quit"
+		}
+		return "Enter select database  •  r refresh  •  Ctrl+R raw command  •  Tab navigator/data  •  Ctrl+K shortcuts  •  q quit"
+	}
 	if m.database == nil {
 		if m.panel == panelQuery {
 			return "raw query  •  connection required  •  Ctrl+S settings  •  Ctrl+T table data  •  Ctrl+N new connection  •  Ctrl+L open connections  •  Ctrl+K shortcuts  •  q quit"

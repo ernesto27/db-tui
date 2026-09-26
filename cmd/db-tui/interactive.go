@@ -5,6 +5,7 @@ import (
 
 	"github.com/ernestoponce27/db-tui/internal/app"
 	"github.com/ernestoponce27/db-tui/internal/config"
+	"github.com/ernestoponce27/db-tui/internal/redis"
 )
 
 func runInteractive() error {
@@ -13,7 +14,7 @@ func runInteractive() error {
 		panic(err)
 	}
 
-	model := app.New(appConfig, app.ConnectionSettings{}, connectDatabase)
+	model := app.New(appConfig, app.ConnectionSettings{}, connectDatabase, redis.Connect)
 	finalModel, err := tea.NewProgram(model).Run()
 	if finalApp, ok := finalModel.(app.Model); ok {
 		finalApp.Close()

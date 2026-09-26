@@ -103,6 +103,9 @@ func newConfigConnection(settings ConnectionSettings) config.Connection {
 	if name == "" && engine == db.EngineSQLite && strings.TrimSpace(settings.DSN) != "" {
 		name = filepath.Base(strings.TrimSpace(settings.DSN)) + "-" + strconv.Itoa(rand.IntN(1_000_000))
 	}
+	if name == "" && engine == db.EngineRedis {
+		name = "Redis connection"
+	}
 	if name == "" {
 		name = engineDisplayName(engine) + " connection"
 	}

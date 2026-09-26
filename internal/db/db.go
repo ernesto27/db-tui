@@ -64,6 +64,7 @@ const (
 	EngineOracle     = "oracle"
 	EngineSQLite     = "sqlite"
 	EngineSQLServer  = "sqlserver"
+	EngineRedis      = "redis"
 
 	// ExportTypeCSV identifies CSV table exports.
 	ExportTypeCSV  = "csv"

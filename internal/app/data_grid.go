@@ -70,6 +70,11 @@ func (m dataModel) visibleColumnWidth(column int) int {
 
 func (m dataModel) visibleDataEnd(width, height, firstColumn, lastColumn, firstRow int) int {
 	availableHeight := max(1, height-2)
+	if m.singleLineRows && firstRow < len(m.page.Rows) {
+		oneRowHeight := lipgloss.Height(m.dataGrid(width, firstColumn, lastColumn, firstRow, firstRow+1).String())
+		visibleRows := max(1, availableHeight-oneRowHeight+1)
+		return min(len(m.page.Rows), firstRow+visibleRows)
+	}
 	lastRow := firstRow
 	for lastRow < len(m.page.Rows) {
 		grid := m.dataGrid(width, firstColumn, lastColumn, firstRow, lastRow+1)
@@ -318,12 +323,16 @@ func (m dataModel) dataColumnWidths(width, firstColumn, lastColumn int) []int {
 		columnWidths[index] = minimumWidth
 		desiredWidths[index] = minimumWidth
 
-		for _, row := range m.page.Rows {
-			var value any
-			if columnIndex < len(row) {
-				value = row[columnIndex]
+		if len(m.cachedCellWidths) == len(m.page.Columns) {
+			desiredWidths[index] = max(desiredWidths[index], m.cachedCellWidths[columnIndex]+tableHorizontalPadding)
+		} else {
+			for _, row := range m.page.Rows {
+				var value any
+				if columnIndex < len(row) {
+					value = row[columnIndex]
+				}
+				desiredWidths[index] = max(desiredWidths[index], lipgloss.Width(formatCell(value))+tableHorizontalPadding)
 			}
-			desiredWidths[index] = max(desiredWidths[index], lipgloss.Width(formatCell(value))+tableHorizontalPadding)
 		}
 
 		if width, ok := m.columnWidths[columnIndex]; ok {
@@ -357,6 +366,20 @@ func (m dataModel) dataColumnWidths(width, firstColumn, lastColumn int) []int {
 	}
 
 	return columnWidths
+}
+
+func (m *dataModel) cacheSingleLineWidths() {
+	m.cachedCellWidths = make([]int, len(m.page.Columns))
+	for _, row := range m.page.Rows {
+		for column := range m.page.Columns {
+			var value any
+			if column < len(row) {
+				value = row[column]
+			}
+			m.cachedCellWidths[column] = max(m.cachedCellWidths[column], lipgloss.Width(formatCell(value)))
+		}
+	}
+	m.singleLineRows = true
 }
 
 func totalTableWidth(columnWidths []int) int {

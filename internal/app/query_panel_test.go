@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -310,6 +311,47 @@ func TestQueryScrollResultsResetsEmptyResult(t *testing.T) {
 	query.scrollResults(1)
 
 	assert.Zero(t, query.viewport)
+}
+
+func TestRedisResultShowsPlainTextWithoutGrid(t *testing.T) {
+	layout := newAppLayout(100, 24)
+	query := newQueryModel(layout)
+	query.finishRedisExecute("active: true\nname: Customer 1", "HGETALL", time.Millisecond, nil)
+
+	view := query.resultView(layout, true, true)
+	assert.Contains(t, view, "active: true\nname: Customer 1")
+	assert.Contains(t, view, "HGETALL")
+	assert.NotContains(t, view, "│")
+	assert.NotContains(t, view, "map[")
+	assert.True(t, query.resultsFocused)
+}
+
+func TestRedisResultScrollsWrappedText(t *testing.T) {
+	layout := newAppLayout(60, 20)
+	query := newQueryModel(layout)
+	query.finishRedisExecute(strings.Repeat("a very long Redis reply value\n", 30), "LRANGE", time.Millisecond, nil)
+	first := query.resultView(layout, true, true)
+	query.scrollResults(100, layout)
+	assert.Greater(t, query.viewport, 0)
+	assert.NotEqual(t, first, query.resultView(layout, true, true))
+	lastViewport := query.viewport
+	query.scrollResults(100, layout)
+	assert.Equal(t, lastViewport, query.viewport)
+	query.scrollResults(-100, layout)
+	assert.Zero(t, query.viewport)
+	assert.Equal(t, first, query.resultView(layout, true, true))
+}
+
+func TestRedisRawResultClearsBeforeNextCommand(t *testing.T) {
+	layout := newAppLayout(100, 24)
+	query := newQueryModel(layout)
+	query.finishRedisExecute("PONG", "PING", time.Millisecond, nil)
+	query.beginExecute("GET fixture:app:name")
+	assert.Empty(t, query.rawResult)
+	assert.False(t, query.resultsFocused)
+	query.finishExecute(db.QueryResult{Columns: []string{"id"}, Rows: [][]any{{1}}}, time.Millisecond, nil)
+	assert.Empty(t, query.rawResult)
+	assert.Contains(t, query.resultView(layout, true), "Results")
 }
 
 func TestQueryToggleFocus(t *testing.T) {

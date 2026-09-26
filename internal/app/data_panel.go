@@ -16,16 +16,18 @@ type rowLoadRequest struct {
 }
 
 type dataModel struct {
-	page         db.RowPage
-	offset       int
-	viewport     int
-	selected     int
-	columnOffset int
-	columnWidths map[int]int
-	resizing     *columnResize
-	selection    textselection.Selection
-	loading      bool
-	err          error
+	page             db.RowPage
+	offset           int
+	viewport         int
+	selected         int
+	columnOffset     int
+	columnWidths     map[int]int
+	cachedCellWidths []int
+	singleLineRows   bool
+	resizing         *columnResize
+	selection        textselection.Selection
+	loading          bool
+	err              error
 }
 
 type columnResize struct {
@@ -59,6 +61,8 @@ func (m *dataModel) beginLoad(offset int) {
 	m.viewport = 0
 	m.selected = 0
 	m.columnOffset = 0
+	m.cachedCellWidths = nil
+	m.singleLineRows = false
 	m.resizing = nil
 	m.selection.Clear()
 	m.loading = true
@@ -73,6 +77,8 @@ func (m *dataModel) resetColumnWidths() {
 func (m *dataModel) finishLoad(page db.RowPage, selectedRow int, err error, layout appLayout) {
 	m.loading = false
 	m.err = err
+	m.cachedCellWidths = nil
+	m.singleLineRows = false
 	if err != nil {
 		return
 	}

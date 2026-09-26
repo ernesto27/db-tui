@@ -48,6 +48,7 @@ type openLastConnectionMsg struct{}
 // Model is the root Bubble Tea application model.
 type Model struct {
 	database               db.Database
+	redis                  redisState
 	readOnly               bool
 	savedConnection        ConnectionSettings
 	sqlScripts             ListSqlScript
@@ -120,11 +121,11 @@ type Model struct {
 }
 
 // New creates the root Bubble Tea application model.
-func New(config config.Config, savedConnection ConnectionSettings, connect ConnectFunc) Model {
+func New(config config.Config, savedConnection ConnectionSettings, connect ConnectFunc, redisConnect ...RedisConnectFunc) Model {
 	layout := newAppLayout(defaultWidth, defaultHeight)
 	navigator := newNavigatorModel()
 	navigator.resize(layout)
-	return Model{
+	model := Model{
 		savedConnection:        savedConnection,
 		sqlScripts:             ListSqlScript{},
 		activeConnectionIndex:  -1,
@@ -138,6 +139,10 @@ func New(config config.Config, savedConnection ConnectionSettings, connect Conne
 		navigator:              navigator,
 		query:                  newQueryModel(layout),
 	}
+	if len(redisConnect) > 0 {
+		model.redis.connect = redisConnect[0]
+	}
+	return model
 }
 
 // Init implements tea.Model.
@@ -174,8 +179,14 @@ func (m Model) loadDatabaseObjects() tea.Cmd {
 // Close releases the current database session, if any.
 func (m Model) Close() {
 	m.query.cancelExecution()
+	if m.redis.loadCancel != nil {
+		m.redis.loadCancel()
+	}
 	if m.database != nil {
 		m.database.Close()
+	}
+	if m.redis.client != nil {
+		_ = m.redis.client.Close()
 	}
 }
 

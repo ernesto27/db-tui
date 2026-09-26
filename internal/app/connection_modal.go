@@ -26,7 +26,7 @@ const (
 
 const connectionModalInputWidth = 42
 
-var connectionEngines = []string{db.EnginePostgreSQL, db.EngineMySQL, db.EngineOracle, db.EngineSQLite, db.EngineSQLServer}
+var connectionEngines = []string{db.EnginePostgreSQL, db.EngineMySQL, db.EngineOracle, db.EngineSQLite, db.EngineSQLServer, db.EngineRedis}
 
 type connectionModal struct {
 	inputs      [connectionInputCount]textinput.Model
@@ -165,6 +165,9 @@ func (m *connectionModal) selectEngine(delta int) {
 	previousEngine := m.engine()
 	m.engineIndex = (m.engineIndex + delta + len(connectionEngines)) % len(connectionEngines)
 	m.setDSNPlaceholder()
+	if m.engine() == db.EngineRedis && m.inputs[hostInput].Value() == "" {
+		m.inputs[hostInput].SetValue("127.0.0.1")
+	}
 	previousPort := defaultPortForEngine(previousEngine)
 	if port := m.inputs[portInput].Value(); port == "" || port == previousPort {
 		m.inputs[portInput].SetValue(defaultPortForEngine(m.engine()))
@@ -197,6 +200,10 @@ func (m *connectionModal) setDSNPlaceholder() {
 		m.inputs[dsnInput].Placeholder = "sqlserver://user:password@host:1433?database=name"
 		return
 	}
+	if m.engine() == db.EngineRedis {
+		m.inputs[dsnInput].Placeholder = "redis://user:password@host:6379"
+		return
+	}
 	m.inputs[dsnInput].Placeholder = "engine-specific DSN"
 }
 
@@ -213,12 +220,18 @@ func defaultPortForEngine(engine string) string {
 	if engine == db.EngineSQLServer {
 		return "1433"
 	}
+	if engine == db.EngineRedis {
+		return "6379"
+	}
 	return "5432"
 }
 
 func connectionInputsForEngine(engine string) []connectionInput {
 	if engine == db.EngineSQLite {
 		return []connectionInput{engineInput, dsnInput}
+	}
+	if engine == db.EngineRedis {
+		return []connectionInput{engineInput, hostInput, portInput, usernameInput, passwordInput, dsnInput}
 	}
 	return []connectionInput{engineInput, hostInput, databaseNameInput, portInput, usernameInput, passwordInput, dsnInput}
 }
@@ -228,6 +241,15 @@ func (m connectionModal) connectionSettings() (ConnectionSettings, error) {
 		settings := ConnectionSettings{
 			Engine: db.EngineSQLite,
 			DSN:    strings.TrimSpace(m.inputs[dsnInput].Value()),
+		}
+		_, err := settings.connectionDSN()
+		return settings, err
+	}
+	if m.engine() == db.EngineRedis && strings.TrimSpace(m.inputs[dsnInput].Value()) == "" {
+		port, _ := strconv.Atoi(strings.TrimSpace(m.inputs[portInput].Value()))
+		settings := ConnectionSettings{
+			Engine: db.EngineRedis, Host: strings.TrimSpace(m.inputs[hostInput].Value()), Port: port,
+			Username: strings.TrimSpace(m.inputs[usernameInput].Value()), Password: m.inputs[passwordInput].Value(),
 		}
 		_, err := settings.connectionDSN()
 		return settings, err
@@ -290,6 +312,15 @@ func (m connectionModal) view(width int) string {
 			label string
 			input connectionInput
 		}{{"Database file", dsnInput}}
+	}
+	if m.engine() == db.EngineRedis {
+		fields = []struct {
+			label string
+			input connectionInput
+		}{
+			{"Host", hostInput}, {"Port", portInput}, {"Username (optional)", usernameInput},
+			{"Password (optional)", passwordInput}, {"DSN (optional)", dsnInput},
+		}
 	}
 	for _, field := range fields {
 		inputView := m.inputs[field.input].View()

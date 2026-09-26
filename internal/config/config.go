@@ -134,12 +134,38 @@ func (config Config) FindConnection(name string) (Connection, error) {
 func (connection Connection) Target() (string, string, error) {
 	engine := strings.TrimSpace(connection.Engine)
 	switch engine {
-	case db.EnginePostgreSQL, db.EngineMySQL, db.EngineOracle, db.EngineSQLite, db.EngineSQLServer:
+	case db.EnginePostgreSQL, db.EngineMySQL, db.EngineOracle, db.EngineSQLite, db.EngineSQLServer, db.EngineRedis:
 	default:
 		return "", "", fmt.Errorf("unsupported database engine %q", engine)
 	}
 
 	settings := connection.Settings
+	if engine == db.EngineRedis {
+		if dsn := strings.TrimSpace(settings.DSN); dsn != "" {
+			parsed, err := url.Parse(dsn)
+			if err != nil || parsed.Scheme != "redis" || parsed.Hostname() == "" {
+				return "", "", errors.New("valid redis:// DSN is required")
+			}
+			return engine, dsn, nil
+		}
+		host := strings.TrimSpace(settings.Hostname)
+		port, err := strconv.Atoi(strings.TrimSpace(settings.Port))
+		if host == "" {
+			return "", "", errors.New("host is required")
+		}
+		if err != nil || port < 1 || port > 65535 {
+			return "", "", errors.New("port must be between 1 and 65535")
+		}
+		address := net.JoinHostPort(host, strconv.Itoa(port))
+		redisURL := &url.URL{Scheme: "redis", Host: address}
+		username := strings.TrimSpace(settings.Username)
+		if settings.Password != "" {
+			redisURL.User = url.UserPassword(username, settings.Password)
+		} else if username != "" {
+			redisURL.User = url.User(username)
+		}
+		return engine, redisURL.String(), nil
+	}
 	if dsn := strings.TrimSpace(settings.DSN); dsn != "" {
 		return engine, dsn, nil
 	}

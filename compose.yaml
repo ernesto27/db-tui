@@ -99,3 +99,88 @@ services:
       - >-
         /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -No -b -i /init/001_sample.sql
     restart: "no"
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "127.0.0.1:6380:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "test \"$$(redis-cli ping)\" = PONG && test \"$$(redis-cli GET fixture:seed:ready)\" = 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        redis-server --save '' --appendonly no &
+        server_pid=$$!
+        trap 'kill -TERM "$$server_pid" 2>/dev/null || :; wait "$$server_pid" 2>/dev/null || :; exit 0' TERM INT
+        until [ "$$(redis-cli ping 2>/dev/null)" = PONG ]; do sleep 1; done
+
+        redis() { redis-cli "$$@" >/dev/null; }
+
+        redis SET fixture:app:name db-tui
+        redis SET fixture:app:config '{"theme":"dark","page_size":50}'
+        redis SET fixture:orders:next_id 501
+        redis SET fixture:session:demo active EX 3600
+        redis DEL fixture:customers fixture:products fixture:orders \
+          fixture:roles:reader fixture:roles:editor fixture:leaderboard \
+          fixture:recent:queries fixture:events
+
+        i=1
+        while [ "$$i" -le 100 ]; do
+          region=$$(( (i - 1) % 5 + 1 ))
+          redis HSET "fixture:customer:$$i" \
+            name "Customer $$i" email "customer$$i@example.test" \
+            region "Region $$region" active true
+          redis SADD fixture:customers "$$i"
+          redis DEL "fixture:customer:$$i:orders"
+          i=$$((i + 1))
+        done
+
+        i=1
+        while [ "$$i" -le 50 ]; do
+          category=$$(( (i - 1) % 5 + 1 ))
+          price_cents=$$(( 500 + i * 125 ))
+          redis HSET "fixture:product:$$i" \
+            name "Product $$i" category "Category $$category" \
+            price_cents "$$price_cents" stock "$$(( 100 - i ))"
+          redis SADD fixture:products "$$i"
+          i=$$((i + 1))
+        done
+
+        i=1
+        while [ "$$i" -le 500 ]; do
+          customer=$$(( (i - 1) % 100 + 1 ))
+          product=$$(( (i - 1) % 50 + 1 ))
+          case $$(( i % 4 )) in
+            0) status=pending ;;
+            1) status=paid ;;
+            2) status=shipped ;;
+            3) status=delivered ;;
+          esac
+          redis HSET "fixture:order:$$i" \
+            customer_id "$$customer" product_id "$$product" \
+            quantity "$$(( i % 3 + 1 ))" status "$$status"
+          redis SADD fixture:orders "$$i"
+          redis RPUSH "fixture:customer:$$customer:orders" "$$i"
+          i=$$((i + 1))
+        done
+
+        redis RPUSH fixture:recent:queries "GET fixture:app:name" \
+          "HGETALL fixture:customer:1" "SMEMBERS fixture:orders"
+        redis SADD fixture:roles:reader 1 2 3 4 5
+        redis SADD fixture:roles:editor 1 3
+        redis ZADD fixture:leaderboard 125 customer:1 98 customer:2 74 customer:3
+
+        redis -n 1 SET fixture:db1:message "hello from db1"
+        redis -n 1 HSET fixture:db1:sample name "DB 1" purpose "database switching"
+
+        i=1
+        while [ "$$i" -le 25 ]; do
+          redis XADD fixture:events '*' type order_created order_id "$$i"
+          i=$$((i + 1))
+        done
+
+        redis SET fixture:seed:ready 1
+        wait "$$server_pid"

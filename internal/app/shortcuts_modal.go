@@ -67,12 +67,36 @@ var shortcutSections = []shortcutSection{
 	}},
 }
 
-type shortcutsModal struct {
-	offset int
+var redisShortcutSections = []shortcutSection{
+	{title: "Global", shortcuts: []shortcut{
+		{key: "Ctrl+K", action: "Open or close keyboard shortcuts"},
+		{key: "Ctrl+L", action: "Open connections"},
+		{key: "Ctrl+N", action: "New connection / clear command"},
+		{key: "Ctrl+R", action: "Open Redis command panel"},
+		{key: "Ctrl+T", action: "Open key data"},
+		{key: "Q / Ctrl+C", action: "Quit"},
+	}},
+	{title: "Redis databases and keys", shortcuts: []shortcut{
+		{key: "Tab", action: "Switch focused pane"},
+		{key: "Up / Down", action: "Move through databases or keys"},
+		{key: "Left / Right", action: "Switch pane or scroll columns"},
+		{key: "Enter", action: "Load selected logical database"},
+		{key: "R", action: "Refresh keys or reconnect from navigator"},
+	}},
+	{title: "Redis command", shortcuts: []shortcut{
+		{key: "Ctrl+P", action: "Execute one command"},
+		{key: "Ctrl+N", action: "Clear command editor"},
+		{key: "Tab", action: "Switch editor and results"},
+	}},
 }
 
-func newShortcutsModal(layout appLayout) shortcutsModal {
-	modal := shortcutsModal{}
+type shortcutsModal struct {
+	offset int
+	redis  bool
+}
+
+func newShortcutsModal(layout appLayout, redisMode ...bool) shortcutsModal {
+	modal := shortcutsModal{redis: len(redisMode) > 0 && redisMode[0]}
 	modal.clamp(layout)
 	return modal
 }
@@ -97,7 +121,11 @@ func (m shortcutsModal) lines(layout appLayout) []string {
 	mutedStyle := lipgloss.NewStyle().Foreground(colorTextMuted).Background(colorModalBackground)
 
 	lines := make([]string, 0, 48)
-	for sectionIndex, section := range shortcutSections {
+	sections := shortcutSections
+	if m.redis {
+		sections = redisShortcutSections
+	}
+	for sectionIndex, section := range sections {
 		if sectionIndex > 0 {
 			lines = append(lines, "")
 		}

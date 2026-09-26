@@ -1,6 +1,6 @@
 # db-tui
 
-A keyboard-first terminal client for PostgreSQL, MySQL, Oracle, SQLite, and SQL Server.
+A keyboard-first terminal client for PostgreSQL, MySQL, Oracle, SQLite, SQL Server, and Redis.
 
 ## Install
 
@@ -31,9 +31,22 @@ SQLite connections use a local database-file path, such as
 `/data/reporting.db`. PostgreSQL, MySQL, Oracle, and SQL Server can use either
 the form fields or an engine-specific DSN.
 
+Redis connections use a host and port (with optional username and password),
+or a `redis://` DSN. The local Compose fixture listens on `127.0.0.1:6380`.
+The sidebar lists only Redis logical databases that contain keys (`db0`, `db1`,
+and so on). Select one to load keys into a resizable key/value/type/TTL table.
+Redis shows 400 keys per page in scan order. Down or the mouse wheel at the
+bottom loads the next page; PgDown and PgUp move between pages.
+Use `Ctrl+R` to enter one raw Redis command at a time. Commands run against
+the selected logical database, may change data without a confirmation prompt,
+and refresh the key table and sidebar after success. `SELECT n` opens `dbn`;
+an empty selected database remains open in the table but is absent from the sidebar.
+Command replies appear as scrollable plain text. Hash fields appear as
+`field: value` lines rather than Go `map[...]` output.
+
 ## Run a query without the TUI
 
-Use the `query` subcommand with either `-q` (the SQL query) or `-f` (a file
+For SQL engines, use the `query` subcommand with either `-q` (the SQL query) or `-f` (a file
 containing the SQL query), plus `-c` (the connection DSN), to print rows to
 standard output. This mode accepts `postgres://` or `postgresql://`, `mysql://`,
 `oracle://`, and `sqlserver://` DSNs, or the path to an existing SQLite database
@@ -113,7 +126,8 @@ Run `db-tui dump -h` for dump-command usage.
 
 ## Features
 
-- Save and switch between PostgreSQL, MySQL, Oracle, SQLite, and SQL Server connections.
+- Save and switch between PostgreSQL, MySQL, Oracle, SQLite, SQL Server, and Redis connections.
+- Browse Redis logical databases and their keys, and run raw Redis commands in the TUI.
 - Browse tables, views, materialized views, and functions when supported by
   the connected database.
 - Browse installed PostgreSQL extensions from the object chooser.

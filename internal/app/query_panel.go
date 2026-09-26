@@ -9,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/ernestoponce27/db-tui/internal/app/sqlhighlight"
 	"github.com/ernestoponce27/db-tui/internal/db"
@@ -28,6 +29,7 @@ type queryModel struct {
 	selection          sqlSelection
 	completion         tableCompletionModel
 	result             db.QueryResult
+	rawResult          string
 	loading            bool
 	err                error
 	request            uint64
@@ -72,6 +74,7 @@ func (m *queryModel) beginExecute(sql string) uint64 {
 	m.loading = true
 	m.err = nil
 	m.result = db.QueryResult{}
+	m.rawResult = ""
 	m.viewport = 0
 	m.resultsFocused = false
 	m.lastExecutedSQL = sql
@@ -87,12 +90,24 @@ func (m *queryModel) finishExecute(result db.QueryResult, duration time.Duration
 	m.cancelExecution()
 	m.loading = false
 	m.result = result
+	m.rawResult = ""
 	m.err = err
 	m.viewport = 0
 	m.executionDuration = duration
 	m.resultsFocused = len(result.Rows) > 0
 	if m.resultsFocused {
 		m.editor.Blur()
+	}
+}
+
+func (m *queryModel) finishRedisExecute(raw, tag string, duration time.Duration, err error) {
+	m.finishExecute(db.QueryResult{CommandTag: tag}, duration, err)
+	if err == nil {
+		m.rawResult = raw
+		m.resultsFocused = raw != ""
+		if m.resultsFocused {
+			m.editor.Blur()
+		}
 	}
 }
 
@@ -119,7 +134,14 @@ func (m *queryModel) toggleFocus() tea.Cmd {
 	return m.focusEditor()
 }
 
-func (m *queryModel) scrollResults(delta int) {
+func (m *queryModel) scrollResults(delta int, layouts ...appLayout) {
+	if m.rawResult != "" && len(layouts) > 0 {
+		layout := layouts[0]
+		lines := m.rawResultLines(layout)
+		visible := m.rawVisibleRows(layout)
+		m.viewport = min(max(m.viewport+delta, 0), max(0, len(lines)-visible))
+		return
+	}
 	if len(m.result.Rows) == 0 {
 		m.viewport = 0
 		return
@@ -131,23 +153,31 @@ func (m queryModel) executionTimeText() string {
 	return "Execution time: " + m.executionDuration.String()
 }
 
-func (m queryModel) cancelControlContains(x, y int, layout appLayout) bool {
+func (m queryModel) cancelControlContains(x, y int, layout appLayout, redisMode ...bool) bool {
 	if !m.loading {
 		return false
 	}
 
-	controlX := layout.data.x + 2 + len(queryExecutingText) + len(m.executionDuration.String()) + 2
+	executingText := queryExecutingText
+	if len(redisMode) > 0 && redisMode[0] {
+		executingText = "Command executing: "
+	}
+	controlX := layout.data.x + 2 + len(executingText) + len(m.executionDuration.String()) + 2
 	controlY := layout.data.y + querySectionHeight(layout) + 1
 	return x >= controlX && x < controlX+len(queryCancelControlText) && y == controlY
 }
 
-func (m queryModel) view(layout appLayout, focused, connected bool, highlighter sqlhighlight.Highlighter) string {
+func (m queryModel) view(layout appLayout, focused, connected bool, highlighter sqlhighlight.Highlighter, redisMode ...bool) string {
+	isRedis := len(redisMode) > 0 && redisMode[0]
 	headingText := "RAW QUERY"
+	if isRedis {
+		headingText = "REDIS COMMAND"
+	}
 	if m.resultsFocused {
 		headingText += "  •  results focused"
 	}
 	heading := lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render(headingText)
-	result := m.resultView(layout, connected)
+	result := m.resultView(layout, connected, isRedis)
 	editor := m.completionOverlay(m.editorView(highlighter))
 	sections := []string{heading, editor}
 	if m.saveWarning != "" {
@@ -158,22 +188,41 @@ func (m queryModel) view(layout appLayout, focused, connected bool, highlighter 
 	return queryPanelStyle(layout.data.width, layout.data.height, focused).Render(content)
 }
 
-func (m queryModel) resultView(layout appLayout, connected bool) string {
+func (m queryModel) resultView(layout appLayout, connected bool, redisMode ...bool) string {
+	isRedis := len(redisMode) > 0 && redisMode[0]
 	switch {
 	case !connected:
+		if isRedis {
+			return "A Redis connection is required to run a command."
+		}
 		return "A database connection is required to run SQL."
 	case m.loading:
 		cancelControl := lipgloss.NewStyle().Foreground(colorTextInactive).Render(queryCancelControlText)
-		return queryExecutingText + m.executionDuration.String() + "  " + cancelControl
+		executingText := queryExecutingText
+		if isRedis {
+			executingText = "Command executing: "
+		}
+		return executingText + m.executionDuration.String() + "  " + cancelControl
 	case m.err != nil:
+		if isRedis {
+			return "Command failed  •  " + m.executionTimeText() + ":\n" + sanitizeText(m.err.Error())
+		}
 		return "Query failed  •  " + m.executionTimeText() +
 			":\n" + sanitizeText(m.err.Error())
+	case isRedis && m.rawResult != "":
+		return m.rawResultView(layout)
 	case len(m.result.Columns) == 0 && m.result.CommandTag != "":
 		return "Command completed: " + sanitizeText(m.result.CommandTag) +
 			"  •  " + m.executionTimeText()
 	case len(m.result.Columns) == 0:
+		if isRedis {
+			return "Write a Redis command above, then press Ctrl+P to execute it."
+		}
 		return "Write SQL above, then press Ctrl+P to execute it."
 	case len(m.result.Rows) == 0:
+		if isRedis {
+			return "Command returned no values.  •  " + sanitizeText(m.result.CommandTag) + "  •  " + m.executionTimeText()
+		}
 		return "Query returned no rows.  •  " +
 			sanitizeText(m.result.CommandTag) +
 			"  •  " + m.executionTimeText()
@@ -202,6 +251,23 @@ func (m queryModel) resultView(layout appLayout, connected bool) string {
 		lipgloss.NewStyle().Foreground(colorTextMuted).Render(title),
 		grid.String(),
 	}, "\n")
+}
+
+func (m queryModel) rawResultLines(layout appLayout) []string {
+	return strings.Split(ansi.Wrap(m.rawResult, queryContentWidth(layout), ""), "\n")
+}
+
+func (m queryModel) rawVisibleRows(layout appLayout) int {
+	return max(1, m.resultHeight(layout)-2)
+}
+
+func (m queryModel) rawResultView(layout appLayout) string {
+	lines := m.rawResultLines(layout)
+	visible := m.rawVisibleRows(layout)
+	first := min(max(m.viewport, 0), max(0, len(lines)-visible))
+	last := min(len(lines), first+visible)
+	title := fmt.Sprintf("Result  •  %s  •  %s", sanitizeText(m.result.CommandTag), m.executionTimeText())
+	return truncateLabel(title, queryContentWidth(layout)) + "\n" + strings.Join(lines[first:last], "\n")
 }
 
 func queryPanelStyle(width, height int, focused bool) lipgloss.Style {

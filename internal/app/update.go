@@ -241,6 +241,25 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		m.focus = focusData
 
 		return nil, true
+	case redisKeysLoadedMsg:
+		if m.redis.client == nil || msg.session != m.session || msg.request != m.redis.request || msg.database != m.redis.database {
+			return nil, true
+		}
+		m.redis.loadCancel = nil
+		if msg.err != nil {
+			m.data.loading = false
+			m.data.err = msg.err
+			return nil, true
+		}
+		if msg.pageIndex == 0 {
+			m.redis.databases = msg.databases
+			m.ensureRedisHighlightedVisible()
+		}
+		m.redis.cursor = msg.page.Next
+		m.redis.pages = append(m.redis.pages, redisRowPage(msg.page))
+		m.showRedisPage(msg.pageIndex, 0)
+		m.focus = focusData
+		return nil, true
 	case extensionsLoadedMsg:
 		if msg.session != m.session || !m.activeExtensions.set || msg.request != m.activeExtensions.request {
 			return nil, true
@@ -282,6 +301,20 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		m.query.finishExecute(msg.result, msg.elapsed, msg.err)
 		return nil, true
+	case redisCommandFinishedMsg:
+		if m.redis.client == nil || msg.session != m.session || msg.request != m.query.request {
+			return nil, true
+		}
+		m.query.finishRedisExecute(msg.result.Raw, msg.result.CommandTag, msg.elapsed, msg.err)
+		if msg.err != nil {
+			return nil, true
+		}
+		if msg.result.SelectDatabase != nil {
+			m.redis.database = *msg.result.SelectDatabase
+			m.redis.highlighted = m.redis.database
+			m.ensureRedisHighlightedVisible()
+		}
+		return m.startRedisLoad(), true
 	case sqlScriptsLoadedMsg:
 		if m.sqlScriptsModal == nil ||
 			msg.connectionName != m.sqlScriptsModal.connectionName ||
@@ -306,6 +339,9 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 		m.layout = newAppLayout(msg.Width, msg.Height)
 		m.navigator.resize(m.layout)
 		m.navigator.ensureVisible(m.layout.navigatorListRows)
+		if m.redis.client != nil {
+			m.ensureRedisHighlightedVisible()
+		}
 		m.data.columnOffset = min(m.data.columnOffset, m.data.maxColumnOffset())
 		m.data.clampColumnWidths(m.layout)
 		m.data.ensureSelectedVisible(m.layout)
@@ -478,14 +514,14 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.modal.connecting = true
 		m.connectionAttempt++
 		m.focus = focusPane(navigatorTables)
-		return m, connectConnection(m.connect, settings, m.connectionAttempt)
+		return m, connectConnection(m.connect, settings, m.connectionAttempt, m.redis.connect)
 	case cancelConnectionMsg:
 		m.modal = nil
 		m.openingLastConnection = false
 		m.editingConnection = -1
 		m.creatingConnection = false
 		m.pendingConnectionIndex = -1
-		if m.database == nil {
+		if m.database == nil && m.redis.client == nil {
 			m.activeConnectionIndex = -1
 		}
 		return m, nil
@@ -493,6 +529,9 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.attempt != m.connectionAttempt {
 			if msg.database != nil {
 				msg.database.Close()
+			}
+			if msg.redis != nil {
+				_ = msg.redis.Close()
 			}
 			return m, nil
 		}
@@ -514,7 +553,12 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 			updatedConfig := m.config
 			updatedConfig.Connections = slices.Clone(m.config.Connections)
 			if m.editingConnection >= len(m.config.Connections) {
-				msg.database.Close()
+				if msg.database != nil {
+					msg.database.Close()
+				}
+				if msg.redis != nil {
+					_ = msg.redis.Close()
+				}
 				m.modal.errorText = "selected connection no longer exists"
 				return m, nil
 			}
@@ -536,7 +580,12 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 				updatedConfig.Connections[nextActiveIndex].Name
 
 			if err := updatedConfig.Save(); err != nil {
-				msg.database.Close()
+				if msg.database != nil {
+					msg.database.Close()
+				}
+				if msg.redis != nil {
+					_ = msg.redis.Close()
+				}
 				m.modal.errorText = "save connection: " + err.Error()
 				return m, nil
 			}
@@ -556,7 +605,12 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.modal = nil
-		command := m.adoptConnection(msg.database, msg.settings)
+		var command tea.Cmd
+		if msg.redis != nil {
+			command = m.adoptRedis(msg.redis, msg.settings)
+		} else {
+			command = m.adoptConnection(msg.database, msg.settings)
+		}
 		if selectedSavedConnection {
 			return m, tea.Batch(command, saveLastConnection(m.config, lastConnectionName, m.session))
 		}
@@ -569,7 +623,10 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) startReconnect() tea.Cmd {
-	if m.database == nil || m.connect == nil || m.reconnecting {
+	if (m.database == nil && m.redis.client == nil) || m.reconnecting {
+		return nil
+	}
+	if m.database != nil && m.connect == nil {
 		return nil
 	}
 
@@ -577,7 +634,7 @@ func (m *Model) startReconnect() tea.Cmd {
 	m.reconnectErr = nil
 	m.connectionAttempt++
 	return tea.Batch(
-		connectConnection(m.connect, m.savedConnection, m.connectionAttempt),
+		connectConnection(m.connect, m.savedConnection, m.connectionAttempt, m.redis.connect),
 		m.startSpinner(),
 	)
 }
@@ -587,6 +644,9 @@ func (m *Model) finishReconnect(msg connectionFinishedMsg) tea.Cmd {
 		if msg.database != nil {
 			msg.database.Close()
 		}
+		if msg.redis != nil {
+			_ = msg.redis.Close()
+		}
 		return nil
 	}
 
@@ -595,11 +655,18 @@ func (m *Model) finishReconnect(msg connectionFinishedMsg) tea.Cmd {
 		m.reconnectErr = msg.err
 		return nil
 	}
+	if msg.redis != nil {
+		return m.adoptRedis(msg.redis, msg.settings)
+	}
 	return m.adoptConnection(msg.database, msg.settings)
 }
 
 func (m *Model) adoptConnection(database db.Database, settings ConnectionSettings) tea.Cmd {
 	m.query.cancelExecution()
+	if m.redis.client != nil {
+		_ = m.redis.client.Close()
+	}
+	m.redis.reset()
 	if m.database != nil {
 		m.database.Close()
 	}
@@ -705,6 +772,10 @@ func (m Model) updateConnectionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.connectionsModal = nil
 		if msg.index == m.activeConnectionIndex {
 			m.query.cancelExecution()
+			if m.redis.client != nil {
+				_ = m.redis.client.Close()
+				m.redis.reset()
+			}
 			if m.database != nil {
 				m.database.Close()
 				m.database = nil
@@ -759,6 +830,9 @@ func (m Model) updateSettingsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 	m.lastNavigatorClick = navigatorClick{}
+	if m.redis.client != nil {
+		return m.updateRedisKey(msg)
+	}
 	switch {
 	case key.Matches(msg, m.keys.shortcuts):
 		modal := newShortcutsModal(m.layout)
@@ -1050,6 +1124,14 @@ func (m *Model) updateNavigatorSearch(msg tea.Msg) tea.Cmd {
 }
 
 func (m *Model) updateMouseClick(msg tea.MouseClickMsg) tea.Cmd {
+	if m.redis.client != nil && msg.Button == tea.MouseLeft && m.layout.clickableNavigatorX(msg.X) {
+		index := m.redis.navigatorOffset + msg.Y - m.layout.navigatorListY
+		if index >= 0 && index < len(m.redis.databases) && msg.Y >= m.layout.navigatorListY && msg.Y < m.layout.navigatorListY+m.layout.navigatorListRows {
+			m.focus = focusNavigator
+			return m.selectRedisDatabase(m.redis.databases[index])
+		}
+		return nil
+	}
 	if index, ok := m.navigator.itemAtMouse(msg, m.layout); ok {
 		item := m.navigator.visibleItems()[index]
 		doubleClick := m.lastNavigatorClick.recorded &&
@@ -1071,7 +1153,7 @@ func (m *Model) updateMouseClick(msg tea.MouseClickMsg) tea.Cmd {
 		return nil
 	}
 	m.lastNavigatorClick = navigatorClick{}
-	if m.panel == panelQuery && msg.Button == tea.MouseLeft && m.query.cancelControlContains(msg.X, msg.Y, m.layout) {
+	if m.panel == panelQuery && msg.Button == tea.MouseLeft && m.query.cancelControlContains(msg.X, msg.Y, m.layout, m.redis.client != nil) {
 		if m.query.cancel != nil {
 			m.query.cancel()
 		}
@@ -1143,6 +1225,15 @@ func (m *Model) updateMouseWheel(msg tea.MouseWheelMsg) tea.Cmd {
 	}
 	if m.layout.mouseInNavigator(msg.X) {
 		m.focus = focusNavigator
+		if m.redis.client != nil {
+			if msg.Button == tea.MouseWheelUp {
+				m.moveRedisHighlight(-1)
+			}
+			if msg.Button == tea.MouseWheelDown {
+				m.moveRedisHighlight(1)
+			}
+			return nil
+		}
 		switch msg.Button {
 		case tea.MouseWheelUp:
 			m.navigator.move(-1, m.layout.navigatorListRows)
@@ -1156,14 +1247,29 @@ func (m *Model) updateMouseWheel(msg tea.MouseWheelMsg) tea.Cmd {
 		m.focus = focusData
 		switch msg.Button {
 		case tea.MouseWheelUp:
-			m.query.scrollResults(-1)
+			m.query.scrollResults(-1, m.layout)
 		case tea.MouseWheelDown:
-			m.query.scrollResults(1)
+			m.query.scrollResults(1, m.layout)
 		}
 		return nil
 	}
 
 	m.focus = focusData
+	if m.redis.client != nil {
+		if msg.Button == tea.MouseWheelUp {
+			_, load := m.data.moveUp(m.layout, redisKeyLimit)
+			if load {
+				return m.previousRedisPage(redisKeyLimit - 1)
+			}
+		}
+		if msg.Button == tea.MouseWheelDown {
+			_, load := m.data.moveDown(m.layout, redisKeyLimit)
+			if load {
+				return m.nextRedisPage()
+			}
+		}
+		return nil
+	}
 	switch msg.Button {
 	case tea.MouseWheelUp:
 		if m.activeFunction.set {

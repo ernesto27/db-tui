@@ -1,5 +1,7 @@
 [x] - suuport engine sql server
+[] press key in data panel, works sloopy
 [] - support engine mongodb
+[] - key option to show queires executed in connection
 [x] - option to set color connections
 [x] - when open TUI i want to load last connection
 [ ] Replace placeholder Database methods with explicit optional capability interfaces.
@@ -13,6 +15,7 @@
 [x] - fix how price is show in data panel  - postgresql
 [x] - add refresh tables
 
+
 QUERY WORKFLOW
 [x] Add SQL autocomplete for tables
 [ ] Add SQL autocomplete for keywords, schemas, tables, views, functions, and columns.
@@ -25,6 +28,16 @@ po
 [x] Add cancellation for long-running queries.
 [x] Add a read-only safety mode and
 [x] confirmation before destructive statements.
+
+REDIS — DEFERRED
+[ ] Add key filtering and sorting.
+[ ] Load large values and pages incrementally.
+[ ] Add a key detail view and direct key editing/deletion.
+[ ] Support TLS, Cluster, and Sentinel connections.
+[ ] Support Redis modules and types added after Redis 7.4.
+[ ] Show streaming command output, such as SUBSCRIBE and MONITOR.
+[ ] Consider saved Redis commands, a read-only mode, and confirmation for destructive commands.
+[ ] Consider Redis support for the query and dump CLI commands.
 
 CLI
 [x] Add a non-interactive CLI mode for executing SQL json
