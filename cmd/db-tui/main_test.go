@@ -84,6 +84,64 @@ func TestRootCommandRoutesWorkflows(t *testing.T) {
 	}
 }
 
+func TestListCommand(t *testing.T) {
+	tests := []struct {
+		name         string
+		connections  []config.Connection
+		wantContains []string
+		wantOutput   string
+		wantAbsent   []string
+	}{
+		{
+			name: "shows saved connections",
+			connections: []config.Connection{
+				{
+					Name:        "reporting",
+					Engine:      db.EnginePostgreSQL,
+					Environment: config.ConnectionEnvironmentProduction,
+					Settings: config.Settings{
+						Password: "test-secret",
+						DSN:      "postgres://reader:test-secret@localhost/app",
+					},
+				},
+			},
+			wantContains: []string{"NAME", "ENGINE", "ENVIRONMENT", "reporting", db.EnginePostgreSQL, string(config.ConnectionEnvironmentProduction)},
+			wantAbsent:   []string{"test-secret", "postgres://reader:"},
+		},
+		{
+			name:       "shows message for empty config",
+			wantOutput: "No saved connections.\n",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			appConfig, err := config.Load()
+			require.NoError(t, err)
+			appConfig.Connections = test.connections
+			require.NoError(t, appConfig.Save())
+
+			var output bytes.Buffer
+			cmd := newRootCmd(cliDependencies{})
+			cmd.SetArgs([]string{"list"})
+			cmd.SetOut(&output)
+			cmd.SetErr(io.Discard)
+
+			require.NoError(t, cmd.ExecuteContext(context.Background()))
+			if test.wantOutput != "" {
+				assert.Equal(t, test.wantOutput, output.String())
+			}
+			for _, value := range test.wantContains {
+				assert.Contains(t, output.String(), value)
+			}
+			for _, value := range test.wantAbsent {
+				assert.NotContains(t, output.String(), value)
+			}
+		})
+	}
+}
+
 func TestQueryCommandReadsQueryFromFile(t *testing.T) {
 	const query = "SELECT 1;"
 	queryFile := filepath.Join(t.TempDir(), "query.sql")

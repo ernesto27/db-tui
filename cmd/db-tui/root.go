@@ -47,6 +47,7 @@ func newRootCmd(dependencies cliDependencies) *cobra.Command {
 	cmd.AddCommand(
 		newQueryCmd(dependencies.executeQuery),
 		newDumpCmd(dependencies.dumpDatabase),
+		newListConnectionsCmd(),
 	)
 
 	return cmd
