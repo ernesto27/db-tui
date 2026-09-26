@@ -141,7 +141,6 @@ func (m *Model) showRedisPage(pageIndex, selectedRow int) tea.Cmd {
 	m.redis.pageIndex = pageIndex
 	m.data.beginLoad(pageIndex * redisKeyLimit)
 	m.data.finishLoad(m.redis.pages[pageIndex], selectedRow, nil, m.layout)
-	m.data.cacheSingleLineWidths()
 	return nil
 }
 

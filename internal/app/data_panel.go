@@ -83,6 +83,7 @@ func (m *dataModel) finishLoad(page db.RowPage, selectedRow int, err error, layo
 		return
 	}
 	m.page = page
+	m.cacheSingleLineWidths()
 	m.viewport = 0
 	m.selected = min(selectedRow, max(0, len(page.Rows)-1))
 	m.columnOffset = 0
