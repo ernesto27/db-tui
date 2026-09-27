@@ -48,6 +48,7 @@ func newRootCmd(dependencies cliDependencies) *cobra.Command {
 		newQueryCmd(dependencies.executeQuery),
 		newDumpCmd(dependencies.dumpDatabase),
 		newListConnectionsCmd(),
+		newRedisCmd(),
 	)
 
 	return cmd

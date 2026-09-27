@@ -62,6 +62,9 @@ type Result struct {
 	SelectDatabase *int
 }
 
+// DatabaseFromDSN makes Execute use the logical database selected by the DSN.
+const DatabaseFromDSN = -1
+
 // Client owns a pool for each logical database selected in the TUI.
 type Client struct {
 	mu            sync.Mutex
@@ -78,7 +81,6 @@ func Connect(ctx context.Context, settings Settings) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	options.DB = 0
 	base := goredis.NewClient(&options)
 	if err := base.Ping(ctx).Err(); err != nil {
 		_ = base.Close()
@@ -96,7 +98,7 @@ func Connect(ctx context.Context, settings Settings) (*Client, error) {
 	}
 	return &Client{
 		options:       options,
-		clients:       map[int]*goredis.Client{0: base},
+		clients:       map[int]*goredis.Client{options.DB: base},
 		databaseCount: count,
 		host:          host,
 	}, nil
@@ -117,8 +119,8 @@ func connectionOptions(settings Settings) (goredis.Options, string, error) {
 			return goredis.Options{}, "", errors.New("valid redis:// DSN is required")
 		}
 		options, err := goredis.ParseURL(dsn)
-		if err != nil || options.DB != 0 {
-			return goredis.Options{}, "", errors.New("valid redis:// DSN for db0 is required")
+		if err != nil {
+			return goredis.Options{}, "", errors.New("valid redis:// DSN is required")
 		}
 		return *options, parsed.Hostname(), nil
 	}
@@ -144,7 +146,7 @@ func (c *Client) DatabaseCount() int { return c.databaseCount }
 
 // PopulatedDatabases returns the logical databases currently holding keys.
 func (c *Client) PopulatedDatabases(ctx context.Context) ([]int, error) {
-	client, err := c.clientFor(0)
+	client, err := c.clientFor(c.options.DB)
 	if err != nil {
 		return nil, err
 	}
@@ -402,10 +404,14 @@ func safeText(value string) string {
 }
 
 // Execute runs one finite command on the selected logical database.
+// Pass DatabaseFromDSN to use the database selected by the connection DSN.
 func (c *Client) Execute(ctx context.Context, database int, command string) (Result, error) {
 	arguments, err := parseCommand(command)
 	if err != nil {
 		return Result{}, err
+	}
+	if database == DatabaseFromDSN {
+		database = c.options.DB
 	}
 	client, err := c.clientFor(database)
 	if err != nil {

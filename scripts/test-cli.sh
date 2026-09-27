@@ -8,6 +8,7 @@ dsn="postgres://db_tui@127.0.0.1:5433/chinook?sslmode=disable"
 mysql_dsn="mysql://db_tui:db_tui@127.0.0.1:3307/world"
 oracle_dsn="oracle://db_tui:db_tui@127.0.0.1:1522/FREEPDB1"
 sqlserver_dsn="sqlserver://sa:DbTuiSql2026%21@127.0.0.1:1434?database=db_tui&encrypt=true&trustservercertificate=true"
+redis_dsn="redis://127.0.0.1:6380/1"
 sqlite_path="$repo_root/docker/sqlite/employee.db"
 postgres_query_file="$repo_root/data/postgres-test-query.sql"
 mysql_query_file="$repo_root/data/mysql-test-query.sql"
@@ -24,7 +25,9 @@ fail() {
 	exit 1
 }
 
-expect_cli() {
+expect_command() {
+	local subcommand="$1"
+	shift
 	local name="$1"
 	local expected_exit="$2"
 	local expected_stdout="$3"
@@ -35,7 +38,7 @@ expect_cli() {
 	local stderr_file="$temp_dir/$name.stderr"
 	local actual_exit
 
-	if "$binary" query "$@" >"$stdout_file" 2>"$stderr_file"; then
+	if "$binary" "$subcommand" "$@" >"$stdout_file" 2>"$stderr_file"; then
 		actual_exit=0
 	else
 		actual_exit=$?
@@ -69,6 +72,10 @@ expect_cli() {
 	echo "PASS: $name"
 }
 
+expect_cli() {
+	expect_command query "$@"
+}
+
 expect_dump() {
 	local name="$1"
 	local expected_file_pattern="$2"
@@ -99,7 +106,7 @@ expect_dump() {
 }
 
 cd "$repo_root"
-docker compose up -d --wait postgres mysql oracle sqlserver
+docker compose up -d --wait postgres mysql oracle sqlserver redis
 go build -o "$binary" ./cmd/db-tui
 
 saved_home="$temp_dir/home"
@@ -119,6 +126,15 @@ cat >"$saved_home/.config/db-tui/config.json" <<EOF
 EOF
 chmod 600 "$saved_home/.config/db-tui/config.json"
 export HOME="$saved_home"
+
+expect_command \
+	redis \
+	redis_db1_get \
+	0 \
+	"hello from db1" \
+	"" \
+	-d "$redis_dsn" \
+	-c 'GET fixture:db1:message'
 
 expect_dump "postgres_dump" "chinook_*.sql" --dsn "$dsn"
 expect_dump "mysql_dump" "world_*.sql" --dsn "$mysql_dsn"

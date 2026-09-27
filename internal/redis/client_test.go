@@ -35,6 +35,7 @@ func TestConnectionOptions(t *testing.T) {
 		host     string
 		username string
 		password string
+		database int
 		wantErr  string
 	}{
 		{name: "host and port", settings: Settings{Host: " localhost ", Port: 6380, Username: " reader ", Password: "secret"}, address: "localhost:6380", host: "localhost", username: "reader", password: "secret"},
@@ -43,7 +44,7 @@ func TestConnectionOptions(t *testing.T) {
 		{name: "missing host", settings: Settings{Port: 6379}, wantErr: "host is required"},
 		{name: "invalid port", settings: Settings{Host: "localhost", Port: 0}, wantErr: "port must be"},
 		{name: "invalid DSN scheme", settings: Settings{DSN: "http://example.test"}, wantErr: "valid redis:// DSN"},
-		{name: "DSN cannot select db1", settings: Settings{DSN: "redis://example.test/1"}, wantErr: "for db0"},
+		{name: "DSN selects db1", settings: Settings{DSN: "redis://example.test/1"}, address: "example.test:6379", host: "example.test", database: 1},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -57,7 +58,7 @@ func TestConnectionOptions(t *testing.T) {
 			assert.Equal(t, test.host, host)
 			assert.Equal(t, test.username, options.Username)
 			assert.Equal(t, test.password, options.Password)
-			assert.Zero(t, options.DB)
+			assert.Equal(t, test.database, options.DB)
 		})
 	}
 }
@@ -93,6 +94,20 @@ func TestPopulatedDatabasesIncludesFixtureDatabases(t *testing.T) {
 	assert.True(t, slices.IsSorted(databases))
 	assert.Contains(t, databases, 0)
 	assert.Contains(t, databases, 1)
+}
+
+func TestPopulatedDatabasesReusesDSNClient(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client, err := Connect(ctx, Settings{DSN: "redis://127.0.0.1:6380/1"})
+	require.NoError(t, err, "start the required fixture with docker compose up -d redis")
+	t.Cleanup(func() { assert.NoError(t, client.Close()) })
+
+	databases, err := client.PopulatedDatabases(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, databases, 0)
+	assert.Contains(t, databases, 1)
+	assert.Len(t, client.clients, 1)
 }
 
 func TestConnectFailsWhenServerIsUnavailable(t *testing.T) {
@@ -338,7 +353,7 @@ func TestExecuteFixtureCommands(t *testing.T) {
 func TestExecuteRejectsInvalidCommands(t *testing.T) {
 	client := fixtureClient(t)
 	ctx := context.Background()
-	_, err := client.Execute(ctx, -1, "PING")
+	_, err := client.Execute(ctx, -2, "PING")
 	assert.ErrorContains(t, err, "out of range")
 	_, err = client.Execute(ctx, 0, "SELECT 999")
 	assert.ErrorContains(t, err, "out of range")
