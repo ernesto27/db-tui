@@ -355,10 +355,13 @@ func (m connectionModal) view(width int) string {
 	if m.engineMenuOpen {
 		for index, engine := range connectionEngines {
 			prefix := "  "
-			optionStyle := engineStyle
+			optionStyle := fieldStyle.Background(colorModalBackground).Foreground(colorText)
 			if index == m.engineMenuIndex {
 				prefix = "> "
-				optionStyle = optionStyle.Foreground(colorTitle).Bold(true)
+				optionStyle = optionStyle.
+					Foreground(colorSelectionForeground).
+					Background(colorSelectionBackground).
+					Bold(true)
 			}
 			lines = append(lines, optionStyle.Render(prefix+engineDisplayName(engine)))
 		}

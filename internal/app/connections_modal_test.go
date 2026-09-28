@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -117,6 +118,21 @@ func TestConnectionModalSelectsDatabaseEngine(t *testing.T) {
 	assert.Equal(t, "path/to/database.db", updated.inputs[dsnInput].Placeholder)
 	assert.NotContains(t, view, "Host")
 	assert.NotContains(t, view, "Username")
+}
+
+func TestConnectionModalEngineMenuHighlightsSelectedOption(t *testing.T) {
+	modal := newConnectionModal(ConnectionSettings{})
+	modal.engineMenuOpen = true
+	modal.engineMenuIndex = 1
+
+	selectedOption := lipgloss.NewStyle().
+		Width(connectionModalWidth(80) - 6).
+		Foreground(colorSelectionForeground).
+		Background(colorSelectionBackground).
+		Bold(true).
+		Render("> MySQL")
+
+	assert.Contains(t, modal.view(80), selectedOption)
 }
 
 func TestSQLiteConnectionSettingsRoundTripThroughDSN(t *testing.T) {
