@@ -941,6 +941,33 @@ func TestUpdateIgnoresMouseWhileConnectionModalIsOpen(t *testing.T) {
 	assert.NotNil(t, updated.modal)
 }
 
+func TestUpdateSelectsConnectionEngineWithMouse(t *testing.T) {
+	model := New(config.Config{}, ConnectionSettings{}, nil)
+	modal := newConnectionModal(ConnectionSettings{})
+	modal.focused = hostInput
+	modal.inputs[hostInput].Focus()
+	model.modal = &modal
+
+	x, y, width := modal.engineSelectorBounds(model.layout)
+	updated, command := updateModel(t, model, tea.MouseClickMsg{
+		X: x + width/2, Y: y, Button: tea.MouseLeft,
+	})
+
+	assert.Nil(t, command)
+	require.True(t, updated.modal.engineMenuOpen)
+	assert.Equal(t, engineInput, updated.modal.focused)
+
+	x, y, width = updated.modal.engineSelectorBounds(updated.layout)
+	updated, command = updateModel(t, updated, tea.MouseClickMsg{
+		X: x + width/2, Y: y + 2, Button: tea.MouseLeft,
+	})
+
+	assert.Nil(t, command)
+	assert.False(t, updated.modal.engineMenuOpen)
+	assert.Equal(t, db.EngineMySQL, updated.modal.engine())
+	assert.Equal(t, "3306", updated.modal.inputs[portInput].Value())
+}
+
 func TestUpdateIgnoresMouseWhileConnectionsModalIsOpen(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	modal := newConnectionsModal(config.Config{})

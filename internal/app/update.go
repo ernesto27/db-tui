@@ -23,8 +23,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.modal != nil {
-		switch msg.(type) {
-		case tea.MouseClickMsg, tea.MouseReleaseMsg, tea.MouseWheelMsg, tea.MouseMotionMsg:
+		switch msg := msg.(type) {
+		case tea.MouseClickMsg:
+			m.modal.updateMouseClick(msg, m.layout)
+			return m, nil
+		case tea.MouseReleaseMsg, tea.MouseWheelMsg, tea.MouseMotionMsg:
 			return m, nil
 		default:
 			return m.updateModal(msg)

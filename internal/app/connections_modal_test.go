@@ -71,14 +71,30 @@ func TestConnectionModalSelectsDatabaseEngine(t *testing.T) {
 	assert.Equal(t, db.EnginePostgreSQL, modal.engine())
 	assert.Equal(t, "5432", modal.inputs[portInput].Value())
 
-	updated, command := modal.update(keyPress(tea.KeyRight, "", 0))
+	updated, command := modal.update(keyPress(tea.KeyEnter, "", 0))
 
 	assert.Nil(t, command)
+	assert.True(t, updated.engineMenuOpen)
+	assert.Contains(t, updated.view(80), "> PostgreSQL")
+	assert.Contains(t, updated.view(80), "  MySQL")
+
+	updated, command = updated.update(keyPress(tea.KeyDown, "", 0))
+	assert.Nil(t, command)
+	assert.Equal(t, 1, updated.engineMenuIndex)
+
+	updated, command = updated.update(keyPress(tea.KeyEnter, "", 0))
+	assert.Nil(t, command)
+	assert.False(t, updated.engineMenuOpen)
 	assert.Equal(t, db.EngineMySQL, updated.engine())
 	assert.Equal(t, "3306", updated.inputs[portInput].Value())
-	assert.Contains(t, updated.view(80), "MySQL")
 
-	updated, command = updated.update(keyPress(tea.KeyRight, "", 0))
+	updated, command = updated.update(keyPress(tea.KeyEnter, "", 0))
+	assert.Nil(t, command)
+	updated, command = updated.update(keyPress(tea.KeyDown, "", 0))
+	assert.Nil(t, command)
+	updated, command = updated.update(keyPress(tea.KeyDown, "", 0))
+	assert.Nil(t, command)
+	updated, command = updated.update(keyPress(tea.KeyEnter, "", 0))
 
 	assert.Nil(t, command)
 	assert.Equal(t, db.EngineOracle, updated.engine())
@@ -87,7 +103,11 @@ func TestConnectionModalSelectsDatabaseEngine(t *testing.T) {
 	assert.Contains(t, updated.view(80), "Database name")
 	assert.Equal(t, "oracle://user:password@host:1521/service", updated.inputs[dsnInput].Placeholder)
 
-	updated, command = updated.update(keyPress(tea.KeyRight, "", 0))
+	updated, command = updated.update(keyPress(tea.KeyEnter, "", 0))
+	assert.Nil(t, command)
+	updated, command = updated.update(keyPress(tea.KeyDown, "", 0))
+	assert.Nil(t, command)
+	updated, command = updated.update(keyPress(tea.KeyEnter, "", 0))
 
 	assert.Nil(t, command)
 	assert.Equal(t, "sqlite", updated.engine())

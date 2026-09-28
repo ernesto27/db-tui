@@ -29,11 +29,13 @@ const connectionModalInputWidth = 42
 var connectionEngines = []string{db.EnginePostgreSQL, db.EngineMySQL, db.EngineOracle, db.EngineSQLite, db.EngineSQLServer, db.EngineRedis}
 
 type connectionModal struct {
-	inputs      [connectionInputCount]textinput.Model
-	engineIndex int
-	focused     connectionInput
-	errorText   string
-	connecting  bool
+	inputs          [connectionInputCount]textinput.Model
+	engineIndex     int
+	engineMenuOpen  bool
+	engineMenuIndex int
+	focused         connectionInput
+	errorText       string
+	connecting      bool
 }
 
 type submitConnectionMsg struct{}
@@ -107,12 +109,27 @@ func (m connectionModal) update(msg tea.Msg) (connectionModal, tea.Cmd) {
 
 	if key, ok := msg.(tea.KeyPressMsg); ok {
 		if m.focused == engineInput {
+			if m.engineMenuOpen {
+				switch key.String() {
+				case "up", "k":
+					m.engineMenuIndex = max(0, m.engineMenuIndex-1)
+					return m, nil
+				case "down", "j":
+					m.engineMenuIndex = min(len(connectionEngines)-1, m.engineMenuIndex+1)
+					return m, nil
+				case "enter":
+					m.selectEngine(m.engineMenuIndex - m.engineIndex)
+					m.engineMenuOpen = false
+					return m, nil
+				case "esc":
+					m.engineMenuOpen = false
+					return m, nil
+				}
+			}
 			switch key.String() {
-			case "left", "up":
-				m.selectEngine(-1)
-				return m, nil
-			case "right", "down":
-				m.selectEngine(1)
+			case "enter":
+				m.engineMenuOpen = true
+				m.engineMenuIndex = m.engineIndex
 				return m, nil
 			}
 		}
@@ -139,6 +156,7 @@ func (m connectionModal) update(msg tea.Msg) (connectionModal, tea.Cmd) {
 }
 
 func (m *connectionModal) focus(delta int) tea.Cmd {
+	m.engineMenuOpen = false
 	if m.focused != engineInput {
 		m.inputs[m.focused].Blur()
 	}
@@ -185,6 +203,44 @@ func (m *connectionModal) setEngine(engine string) {
 	if m.inputs[portInput].Value() == "" {
 		m.inputs[portInput].SetValue(defaultPortForEngine(m.engine()))
 	}
+}
+
+func connectionModalWidth(width int) int {
+	return min(64, max(52, width-8))
+}
+
+func (m connectionModal) engineSelectorBounds(layout appLayout) (x, y, width int) {
+	modalWidth := connectionModalWidth(layout.width)
+	modalHeight := lipgloss.Height(m.view(layout.width))
+	return max(0, (layout.width-modalWidth)/2) + 3,
+		max(0, (layout.height-modalHeight)/2) + 5,
+		modalWidth - 6
+}
+
+func (m *connectionModal) updateMouseClick(msg tea.MouseClickMsg, layout appLayout) {
+	if msg.Button != tea.MouseLeft || m.connecting {
+		return
+	}
+
+	x, y, width := m.engineSelectorBounds(layout)
+	if msg.X >= x && msg.X < x+width && msg.Y == y {
+		if m.focused != engineInput {
+			m.inputs[m.focused].Blur()
+			m.focused = engineInput
+		}
+		m.engineMenuOpen = !m.engineMenuOpen
+		m.engineMenuIndex = m.engineIndex
+		return
+	}
+	if !m.engineMenuOpen {
+		return
+	}
+
+	selected := msg.Y - y - 1
+	if msg.X >= x && msg.X < x+width && selected >= 0 && selected < len(connectionEngines) {
+		m.selectEngine(selected - m.engineIndex)
+	}
+	m.engineMenuOpen = false
 }
 
 func (m *connectionModal) setDSNPlaceholder() {
@@ -280,7 +336,7 @@ func (m connectionModal) connectionSettings() (ConnectionSettings, error) {
 }
 
 func (m connectionModal) view(width int) string {
-	modalWidth := min(64, max(52, width-8))
+	modalWidth := connectionModalWidth(width)
 	fieldStyle := lipgloss.NewStyle().Width(modalWidth - 6).Background(colorInputBackground)
 	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(colorAccent)
 
@@ -294,8 +350,19 @@ func (m connectionModal) view(width int) string {
 	}
 	lines = append(lines,
 		labelStyle.Render("Engine"),
-		engineStyle.Render("◀ "+engineDisplayName(m.engine())+" ▶"),
+		engineStyle.Render(engineDisplayName(m.engine())+" ▾"),
 	)
+	if m.engineMenuOpen {
+		for index, engine := range connectionEngines {
+			prefix := "  "
+			optionStyle := engineStyle
+			if index == m.engineMenuIndex {
+				prefix = "> "
+				optionStyle = optionStyle.Foreground(colorTitle).Bold(true)
+			}
+			lines = append(lines, optionStyle.Render(prefix+engineDisplayName(engine)))
+		}
+	}
 	fields := []struct {
 		label string
 		input connectionInput
@@ -340,9 +407,13 @@ func (m connectionModal) view(width int) string {
 	if m.connecting {
 		lines = append(lines, "", lipgloss.NewStyle().Foreground(colorAccent).Render("Checking connection…"))
 	} else {
+		helpText := "Tab move  •  Enter select engine  •  Esc cancel"
+		if m.engineMenuOpen {
+			helpText = "↑/↓ move  •  Enter select  •  Esc close list"
+		}
 		lines = append(lines,
 			"",
-			lipgloss.NewStyle().Foreground(colorTextMuted).Render("Tab move  •  ←/→ select engine  •  Enter connect  •  Esc cancel"),
+			lipgloss.NewStyle().Foreground(colorTextMuted).Render(helpText),
 		)
 	}
 
