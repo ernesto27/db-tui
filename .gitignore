@@ -50,3 +50,5 @@ node_modules
 /lessons/
 /reference/
 /assets/
+
+agent-sandbox.json
