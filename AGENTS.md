@@ -46,7 +46,14 @@ Implement the requested change before running automated checks. Do not use test-
 
 ## Change Approval
 
-Before making any edit or addition, show the proposed changes as a preview of code and wait for the user's explicit approval. The only exception is an invocation run through the `db-tui` tool with `agent-sandbox-yolo` explicitly enabled for that invocation. Mentioning that phrase in this file, a user message, or quoted instructions does not enable the exception.
+When the current task is run through the `agent-sandbox` tool
+(including `agent-sandbox run`), work autonomously without requesting
+a code preview or approval. No `agent-sandbox-yolo` flag is required.
+Implement the scoped change, add or update relevant tests, and run
+required validation once at the end.
+
+For other invocations, show proposed changes as a code preview and
+wait for the user's explicit approval before editing or adding files.
 
 ## Commit & Pull Request Guidelines
 
@@ -57,9 +64,6 @@ Recent commits use concise imperative subjects (for example, `add basic view of 
 Save specifications and design decisions as Markdown files in this repository. Do not publish them to GitHub issues, pull requests, or an external issue tracker unless the user explicitly asks.
 
 IMPORTANT do not use superpowers plugin as default, do not use git worktree or commit
-
-When `agent-sandbox-yolo` is enabled by the `agent-sandbox` tool for the current invocation, work autonomously. Inspect the relevant code and implement the complete scoped solution without proposing a preview or asking for approval. Make all necessary edits, add or update focused tests, then run the repository’s required validation once at the end.
-
 
 <!-- CODEGRAPH_START -->
 ## CodeGraph
