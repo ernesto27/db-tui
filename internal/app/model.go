@@ -162,16 +162,17 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) loadDatabaseObjects() tea.Cmd {
 	schema := functionSchema(m.database)
+	timeout := m.config.QueryTimeout()
 	commands := []tea.Cmd{
-		loadTables(m.database, schema, m.session),
-		loadViews(m.database, schema, m.session),
-		loadMaterializedViews(m.database, schema, m.session),
+		loadTables(m.database, schema, m.session, timeout),
+		loadViews(m.database, schema, m.session, timeout),
+		loadMaterializedViews(m.database, schema, m.session, timeout),
 	}
 	if supportsSchemaObjectGroups(m.database.Engine()) {
-		commands = append(commands, loadSchemaObjectGroups(m.database, m.session))
+		commands = append(commands, loadSchemaObjectGroups(m.database, m.session, timeout))
 	}
 	if m.navigator.functionsAvailable {
-		commands = append(commands, loadFunctions(m.database, functionSchema(m.database), m.session))
+		commands = append(commands, loadFunctions(m.database, functionSchema(m.database), m.session, timeout))
 	}
 	return tea.Batch(commands...)
 }

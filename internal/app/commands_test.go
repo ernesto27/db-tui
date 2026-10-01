@@ -15,16 +15,19 @@ import (
 
 func TestLoadTables(t *testing.T) {
 	wantErr := errors.New("list failed")
+	timeout := 750 * time.Millisecond
 	database := &fakeDatabase{
 		tables:    []db.Table{{Name: "Album"}},
 		tablesErr: wantErr,
 	}
 
-	message, ok := loadTables(database, "public", 7)().(tablesLoadedMsg)
+	started := time.Now()
+	message, ok := loadTables(database, "public", 7, timeout)().(tablesLoadedMsg)
 	require.True(t, ok)
 
 	assert.Equal(t, 1, database.listTablesCalls)
 	assert.True(t, database.listTablesDeadline)
+	assert.WithinDuration(t, started.Add(timeout), database.listTablesDeadlineAt, 100*time.Millisecond)
 	assert.Equal(t, database.tables, message.tables)
 	assert.ErrorIs(t, message.err, wantErr)
 	assert.Equal(t, uint64(7), message.session)
@@ -35,7 +38,7 @@ func TestLoadSchemaObjectGroups(t *testing.T) {
 	wantGroups := []db.SchemaObjectGroup{{Schema: "reporting", Type: db.SchemaObjectViews}}
 	database := &fakeDatabase{schemaObjectGroups: wantGroups, schemaObjectGroupsErr: wantErr}
 
-	message, ok := loadSchemaObjectGroups(database, 7)().(schemaObjectGroupsLoadedMsg)
+	message, ok := loadSchemaObjectGroups(database, 7, config.Config{}.QueryTimeout())().(schemaObjectGroupsLoadedMsg)
 
 	require.True(t, ok)
 	assert.Equal(t, 1, database.listSchemaObjectGroupsCalls)
@@ -50,7 +53,7 @@ func TestLoadFunctions(t *testing.T) {
 	wantFunctions := []db.FunctionColumns{{Name: "customer_total", Arguments: "customer_id integer", ReturnType: "numeric", Definition: "SELECT 1"}}
 	database := &fakeDatabase{functions: wantFunctions, functionsErr: wantErr}
 
-	message, ok := loadFunctions(database, "public", 7)().(functionsLoadedMsg)
+	message, ok := loadFunctions(database, "public", 7, config.Config{}.QueryTimeout())().(functionsLoadedMsg)
 
 	require.True(t, ok)
 	assert.Equal(t, 1, database.listFunctionsCalls)
@@ -66,7 +69,7 @@ func TestLoadExtensions(t *testing.T) {
 	wantExtensions := []db.ExtensionData{{Name: "pg_trgm", Schema: "public", Version: "1.6"}}
 	database := &fakeDatabase{extensions: wantExtensions, extensionsErr: wantErr}
 
-	message, ok := loadExtensions(database, 7, 3)().(extensionsLoadedMsg)
+	message, ok := loadExtensions(database, 7, 3, config.Config{}.QueryTimeout())().(extensionsLoadedMsg)
 
 	require.True(t, ok)
 	assert.Equal(t, 1, database.listExtensionsCalls)
@@ -140,6 +143,7 @@ func TestLoadRows(t *testing.T) {
 				test.maxPageSize,
 				test.session,
 				test.request,
+				config.Config{}.QueryTimeout(),
 			)().(rowsLoadedMsg)
 			require.True(t, ok)
 
@@ -176,7 +180,7 @@ func TestLoadTableDDL(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			table := db.Table{Schema: "public", Name: "Album"}
-			message, ok := loadTableDDL(test.database, table, 7, 3)().(tableDDLLoadedMsg)
+			message, ok := loadTableDDL(test.database, table, 7, 3, config.Config{}.QueryTimeout())().(tableDDLLoadedMsg)
 			require.True(t, ok)
 
 			assert.Equal(t, 1, test.database.tableDDLCalls)
@@ -196,7 +200,7 @@ func TestLoadColumns(t *testing.T) {
 	database := &fakeDatabase{columns: wantColumns}
 	table := db.Table{Name: "Album"}
 
-	message, ok := loadColumns(database, table, 7, 3)().(columnsLoadedMsg)
+	message, ok := loadColumns(database, table, 7, 3, config.Config{}.QueryTimeout())().(columnsLoadedMsg)
 	require.True(t, ok)
 
 	assert.Equal(t, 1, database.listColumnsCalls)
@@ -213,7 +217,7 @@ func TestLoadIndexes(t *testing.T) {
 	database := &fakeDatabase{indexes: wantIndexes}
 	table := db.Table{Name: "Album"}
 
-	message, ok := loadIndexes(database, table, 7, 3)().(indexesLoadedMsg)
+	message, ok := loadIndexes(database, table, 7, 3, config.Config{}.QueryTimeout())().(indexesLoadedMsg)
 	require.True(t, ok)
 
 	assert.Equal(t, 1, database.listIndexesCalls)
