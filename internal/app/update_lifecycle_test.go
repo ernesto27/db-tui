@@ -118,6 +118,23 @@ func TestUpdateAppliesTablesFromCurrentSession(t *testing.T) {
 	assert.Zero(t, updated.data.offset)
 }
 
+func TestModelLoadDatabaseObjectsUsesConfiguredTimeoutForTables(t *testing.T) {
+	database := &fakeDatabase{name: "chinook"}
+	model := New(config.Config{QueryExecutionTimeout: "750ms"}, ConnectionSettings{}, nil)
+	model.database = database
+
+	command := model.loadDatabaseObjects()
+	require.NotNil(t, command)
+	batch, ok := command().(tea.BatchMsg)
+	require.True(t, ok)
+
+	message, ok := batch[0]().(tablesLoadedMsg)
+	require.True(t, ok)
+	assert.Equal(t, model.session, message.session)
+	assert.True(t, database.listTablesDeadline)
+	assert.WithinDuration(t, time.Now().Add(750*time.Millisecond), database.listTablesDeadlineAt, 100*time.Millisecond)
+}
+
 func TestUpdateSelectsViewForViewsOnlyDatabaseRegardlessOfLoadOrder(t *testing.T) {
 	for _, test := range []struct {
 		name  string
