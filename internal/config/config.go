@@ -11,14 +11,17 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
 const (
-	configDirectoryMode = 0o700
-	configFileMode      = 0o600
-	configFileName      = "config.json"
+	configDirectoryMode     = 0o700
+	configFileMode          = 0o600
+	configFileName          = "config.json"
+	defaultQueryTimeoutText = "20m"
+	defaultQueryTimeout     = 20 * time.Minute
 )
 
 type Settings struct {
@@ -47,9 +50,10 @@ type Connection struct {
 
 // Config contains db-tui connection settings.
 type Config struct {
-	Connections        []Connection `json:"connections,omitempty"`
-	MaxPageSize        int          `json:"maxPageSize"`
-	LastConnectionName string       `json:"lastConnectionName,omitempty"`
+	Connections           []Connection `json:"connections,omitempty"`
+	MaxPageSize           int          `json:"maxPageSize"`
+	QueryExecutionTimeout string       `json:"queryExecutionTimeout"`
+	LastConnectionName    string       `json:"lastConnectionName,omitempty"`
 }
 
 // PageSize returns the configured page size or the default when it is invalid.
@@ -58,6 +62,17 @@ func (config Config) PageSize() int {
 		return db.MaxPageSize
 	}
 	return config.MaxPageSize
+}
+
+// QueryTimeout returns the configured query timeout or the default when it is invalid.
+func (config Config) QueryTimeout() time.Duration {
+	timeout, _ := time.ParseDuration(config.QueryTimeoutText())
+	return timeout
+}
+
+// QueryTimeoutText returns the configured query timeout text or the default when it is invalid.
+func (config Config) QueryTimeoutText() string {
+	return normalizeQueryExecutionTimeout(config.QueryExecutionTimeout)
 }
 
 // Load reads the db-tui configuration from $HOME/.config/db-tui/config.json.
@@ -101,6 +116,7 @@ func decodeConfig(data []byte) (Config, error) {
 		return Config{}, fmt.Errorf("decode config: %w", err)
 	}
 	config.MaxPageSize = config.PageSize()
+	config.QueryExecutionTimeout = config.QueryTimeoutText()
 
 	return config, nil
 }
@@ -117,6 +133,7 @@ func (config *Config) Save() error {
 		return err
 	}
 	config.MaxPageSize = config.PageSize()
+	config.QueryExecutionTimeout = config.QueryTimeoutText()
 	return writeConfig(path, *config)
 }
 
@@ -222,7 +239,8 @@ func (connection Connection) Target() (string, string, error) {
 
 func createEmptyConfig(path string) ([]byte, error) {
 	data, err := encodeConfig(Config{
-		MaxPageSize: db.MaxPageSize,
+		MaxPageSize:           db.MaxPageSize,
+		QueryExecutionTimeout: defaultQueryTimeoutText,
 	})
 	if err != nil {
 		return nil, err
@@ -231,6 +249,14 @@ func createEmptyConfig(path string) ([]byte, error) {
 		return nil, fmt.Errorf("create empty config: %w", err)
 	}
 	return data, nil
+}
+
+func normalizeQueryExecutionTimeout(value string) string {
+	value = strings.TrimSpace(value)
+	if timeout, err := time.ParseDuration(value); err == nil && timeout > 0 {
+		return value
+	}
+	return defaultQueryTimeoutText
 }
 
 func writeConfig(path string, config Config) error {

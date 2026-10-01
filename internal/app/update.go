@@ -475,6 +475,7 @@ func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 			return nil, true
 		}
 		m.config.MaxPageSize = msg.maxPageSize
+		m.config.QueryExecutionTimeout = msg.queryExecutionTimeout
 		m.settingsModal = nil
 		return nil, true
 	default:
@@ -817,7 +818,7 @@ func (m Model) updateSettingsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case saveSettingsMsg:
 		m.settingsModal.saving = true
-		return m, saveSettings(m.config, msg.maxPageSize)
+		return m, saveSettings(m.config, msg.maxPageSize, msg.queryExecutionTimeout)
 	case cancelSettingsMsg:
 		m.settingsModal = nil
 		return m, nil
@@ -839,9 +840,9 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.shortcutsModal = &modal
 		return nil
 	case key.Matches(msg, m.keys.settings):
-		modal := newSettingsModal(m.config.PageSize())
+		modal := newSettingsModal(m.config.PageSize(), m.config.QueryTimeoutText())
 		m.settingsModal = &modal
-		return m.settingsModal.maxPageSize.Focus()
+		return m.settingsModal.focusInput(0)
 	case key.Matches(msg, m.keys.readOnly):
 		if m.database != nil {
 			m.readOnly = !m.readOnly
@@ -1438,7 +1439,7 @@ func (m *Model) executeRawQuery(sql string) tea.Cmd {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), queryExecutionTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), m.config.QueryTimeout())
 	request := m.query.beginExecute(sql)
 	m.query.cancel = cancel
 	session := m.session

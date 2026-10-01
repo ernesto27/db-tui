@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ernestoponce27/db-tui/internal/config"
 	"github.com/ernestoponce27/db-tui/internal/db"
 )
 
@@ -266,7 +267,7 @@ func TestExecuteQuery(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), queryExecutionTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), config.Config{}.QueryTimeout())
 			defer cancel()
 			message, ok := executeQuery(
 				ctx,

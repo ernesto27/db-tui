@@ -396,6 +396,21 @@ func TestModelStartQueryBeginsExecution(t *testing.T) {
 	assert.False(t, model.spinnerRunning)
 }
 
+func TestModelStartQueryUsesConfiguredTimeout(t *testing.T) {
+	database := &fakeDatabase{name: "chinook"}
+	model := New(config.Config{QueryExecutionTimeout: "750ms"}, ConnectionSettings{}, nil)
+	model.database = database
+	model.query.editor.SetValue("SELECT 1")
+
+	command := model.startQuery()
+	require.NotNil(t, command)
+	batch := command().(tea.BatchMsg)
+	_, ok := batch[0]().(queryFinishedMsg)
+	require.True(t, ok)
+
+	assert.WithinDuration(t, time.Now().Add(750*time.Millisecond), database.executeDeadlineAt, 100*time.Millisecond)
+}
+
 func TestModelStartQueryRequiresDeleteConfirmation(t *testing.T) {
 	model := New(config.Config{}, ConnectionSettings{}, nil)
 	model.database = &fakeDatabase{name: "chinook"}
