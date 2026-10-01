@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -45,10 +44,7 @@ type lastConnectionSavedMsg struct {
 	err     error
 }
 
-const (
-	connectionTimeout           = 5 * time.Second
-	lastConnectionOpenErrorText = "Unable to open last used connection"
-)
+const lastConnectionOpenErrorText = "Unable to open last used connection"
 
 func saveLastConnection(cfg config.Config, name string, session uint64) tea.Cmd {
 	return func() tea.Msg {
@@ -101,7 +97,7 @@ func connectConnection(connect ConnectFunc, settings ConnectionSettings, attempt
 			return connectionFinishedMsg{attempt: attempt, err: err}
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
+		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		if engine == db.EngineRedis {
 			if len(redisConnect) == 0 || redisConnect[0] == nil {
