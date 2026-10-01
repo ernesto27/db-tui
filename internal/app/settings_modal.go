@@ -39,7 +39,6 @@ func newSettingsModal(maxPageSize int, queryExecutionTimeout string) settingsMod
 		styles := editRowInputStyles()
 		styles.Focused.Text = styles.Focused.Text.Foreground(colorAccent)
 		styles.Blurred = styles.Focused
-		styles.Cursor.Color = colorModalBackground
 		input.SetStyles(styles)
 		input.SetValue(value)
 		return input
@@ -127,17 +126,19 @@ func (m settingsModal) view(width int) string {
 		Width(30).
 		Foreground(colorAccent).
 		Background(colorModalBackground)
+	fieldView := func(label string, input textinput.Model) string {
+		label = labelStyle.Render(label)
+		value := lipgloss.NewStyle().
+			Height(lipgloss.Height(label)).
+			Background(colorModalBackground).
+			Render(modalTextInputView(input))
+		return lipgloss.JoinHorizontal(lipgloss.Top, label, value)
+	}
 	lines := []string{
 		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Settings"),
 		"",
-		lipgloss.JoinHorizontal(lipgloss.Top,
-			labelStyle.Render("Max page size"),
-			m.maxPageSize.View(),
-		),
-		lipgloss.JoinHorizontal(lipgloss.Top,
-			labelStyle.Render("Query timeout (for example, 20m)"),
-			m.queryExecutionTimeout.View(),
-		),
+		fieldView("Max page size", m.maxPageSize),
+		fieldView("Query timeout: 20m", m.queryExecutionTimeout),
 	}
 	if m.errorText != "" {
 		lines = append(lines, "", lipgloss.NewStyle().

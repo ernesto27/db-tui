@@ -59,6 +59,7 @@ type submitEnvironmentMsg struct {
 func newActionsModal(tableName, connName string) actionsModal {
 	input := textinput.New()
 	input.Prompt = ""
+	input.SetStyles(editRowInputStyles())
 	input.SetWidth(40)
 
 	m := actionsModal{
@@ -332,7 +333,7 @@ func (m actionsModal) viewRenameEditing(width int) string {
 		lipgloss.NewStyle().Bold(true).Foreground(colorTitle).Render("Rename connection"),
 		"",
 		lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render("New name:"),
-		m.renameInput.View(),
+		modalTextInputView(m.renameInput),
 		"",
 	}
 	if m.renameError != "" {

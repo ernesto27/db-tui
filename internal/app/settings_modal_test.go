@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -97,4 +98,21 @@ func TestSettingsModalView(t *testing.T) {
 	assert.Contains(t, view, "Max page size")
 	assert.Contains(t, view, "Query timeout")
 	assert.Contains(t, view, "Enter save")
+}
+
+func TestSettingsModalInputFocusKeepsValuesVisible(t *testing.T) {
+	modal := newSettingsModal(100, "20m")
+	modal.focusInput(0)
+	for _, focused := range []int{0, 1, 0} {
+		assert.Equal(t, focused == 0, modal.maxPageSize.Focused())
+		assert.Equal(t, focused == 1, modal.queryExecutionTimeout.Focused())
+		assert.Contains(t, ansi.Strip(modal.view(80)), "100")
+		assert.Contains(t, ansi.Strip(modal.view(80)), "20m")
+		blurred := modal.queryExecutionTimeout
+		if focused == 1 {
+			blurred = modal.maxPageSize
+		}
+		assert.Equal(t, blurred.Value(), ansi.Strip(modalTextInputView(blurred)))
+		modal, _ = modal.update(keyPress(tea.KeyTab, "", 0))
+	}
 }

@@ -72,6 +72,9 @@ func newNavigatorModel() navigatorModel {
 	filter := textinput.New()
 	filter.Prompt = "Filter: "
 	filter.Placeholder = "Ctrl+F"
+	styles := filter.Styles()
+	styles.Cursor.Color = colorAccent
+	filter.SetStyles(styles)
 	filter.SetWidth(14)
 	return navigatorModel{filter: filter}
 }
