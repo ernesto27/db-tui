@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/require"
@@ -101,6 +102,7 @@ type fakeDatabase struct {
 	executedSQL                    string
 	executeMode                    db.QueryExecutionMode
 	executeDeadline                bool
+	executeDeadlineAt              time.Time
 	blockExecuteUntilCanceled      bool
 	executeStarted                 chan struct{}
 	executeContext                 context.Context
@@ -203,7 +205,7 @@ func (f *fakeDatabase) Execute(
 	f.executeCalls++
 	f.executedSQL = sql
 	f.executeMode = mode
-	_, f.executeDeadline = ctx.Deadline()
+	f.executeDeadlineAt, f.executeDeadline = ctx.Deadline()
 	if f.blockExecuteUntilCanceled {
 		f.executeContext = ctx
 		close(f.executeStarted)

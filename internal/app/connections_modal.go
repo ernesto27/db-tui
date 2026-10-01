@@ -51,6 +51,7 @@ func newConnectionsModal(appConfig config.Config) connectionsModal {
 	search := textinput.New()
 	search.Prompt = ""
 	search.Placeholder = "Search"
+	search.SetStyles(editRowInputStyles())
 	search.SetWidth(connectionModalInputWidth)
 	search.Focus()
 	return connectionsModal{
@@ -263,7 +264,7 @@ func (m connectionsModal) view(width int) string {
 
 	search := m.search
 	search.SetWidth(modalWidth - 6)
-	lines = append(lines, search.View(), "")
+	lines = append(lines, modalTextInputView(search), "")
 	connections := m.visibleConnections()
 	if len(connections) == 0 {
 		lines = append(lines, lipgloss.NewStyle().Foreground(colorTextMuted).Render("No matching connections"))

@@ -247,7 +247,7 @@ func (m *Model) startRedisCommand() tea.Cmd {
 	if m.redis.client == nil || m.query.loading || strings.TrimSpace(command) == "" {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), queryExecutionTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), m.config.QueryTimeout())
 	request := m.query.beginExecute(command)
 	m.query.cancel = cancel
 	client := m.redis.client
@@ -266,9 +266,9 @@ func (m *Model) updateRedisKey(msg tea.KeyPressMsg) tea.Cmd {
 		modal := newShortcutsModal(m.layout, true)
 		m.shortcutsModal = &modal
 	case key.Matches(msg, m.keys.settings):
-		modal := newSettingsModal(m.config.PageSize())
+		modal := newSettingsModal(m.config.PageSize(), m.config.QueryTimeoutText())
 		m.settingsModal = &modal
-		return m.settingsModal.maxPageSize.Focus()
+		return m.settingsModal.focusInput(0)
 	case key.Matches(msg, m.keys.connections):
 		modal := newConnectionsModal(m.config)
 		m.connectionsModal = &modal

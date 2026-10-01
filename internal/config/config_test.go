@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ernestoponce27/db-tui/internal/db"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +22,7 @@ func TestLoad(t *testing.T) {
 		{
 			name:     "valid configuration",
 			contents: `{"connections":[{"name":"local","engine":"postgres","settings":{"hostname":"127.0.0.1","database":"chinook","username":"db_tui","password":"secret","port":"5433","dsn":""},"status":true}]}`,
-			want: Config{MaxPageSize: db.MaxPageSize, Connections: []Connection{{
+			want: Config{MaxPageSize: db.MaxPageSize, QueryExecutionTimeout: defaultQueryTimeoutText, Connections: []Connection{{
 				Name:   "local",
 				Engine: "postgres",
 				Settings: Settings{
@@ -37,7 +38,7 @@ func TestLoad(t *testing.T) {
 		{
 			name:     "empty configuration",
 			contents: `{}`,
-			want:     Config{MaxPageSize: db.MaxPageSize},
+			want:     Config{MaxPageSize: db.MaxPageSize, QueryExecutionTimeout: defaultQueryTimeoutText},
 		},
 		{
 			name:     "malformed JSON",
@@ -75,6 +76,18 @@ func TestLoadPreservesMaxPageSizeAboveDefault(t *testing.T) {
 	assert.Equal(t, 250, config.MaxPageSize)
 }
 
+func TestLoadPreservesQueryExecutionTimeout(t *testing.T) {
+	path := useTemporaryHome(t)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), configDirectoryMode))
+	require.NoError(t, os.WriteFile(path, []byte(`{"queryExecutionTimeout":"45s"}`), 0o600))
+
+	config, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, "45s", config.QueryExecutionTimeout)
+	assert.Equal(t, 45*time.Second, config.QueryTimeout())
+}
+
 func TestLoadPreservesConnectionEnvironment(t *testing.T) {
 	path := useTemporaryHome(t)
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), configDirectoryMode))
@@ -90,12 +103,12 @@ func TestLoadPreservesConnectionEnvironment(t *testing.T) {
 func TestSavePreservesMaxPageSizeAboveDefault(t *testing.T) {
 	path := useTemporaryHome(t)
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), configDirectoryMode))
-	config := Config{MaxPageSize: 250}
+	config := Config{MaxPageSize: 250, QueryExecutionTimeout: "45s"}
 
 	require.NoError(t, config.Save())
 	contents, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"maxPageSize":250}`, string(contents))
+	assert.JSONEq(t, `{"maxPageSize":250,"queryExecutionTimeout":"45s"}`, string(contents))
 }
 
 func TestConfigSaveConnection(t *testing.T) {
@@ -126,11 +139,12 @@ func TestConfigSaveConnection(t *testing.T) {
 	require.NoError(t, err)
 	assert.JSONEq(t, fmt.Sprintf(`{
 		"maxPageSize": %d,
+		"queryExecutionTimeout": %q,
 		"connections": [
 			{"name":"local","engine":"postgres","settings":{"hostname":"","database":"","username":"","password":"","port":"","dsn":""},"status":false},
 			{"name":"production","engine":"postgres","settings":{"hostname":"db.example.com","database":"chinook","username":"db_tui","password":"","port":"5432","dsn":""},"status":false}
 		]
-	}`, db.MaxPageSize), string(contents))
+	}`, db.MaxPageSize, defaultQueryTimeoutText), string(contents))
 }
 
 func TestConfigSave(t *testing.T) {
@@ -155,10 +169,11 @@ func TestConfigSave(t *testing.T) {
 	require.NoError(t, err)
 	assert.JSONEq(t, fmt.Sprintf(`{
 		"maxPageSize": %d,
+		"queryExecutionTimeout": %q,
 		"connections": [
 			{"name":"local","engine":"postgres","settings":{"hostname":"127.0.0.1","database":"chinook","username":"updated_user","password":"","port":"5433","dsn":""},"status":false}
 		]
-	}`, db.MaxPageSize), string(contents))
+	}`, db.MaxPageSize, defaultQueryTimeoutText), string(contents))
 }
 
 func TestConfigSavePersistsConnectionEnvironment(t *testing.T) {
@@ -175,6 +190,7 @@ func TestConfigSavePersistsConnectionEnvironment(t *testing.T) {
 	require.NoError(t, err)
 	assert.JSONEq(t, fmt.Sprintf(`{
 		"maxPageSize": %d,
+		"queryExecutionTimeout": %q,
 		"connections": [{
 			"name":"testing",
 			"engine":"postgres",
@@ -182,7 +198,7 @@ func TestConfigSavePersistsConnectionEnvironment(t *testing.T) {
 			"environment":"testing",
 			"status":false
 		}]
-	}`, db.MaxPageSize), string(contents))
+	}`, db.MaxPageSize, defaultQueryTimeoutText), string(contents))
 }
 
 func TestConfigPersistsSQLiteDatabasePathInExistingDSNField(t *testing.T) {
@@ -200,7 +216,7 @@ func TestConfigPersistsSQLiteDatabasePathInExistingDSNField(t *testing.T) {
 	require.NoError(t, config.Save())
 	contents, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.JSONEq(t, fmt.Sprintf(`{"maxPageSize":%d,"connections":[{"name":"Employee","engine":"sqlite","settings":{"hostname":"","database":"","username":"","password":"","port":"","dsn":"docker/sqlite/employee.db"},"status":false}]}`, db.MaxPageSize), string(contents))
+	assert.JSONEq(t, fmt.Sprintf(`{"maxPageSize":%d,"queryExecutionTimeout":%q,"connections":[{"name":"Employee","engine":"sqlite","settings":{"hostname":"","database":"","username":"","password":"","port":"","dsn":"docker/sqlite/employee.db"},"status":false}]}`, db.MaxPageSize, defaultQueryTimeoutText), string(contents))
 }
 
 func useTemporaryHome(t *testing.T) string {
