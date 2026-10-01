@@ -97,7 +97,7 @@ func connectConnection(connect ConnectFunc, settings ConnectionSettings, attempt
 			return connectionFinishedMsg{attempt: attempt, err: err}
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
+		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		if engine == db.EngineRedis {
 			if len(redisConnect) == 0 || redisConnect[0] == nil {

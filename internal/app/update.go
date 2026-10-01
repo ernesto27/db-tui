@@ -1367,22 +1367,22 @@ func (m *Model) updateSchemaObjectsModal(msg tea.Msg) tea.Cmd {
 			m.navigator.selectSection(navigatorViews, m.layout.navigatorListRows)
 			m.viewsLoading = true
 			m.viewLoadErr = nil
-			return loadViews(m.database, group.Schema, m.session)
+			return loadViews(m.database, group.Schema, m.session, m.config.QueryTimeout())
 		case db.SchemaObjectMaterializedViews:
 			m.navigator.selectSection(navigatorMaterializedViews, m.layout.navigatorListRows)
 			m.materializedViewsLoading = true
 			m.materializedViewLoadErr = nil
-			return loadMaterializedViews(m.database, group.Schema, m.session)
+			return loadMaterializedViews(m.database, group.Schema, m.session, m.config.QueryTimeout())
 		case db.SchemaObjectFunctions:
 			m.navigator.selectSection(navigatorFunctions, m.layout.navigatorListRows)
 			m.functionsLoading = true
 			m.functionLoadErr = nil
-			return loadFunctions(m.database, group.Schema, m.session)
+			return loadFunctions(m.database, group.Schema, m.session, m.config.QueryTimeout())
 		default:
 			m.navigator.selectSection(navigatorTables, m.layout.navigatorListRows)
 			m.loading = true
 			m.tableLoadErr = nil
-			return loadTables(m.database, group.Schema, m.session)
+			return loadTables(m.database, group.Schema, m.session, m.config.QueryTimeout())
 		}
 	}
 	return nil
@@ -1395,7 +1395,7 @@ func (m *Model) startRowLoad(offset, selectedRow int) tea.Cmd {
 
 	m.activeRelation.request++
 	m.data.beginLoad(offset)
-	return tea.Batch(loadRows(m.database, m.activeRelation.item, offset, selectedRow, m.config.PageSize(), m.session, m.activeRelation.request), m.startSpinner())
+	return tea.Batch(loadRows(m.database, m.activeRelation.item, offset, selectedRow, m.config.PageSize(), m.session, m.activeRelation.request, m.config.QueryTimeout()), m.startSpinner())
 }
 
 func (m *Model) startExtensionsLoad() tea.Cmd {
@@ -1413,7 +1413,7 @@ func (m *Model) startExtensionsLoad() tea.Cmd {
 	m.activeFunction = activeFunction{}
 	m.data.resetColumnWidths()
 	m.data.beginLoad(0)
-	return tea.Batch(loadExtensions(extensions, m.session, m.activeExtensions.request), m.startSpinner())
+	return tea.Batch(loadExtensions(extensions, m.session, m.activeExtensions.request, m.config.QueryTimeout()), m.startSpinner())
 }
 
 func (m *Model) startQuery() tea.Cmd {
@@ -1606,7 +1606,7 @@ func (m *Model) updateActionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ddlRequest++
 		modal := newDDLModal(table)
 		m.ddlModal = &modal
-		return *m, tea.Batch(loadTableDDL(m.database, table, m.session, m.ddlRequest), m.startSpinner())
+		return *m, tea.Batch(loadTableDDL(m.database, table, m.session, m.ddlRequest, m.config.QueryTimeout()), m.startSpinner())
 	case selectColumnsActionMsg:
 		table, ok := m.navigator.selectedTable()
 		if m.database == nil || !ok {
@@ -1617,7 +1617,7 @@ func (m *Model) updateActionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.columnsRequest++
 		modal := newColumnsModal(table.Name)
 		m.columnsModal = &modal
-		return *m, tea.Batch(loadColumns(m.database, table, m.session, m.columnsRequest), m.startSpinner())
+		return *m, tea.Batch(loadColumns(m.database, table, m.session, m.columnsRequest, m.config.QueryTimeout()), m.startSpinner())
 	case selectIndexesActionMsg:
 		table, ok := m.navigator.selectedTable()
 		if m.database == nil || !ok {
@@ -1628,7 +1628,7 @@ func (m *Model) updateActionsModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.indexesRequest++
 		modal := newIndexesModal(table.Name)
 		m.indexesModal = &modal
-		return *m, tea.Batch(loadIndexes(m.database, table, m.session, m.indexesRequest), m.startSpinner())
+		return *m, tea.Batch(loadIndexes(m.database, table, m.session, m.indexesRequest, m.config.QueryTimeout()), m.startSpinner())
 	case selectRenameActionMsg:
 		if m.activeConnectionIndex < 0 || m.activeConnectionIndex >= len(m.config.Connections) {
 			m.actionsModal = nil
@@ -1761,7 +1761,7 @@ func (m *Model) openEditRowModal() tea.Cmd {
 		return nil
 	}
 	row := m.data.page.Rows[m.data.selected]
-	return loadEditRowColumns(m.database, m.activeRelation.item.rowSource(), row, m.session)
+	return loadEditRowColumns(m.database, m.activeRelation.item.rowSource(), row, m.session, m.config.QueryTimeout())
 }
 
 func (m *Model) updateEditRowModal(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -1772,7 +1772,7 @@ func (m *Model) updateEditRowModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case editRowSaveMsg:
 		m.editRowModal.state = editRowSaving
 		return m, tea.Batch(
-			saveRowEdit(m.database, msg.table, msg.setColumns, msg.whereColumns, m.session),
+			saveRowEdit(m.database, msg.table, msg.setColumns, msg.whereColumns, m.session, m.config.QueryTimeout()),
 			m.startSpinner(),
 		)
 	default:
@@ -1817,7 +1817,7 @@ func (m *Model) updateDeleteRowModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case deleteRowConfirmMsg:
 		m.deleteRowModal.state = deleteRowDeleting
 		return m, tea.Batch(
-			deleteRow(m.database, msg.table, msg.whereColumns, m.session),
+			deleteRow(m.database, msg.table, msg.whereColumns, m.session, m.config.QueryTimeout()),
 			m.startSpinner(),
 		)
 

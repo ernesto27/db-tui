@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
@@ -146,7 +147,7 @@ func TestDatabaseExplorerModalMovesAndCloses(t *testing.T) {
 
 func TestDatabaseExplorerModalLoadsSelectedSchemaTables(t *testing.T) {
 	database := &fakeDatabase{engine: db.EnginePostgreSQL}
-	model := New(config.Config{}, ConnectionSettings{}, nil)
+	model := New(config.Config{QueryExecutionTimeout: "750ms"}, ConnectionSettings{}, nil)
 	model.database = database
 	modal := newDatabaseExplorerModal([]db.SchemaObjectGroup{{Schema: "analytics", Type: db.SchemaObjectTables}}, false)
 	model.databaseExplorerModal = &modal
@@ -161,6 +162,7 @@ func TestDatabaseExplorerModalLoadsSelectedSchemaTables(t *testing.T) {
 	message, ok := command().(tablesLoadedMsg)
 	require.True(t, ok)
 	assert.Equal(t, "analytics", database.listTablesSchema)
+	assert.WithinDuration(t, time.Now().Add(750*time.Millisecond), database.listTablesDeadlineAt, 100*time.Millisecond)
 	assert.Equal(t, updated.session, message.session)
 }
 

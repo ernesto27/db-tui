@@ -13,8 +13,7 @@ import (
 )
 
 const (
-	tableLoadTimeout = 5 * time.Second
-	dumpTimeout      = 30 * time.Minute
+	dumpTimeout = 30 * time.Minute
 )
 
 type tablesLoadedMsg struct {
@@ -128,41 +127,29 @@ func saveSQLScript(sqlScripts ListSqlScript, connectionName, fileName, content s
 	}
 }
 
-func loadTables(database db.Database, schema string, session uint64) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
-		defer cancel()
-
+func loadTables(database db.Database, schema string, session uint64, timeout time.Duration) tea.Cmd {
+	return databaseCommand(timeout, func(ctx context.Context) tea.Msg {
 		tables, err := database.ListTables(ctx, schema)
 		return tablesLoadedMsg{tables: tables, schema: schema, session: session, err: err}
-	}
+	})
 }
 
-func loadSchemaObjectGroups(database db.Database, session uint64) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
-		defer cancel()
-
+func loadSchemaObjectGroups(database db.Database, session uint64, timeout time.Duration) tea.Cmd {
+	return databaseCommand(timeout, func(ctx context.Context) tea.Msg {
 		groups, err := database.ListSchemaObjectGroups(ctx)
 		return schemaObjectGroupsLoadedMsg{groups: groups, session: session, err: err}
-	}
+	})
 }
 
-func loadViews(database db.Database, schema string, session uint64) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
-		defer cancel()
-
+func loadViews(database db.Database, schema string, session uint64, timeout time.Duration) tea.Cmd {
+	return databaseCommand(timeout, func(ctx context.Context) tea.Msg {
 		views, err := database.ListViews(ctx, schema)
 		return viewsLoadedMsg{views: views, schema: schema, session: session, err: err}
-	}
+	})
 }
 
-func loadRows(database db.Database, relation navigatorItem, offset, selectedRow, maxPageSize int, session, request uint64) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
-		defer cancel()
-
+func loadRows(database db.Database, relation navigatorItem, offset, selectedRow, maxPageSize int, session, request uint64, timeout time.Duration) tea.Cmd {
+	return databaseCommand(timeout, func(ctx context.Context) tea.Msg {
 		page, err := database.GetRows(ctx, relation.rowSource(), db.PageRequest{
 			Offset: offset,
 			Limit:  maxPageSize,
@@ -176,17 +163,14 @@ func loadRows(database db.Database, relation navigatorItem, offset, selectedRow,
 			request:     request,
 			err:         err,
 		}
-	}
+	})
 }
 
-func loadExtensions(database db.Extension, session, request uint64) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
-		defer cancel()
-
+func loadExtensions(database db.Extension, session, request uint64, timeout time.Duration) tea.Cmd {
+	return databaseCommand(timeout, func(ctx context.Context) tea.Msg {
 		extensions, err := database.ListExtensions(ctx)
 		return extensionsLoadedMsg{extensions: extensions, session: session, request: request, err: err}
-	}
+	})
 }
 
 func saveSettings(appConfig config.Config, maxPageSize int, queryExecutionTimeout string) tea.Cmd {
@@ -201,11 +185,8 @@ func saveSettings(appConfig config.Config, maxPageSize int, queryExecutionTimeou
 	}
 }
 
-func loadTableDDL(database db.Database, table db.Table, session, request uint64) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
-		defer cancel()
-
+func loadTableDDL(database db.Database, table db.Table, session, request uint64, timeout time.Duration) tea.Cmd {
+	return databaseCommand(timeout, func(ctx context.Context) tea.Msg {
 		sql, err := database.TableDDL(ctx, table)
 		return tableDDLLoadedMsg{
 			table:   table,
@@ -214,14 +195,11 @@ func loadTableDDL(database db.Database, table db.Table, session, request uint64)
 			request: request,
 			err:     err,
 		}
-	}
+	})
 }
 
-func loadColumns(database db.Database, table db.Table, session, request uint64) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
-		defer cancel()
-
+func loadColumns(database db.Database, table db.Table, session, request uint64, timeout time.Duration) tea.Cmd {
+	return databaseCommand(timeout, func(ctx context.Context) tea.Msg {
 		columns, err := database.ListColumns(ctx, table)
 		return columnsLoadedMsg{
 			tableName: table.Name,
@@ -230,14 +208,11 @@ func loadColumns(database db.Database, table db.Table, session, request uint64) 
 			request:   request,
 			err:       err,
 		}
-	}
+	})
 }
 
-func loadIndexes(database db.Database, table db.Table, session, request uint64) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
-		defer cancel()
-
+func loadIndexes(database db.Database, table db.Table, session, request uint64, timeout time.Duration) tea.Cmd {
+	return databaseCommand(timeout, func(ctx context.Context) tea.Msg {
 		indexes, err := database.ListIndexes(ctx, table)
 		return indexesLoadedMsg{
 			tableName: table.Name,
@@ -246,14 +221,11 @@ func loadIndexes(database db.Database, table db.Table, session, request uint64) 
 			request:   request,
 			err:       err,
 		}
-	}
+	})
 }
 
-func loadMaterializedViews(database db.Database, schema string, session uint64) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
-		defer cancel()
-
+func loadMaterializedViews(database db.Database, schema string, session uint64, timeout time.Duration) tea.Cmd {
+	return databaseCommand(timeout, func(ctx context.Context) tea.Msg {
 		materializedViews, err := database.ListMaterializedViews(ctx, schema)
 
 		return materializedViewsLoadedMsg{
@@ -262,16 +234,21 @@ func loadMaterializedViews(database db.Database, schema string, session uint64) 
 			session:           session,
 			err:               err,
 		}
-	}
+	})
 }
 
-func loadFunctions(database db.Database, schema string, session uint64) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
-		defer cancel()
-
+func loadFunctions(database db.Database, schema string, session uint64, timeout time.Duration) tea.Cmd {
+	return databaseCommand(timeout, func(ctx context.Context) tea.Msg {
 		functions, err := database.ListFunctions(ctx, schema)
 		return functionsLoadedMsg{functions: functions, schema: schema, session: session, err: err}
+	})
+}
+
+func databaseCommand(timeout time.Duration, operation func(context.Context) tea.Msg) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		return operation(ctx)
 	}
 }
 
@@ -360,10 +337,8 @@ type editRowColumnsLoadedMsg struct {
 	err     error
 }
 
-func loadEditRowColumns(database db.Database, table db.Table, row []any, session uint64) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
-		defer cancel()
+func loadEditRowColumns(database db.Database, table db.Table, row []any, session uint64, timeout time.Duration) tea.Cmd {
+	return databaseCommand(timeout, func(ctx context.Context) tea.Msg {
 		columns, err := database.ListColumns(ctx, table)
 		return editRowColumnsLoadedMsg{
 			table:   table,
@@ -372,16 +347,14 @@ func loadEditRowColumns(database db.Database, table db.Table, row []any, session
 			session: session,
 			err:     err,
 		}
-	}
+	})
 }
 
-func saveRowEdit(database db.Database, table db.Table, setColumns, whereColumns map[string]any, session uint64) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
-		defer cancel()
+func saveRowEdit(database db.Database, table db.Table, setColumns, whereColumns map[string]any, session uint64, timeout time.Duration) tea.Cmd {
+	return databaseCommand(timeout, func(ctx context.Context) tea.Msg {
 		err := database.UpdateRow(ctx, table, setColumns, whereColumns)
 		return editRowSavedMsg{session: session, err: err}
-	}
+	})
 }
 
 type deleteRowCancelMsg struct{}
@@ -401,15 +374,13 @@ func deleteRow(
 	table db.Table,
 	whereColumns map[string]any,
 	session uint64,
+	timeout time.Duration,
 ) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), tableLoadTimeout)
-		defer cancel()
-
+	return databaseCommand(timeout, func(ctx context.Context) tea.Msg {
 		err := database.DeleteRow(ctx, table, whereColumns)
 		return deleteRowFinishedMsg{
 			session: session,
 			err:     err,
 		}
-	}
+	})
 }

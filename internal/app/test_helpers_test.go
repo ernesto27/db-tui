@@ -79,6 +79,7 @@ type fakeDatabase struct {
 	listTablesCalls                int
 	listTablesSchema               string
 	listTablesDeadline             bool
+	listTablesDeadlineAt           time.Time
 	listSchemaObjectGroupsCalls    int
 	listSchemaObjectGroupsDeadline bool
 	listViewsCalls                 int
@@ -138,7 +139,7 @@ func (f *fakeDatabase) Host() string {
 func (f *fakeDatabase) ListTables(ctx context.Context, schema string) ([]db.Table, error) {
 	f.listTablesCalls++
 	f.listTablesSchema = schema
-	_, f.listTablesDeadline = ctx.Deadline()
+	f.listTablesDeadlineAt, f.listTablesDeadline = ctx.Deadline()
 	return f.tables, f.tablesErr
 }
 

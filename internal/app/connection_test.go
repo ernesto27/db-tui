@@ -9,7 +9,47 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ernestoponce27/db-tui/internal/db"
+	"github.com/ernestoponce27/db-tui/internal/redis"
 )
+
+func TestConnectRedisWithoutDeadline(t *testing.T) {
+	connectorErr := errors.New("connection refused")
+	for _, err := range []error{nil, connectorErr} {
+		name := "success"
+		if err != nil {
+			name = "connector error"
+		}
+		t.Run(name, func(t *testing.T) {
+			client := new(redis.Client)
+			var connectionCtx context.Context
+			connect := func(ctx context.Context, settings redis.Settings) (*redis.Client, error) {
+				connectionCtx = ctx
+				_, hasDeadline := ctx.Deadline()
+				assert.False(t, hasDeadline)
+				assert.NoError(t, ctx.Err())
+				assert.Equal(t, "redis://localhost:6379", settings.DSN)
+				if err != nil {
+					return nil, err
+				}
+				return client, nil
+			}
+			settings := ConnectionSettings{Engine: db.EngineRedis, DSN: "redis://localhost:6379"}
+			message, ok := connectConnection(nil, settings, 7, connect)().(connectionFinishedMsg)
+			require.True(t, ok)
+			require.NotNil(t, connectionCtx)
+			assert.ErrorIs(t, connectionCtx.Err(), context.Canceled)
+			assert.Equal(t, uint64(7), message.attempt)
+			assert.Equal(t, settings, message.settings)
+			if err != nil {
+				assert.ErrorIs(t, message.err, err)
+				assert.Nil(t, message.redis)
+			} else {
+				assert.NoError(t, message.err)
+				assert.Same(t, client, message.redis)
+			}
+		})
+	}
+}
 
 func TestConnectionSettingsConnectionDSN(t *testing.T) {
 	tests := []struct {
@@ -293,7 +333,7 @@ func TestConnectConnection(t *testing.T) {
 			} else {
 				assert.Equal(t, test.wantEngine, gotEngine)
 				assert.Equal(t, test.wantDSN, gotDSN)
-				assert.True(t, hadDeadline)
+				assert.False(t, hadDeadline)
 			}
 
 			if test.wantErrText != "" {
