@@ -503,7 +503,6 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if err != nil {
 			if m.openingLastConnection {
 				m.modal.errorText = lastConnectionOpenErrorText
-				m.startupErr = lastConnectionOpenErrorText
 				m.openingLastConnection = false
 			} else {
 				m.modal.errorText = err.Error()
@@ -539,7 +538,6 @@ func (m Model) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			if m.openingLastConnection {
 				m.modal.errorText = lastConnectionOpenErrorText
-				m.startupErr = lastConnectionOpenErrorText
 				m.openingLastConnection = false
 			} else {
 				m.modal.errorText = msg.err.Error()

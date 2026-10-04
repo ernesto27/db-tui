@@ -1,10 +1,13 @@
 package redis
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"os/exec"
 	"slices"
 	"strings"
 	"testing"
@@ -115,11 +118,35 @@ func TestConnectFailsWhenServerIsUnavailable(t *testing.T) {
 	require.NoError(t, err)
 	address := listener.Addr().(*net.TCPAddr)
 	require.NoError(t, listener.Close())
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	for _, test := range []struct {
+		name     string
+		settings Settings
+	}{
+		{name: "host and port", settings: Settings{Host: "127.0.0.1", Port: address.Port}},
+		{name: "DSN", settings: Settings{DSN: "redis://" + address.String()}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			client, err := Connect(ctx, test.settings)
+			assert.Nil(t, client)
+			assert.ErrorContains(t, err, "connect to Redis")
+		})
+	}
+}
+
+func TestConnectFailureDoesNotWriteToTerminal(t *testing.T) {
+	// Use a subprocess because go-redis captures stderr during initialization.
+	executable, err := os.Executable()
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	client, err := Connect(ctx, Settings{Host: "127.0.0.1", Port: address.Port})
-	assert.Nil(t, client)
-	assert.ErrorContains(t, err, "connect to Redis")
+	command := exec.CommandContext(ctx, executable, "-test.run=^TestConnectFailsWhenServerIsUnavailable$")
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	stdout, err := command.Output()
+	require.NoError(t, err, "stdout: %s; stderr: %s", stdout, stderr.String())
+	assert.Empty(t, stderr.String(), "Redis diagnostics must not bypass the connection modal")
 }
 
 func TestConfiguredDatabaseCount(t *testing.T) {

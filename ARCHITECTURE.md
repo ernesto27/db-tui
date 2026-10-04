@@ -127,6 +127,8 @@ adapter implementations, updated fakes and callers, and focused tests.
 - Keep config/log directories `0700` and sensitive files `0600`.
 - Credentials are plaintext; do not imply encryption.
 - Sanitize database text and errors before terminal rendering.
+- Disable go-redis diagnostic logging during adapter initialization so it cannot
+  write over the TUI. Connection failures belong in the connection modal.
 - Restrict export names to one safe filename component.
 - Never log passwords or complete DSNs.
 - Require confirmation for destructive operations.

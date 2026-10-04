@@ -43,6 +43,21 @@ func TestLastConnectionStartupErrors(t *testing.T) {
 			connectErr:  errors.New("SENSITIVE_MARKER"),
 			wantInModal: true,
 		},
+		{
+			name: "saved Redis connection cannot open",
+			config: config.Config{
+				LastConnectionName: "redis",
+				Connections: []config.Connection{{
+					Name:   "redis",
+					Engine: db.EngineRedis,
+					Settings: config.Settings{
+						DSN: "redis://127.0.0.1:6380",
+					},
+				}},
+			},
+			connectErr:  errors.New("SENSITIVE_MARKER"),
+			wantInModal: true,
+		},
 	}
 
 	for _, test := range tests {
@@ -69,9 +84,12 @@ func TestLastConnectionStartupErrors(t *testing.T) {
 
 			if test.wantInModal {
 				require.NotNil(t, model.modal)
+				assert.Equal(t, lastConnectionOpenErrorText, model.modal.errorText)
 				assert.NotContains(t, model.modal.errorText, "SENSITIVE_MARKER")
+				assert.NotContains(t, model.baseView().Content, lastConnectionOpenErrorText)
 				model, _ = updateModel(t, model, cancelConnectionMsg{})
 				assert.Contains(t, model.View().Content, "Ctrl+L")
+				assert.NotContains(t, model.View().Content, lastConnectionOpenErrorText)
 			} else {
 				assert.Nil(t, model.modal)
 				assert.Contains(t, view, "Ctrl+L")
