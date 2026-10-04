@@ -19,7 +19,14 @@ import (
 	"unicode/utf8"
 
 	goredis "github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9/logging"
 )
+
+func init() {
+	// Configure the process-wide logger before any client starts background work.
+	// Errors are returned to callers; stderr writes would corrupt the TUI.
+	logging.Disable()
+}
 
 // Settings identifies a standalone Redis server.
 type Settings struct {
