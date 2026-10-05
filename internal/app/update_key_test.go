@@ -219,13 +219,12 @@ func TestUpdateKeyRouting(t *testing.T) {
 			name: "results navigation takes precedence over stale table completion",
 			setup: func(model *Model) {
 				model.panel = panelQuery
-				model.query.result = db.QueryResult{Rows: [][]any{{1}, {2}}}
-				model.query.resultsFocused = true
+				model.query.finishExecute(db.QueryResult{Columns: []string{"id"}, Rows: [][]any{{1}, {2}}}, 0, nil)
 				model.query.completion.visible = true
 			},
 			message: keyPress(tea.KeyDown, "", 0),
 			assert: func(t *testing.T, got Model, _ tea.Cmd) {
-				assert.Equal(t, 1, got.query.viewport)
+				assert.Equal(t, 1, got.query.selectedRow)
 			},
 		},
 		{

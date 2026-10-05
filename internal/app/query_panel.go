@@ -37,6 +37,7 @@ type queryModel struct {
 	loadedScriptName   string
 	saveWarning        string
 	viewport           int
+	selectedRow        int
 	resultsFocused     bool
 	executionDuration  time.Duration
 	executionStartedAt time.Time
@@ -53,7 +54,7 @@ func newQueryModel(layout appLayout) queryModel {
 	editor.MaxContentHeight = 0
 	editor.SetHeight(queryEditorViewportHeight(layout))
 	editor.SetWidth(queryContentWidth(layout))
-	return queryModel{editor: editor}
+	return queryModel{editor: editor, selectedRow: -1}
 }
 
 func (m *queryModel) reset(layout appLayout) {
@@ -67,6 +68,7 @@ func (m *queryModel) resize(layout appLayout) {
 	styleQueryEditor(&m.editor)
 	m.editor.SetWidth(queryContentWidth(layout))
 	m.editor.SetHeight(queryEditorViewportHeight(layout))
+	m.ensureSelectedResultVisible(layout)
 }
 
 func (m *queryModel) beginExecute(sql string) uint64 {
@@ -76,6 +78,7 @@ func (m *queryModel) beginExecute(sql string) uint64 {
 	m.result = db.QueryResult{}
 	m.rawResult = ""
 	m.viewport = 0
+	m.selectedRow = -1
 	m.resultsFocused = false
 	m.lastExecutedSQL = sql
 	m.request++
@@ -93,8 +96,12 @@ func (m *queryModel) finishExecute(result db.QueryResult, duration time.Duration
 	m.rawResult = ""
 	m.err = err
 	m.viewport = 0
+	m.selectedRow = -1
 	m.executionDuration = duration
 	m.resultsFocused = len(result.Rows) > 0
+	if err == nil && len(result.Rows) > 0 {
+		m.selectedRow = 0
+	}
 	if m.resultsFocused {
 		m.editor.Blur()
 	}
@@ -147,6 +154,53 @@ func (m *queryModel) scrollResults(delta int, layouts ...appLayout) {
 		return
 	}
 	m.viewport = min(max(m.viewport+delta, 0), len(m.result.Rows)-1)
+	if len(layouts) > 0 {
+		lastRow := m.visibleResultEnd(layouts[0])
+		m.selectedRow = min(max(m.selectedRow, m.viewport), lastRow-1)
+	}
+}
+
+func (m queryModel) resultGridModel() dataModel {
+	return dataModel{
+		page:     db.RowPage{Columns: m.result.Columns, Rows: m.result.Rows},
+		selected: m.selectedRow,
+		viewport: m.viewport,
+	}
+}
+
+func (m queryModel) visibleResultEnd(layout appLayout) int {
+	grid := m.resultGridModel()
+	width := queryContentWidth(layout)
+	firstColumn, lastColumn := grid.visibleColumnRange(width)
+	return grid.visibleDataEnd(width, m.resultHeight(layout), firstColumn, lastColumn, m.viewport)
+}
+
+func (m queryModel) resultPageSize(layout appLayout) int {
+	return max(1, m.visibleResultEnd(layout)-m.viewport)
+}
+
+func (m *queryModel) moveResultSelection(delta int, layout appLayout) {
+	if m.loading || m.err != nil || len(m.result.Rows) == 0 {
+		return
+	}
+	m.selectedRow = min(max(m.selectedRow+delta, 0), len(m.result.Rows)-1)
+	m.ensureSelectedResultVisible(layout)
+}
+
+func (m *queryModel) ensureSelectedResultVisible(layout appLayout) {
+	if m.rawResult != "" {
+		return
+	}
+	if len(m.result.Rows) == 0 || m.loading || m.err != nil {
+		m.selectedRow = -1
+		m.viewport = 0
+		return
+	}
+	grid := m.resultGridModel()
+	layout.data.width = queryContentWidth(layout)
+	layout.data.height = m.resultHeight(layout)
+	grid.ensureSelectedVisible(layout)
+	m.selectedRow, m.viewport = grid.selected, grid.viewport
 }
 
 func (m queryModel) executionTimeText() string {
@@ -229,11 +283,7 @@ func (m queryModel) resultView(layout appLayout, connected bool, redisMode ...bo
 	}
 
 	contentWidth := queryContentWidth(layout)
-	gridModel := dataModel{
-		page:     db.RowPage{Columns: m.result.Columns, Rows: m.result.Rows},
-		selected: -1,
-		viewport: m.viewport,
-	}
+	gridModel := m.resultGridModel()
 	firstColumn, lastColumn := gridModel.visibleColumnRange(contentWidth)
 	resultHeight := m.resultHeight(layout)
 	lastRow := gridModel.visibleDataEnd(contentWidth, resultHeight, firstColumn, lastColumn, m.viewport)

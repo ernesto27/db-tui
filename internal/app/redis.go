@@ -289,6 +289,8 @@ func (m *Model) updateRedisKey(msg tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(msg, m.keys.tableData):
 		m.panel = panelData
 		m.focus = focusData
+	case m.panel == panelData && m.focus == focusData && key.Matches(msg, m.keys.copyRow):
+		return m.copySelectedRow()
 	case key.Matches(msg, m.keys.quit) && !(m.panel == panelQuery && !m.query.resultsFocused && msg.String() == "q"):
 		return tea.Quit
 	case m.panel == panelQuery && key.Matches(msg, m.keys.executeQuery):

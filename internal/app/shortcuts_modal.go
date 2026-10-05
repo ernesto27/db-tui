@@ -46,6 +46,7 @@ var shortcutSections = []shortcutSection{
 		{key: "R", action: "Refresh table data"},
 		{key: "E", action: "Edit selected row"},
 		{key: "D", action: "Delete selected row"},
+		{key: "C", action: rowCopyActionText},
 		{key: "Ctrl+E", action: "Export table data"},
 		{key: "Ctrl+G", action: "Open table or connection actions"},
 		{key: "Ctrl+D", action: "Dump database"},
@@ -56,8 +57,9 @@ var shortcutSections = []shortcutSection{
 		{key: "Ctrl+H", action: "Open saved scripts"},
 		{key: "Ctrl+E", action: "Export query results"},
 		{key: "Tab", action: "Switch editor and results"},
-		{key: "Up / Down", action: "Scroll query results"},
-		{key: "PageUp / PageDown", action: "Scroll results by page"},
+		{key: "Up / Down or J / K", action: "Select query result row"},
+		{key: "PageUp / PageDown", action: "Move result selection by page"},
+		{key: "C", action: rowCopyActionText},
 	}},
 	{title: "Dialogs", shortcuts: []shortcut{
 		{key: "Up / Down or J / K", action: "Move between options"},
@@ -81,6 +83,7 @@ var redisShortcutSections = []shortcutSection{
 		{key: "Up / Down", action: "Move through databases or keys"},
 		{key: "Left / Right", action: "Switch pane or scroll columns"},
 		{key: "Enter", action: "Load selected logical database"},
+		{key: "C", action: rowCopyActionText},
 		{key: "R", action: "Refresh keys or reconnect from navigator"},
 	}},
 	{title: "Redis command", shortcuts: []shortcut{

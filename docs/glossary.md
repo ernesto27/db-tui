@@ -174,6 +174,23 @@ spacing but omitting ANSI styling sequences.
 A click without a drag remains the ordinary data-row selection interaction and
 does not copy.
 
+## Selected data row
+
+For the row-copy feature, the highlighted row in an active SQL
+relation page, the raw SQL result grid, or the Redis key grid. It identifies
+one loaded row for the `c` shortcut; it is separate from a rendered character-range selection
+and from the navigator's highlighted relation.
+
+## Selected-row clipboard payload
+
+The `c` action's text containing every value of the selected data
+row, in column order, separated by literal tabs without headers or an added
+final newline. It uses full underlying values rather than truncated grid
+text. SQL `NULL` becomes `NULL`, byte slices become string contents, and
+embedded tabs, newlines, and quotes remain unescaped. Redis copies its cached
+key, formatted value, type, and TTL strings without additional reads. See the
+[row-copy specification](specs/2026-10-04-copy-selected-row.md).
+
 ## Row deletion confirmation
 
 A modal, destructive-action checkpoint opened with `d` for a selected row in

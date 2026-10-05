@@ -33,10 +33,14 @@ the form fields or an engine-specific DSN.
 
 Redis connections use a host and port (with optional username and password),
 or a `redis://` DSN. The local Compose fixture listens on `127.0.0.1:6380`.
+A Redis DSN can end in `/n` to select logical database `n`; without it,
+the connection uses `db0`.
 The sidebar lists only Redis logical databases that contain keys (`db0`, `db1`,
 and so on). Select one to load keys into a resizable key/value/type/TTL table.
 Redis shows 400 keys per page in scan order. Down or the mouse wheel at the
 bottom loads the next page; PgDown and PgUp move between pages.
+With the key grid focused, press `c` to copy the highlighted row's key, value,
+type, and TTL separated by tabs. A “Copied to clipboard” toast appears briefly.
 Use `Ctrl+R` to enter one raw Redis command at a time. Commands run against
 the selected logical database, may change data without a confirmation prompt,
 and refresh the key table and sidebar after success. `SELECT n` opens `dbn`;
@@ -105,6 +109,21 @@ query.
 Run `db-tui query -h` for query-command usage. Run `db-tui` without a
 subcommand to start the interactive application.
 
+## Run a Redis command without the TUI
+
+Use `db-tui redis` with `-d` or `--dsn` and `-c` or `--command` to run
+one command against a standalone Redis server. The command runs in the
+logical database selected by the DSN. Its reply is printed as plain text
+to standard output.
+
+```sh
+db-tui redis -d 'redis://127.0.0.1:6379/1' -c 'PING'
+```
+
+This prints `PONG`. Redis commands execute immediately, including commands
+that change data. This subcommand requires a DSN and does not use saved
+connection names. Run `db-tui redis -h` for usage.
+
 ## Create a database dump without the TUI
 
 Use the `dump` subcommand with `-d` or `--dsn`, or with `--connection` and an
@@ -128,12 +147,17 @@ Run `db-tui dump -h` for dump-command usage.
 
 - Save and switch between PostgreSQL, MySQL, Oracle, SQLite, SQL Server, and Redis connections.
 - Browse Redis logical databases and their keys, and run raw Redis commands in the TUI.
+- Run a Redis command without opening the TUI.
 - Browse tables, views, materialized views, and functions when supported by
   the connected database.
 - Browse installed PostgreSQL extensions from the object chooser.
 - Filter database objects and inspect table data in bounded pages.
 - View table DDL, columns, and indexes.
 - Edit or delete a selected row when its table has a usable primary key.
+- Copy the highlighted table, SQL query-result, or Redis key row with `c` while
+  its data panel has focus. Copies all loaded values separated by literal tabs, without
+  headers or escaping, using the terminal's clipboard support.
+  A brief “Copied to clipboard” toast appears after the copy command is sent.
 - Write and execute SQL in the raw-query panel, with confirmation before
   executing statements that delete data.
 - Autocomplete current-schema PostgreSQL table names in the raw-query editor.
@@ -176,6 +200,7 @@ Run `db-tui dump -h` for dump-command usage.
 | `r` | Refresh the current table data |
 | `e` | Edit the selected row |
 | `d` | Delete the selected row (confirmation required) |
+| `c` | Copy the selected row while the data panel has focus |
 | Mouse wheel | Scroll table data or query results |
 
 ### Raw SQL
@@ -189,4 +214,6 @@ Run `db-tui dump -h` for dump-command usage.
 | `Up` / `Down` | Move through PostgreSQL table suggestions when shown |
 | `Tab` / `Enter` | Accept the highlighted table suggestion; otherwise, `Tab` switches editor/results focus |
 | `Esc` | Close a table suggestion or cancel a `DELETE` confirmation |
-| `Up` / `Down`, `k` / `j`, `PgUp` / `PgDown` | Scroll results when results have focus |
+| `Up` / `Down`, `k` / `j` | Select a result row when results have focus |
+| `PgUp` / `PgDown` | Move result-row selection by one visible page |
+| `c` | Copy the selected row when results have focus |

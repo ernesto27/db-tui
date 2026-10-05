@@ -118,6 +118,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) updateLifecycle(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
+	case rowCopyNoticeExpiredMsg:
+		if msg.session == m.rowCopy.session && msg.request == m.rowCopy.request {
+			m.rowCopy.visible = false
+		}
+		return nil, true
 
 	case queryElapsedTickMsg:
 		if msg.session != m.session || msg.request != m.query.request || !m.query.loading {
@@ -955,17 +960,19 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case m.panel == panelQuery && key.Matches(msg, m.keys.queryFocus):
 		return m.query.toggleFocus()
+	case key.Matches(msg, m.keys.copyRow) && m.focus == focusData && (m.panel == panelData || m.query.resultsFocused):
+		return m.copySelectedRow()
 	case m.panel == panelQuery && m.query.resultsFocused && key.Matches(msg, m.keys.up):
-		m.query.scrollResults(-1)
+		m.query.moveResultSelection(-1, m.layout)
 		return nil
 	case m.panel == panelQuery && m.query.resultsFocused && key.Matches(msg, m.keys.down):
-		m.query.scrollResults(1)
+		m.query.moveResultSelection(1, m.layout)
 		return nil
 	case m.panel == panelQuery && m.query.resultsFocused && key.Matches(msg, m.keys.pageUp):
-		m.query.scrollResults(-m.query.resultHeight(m.layout))
+		m.query.moveResultSelection(-m.query.resultPageSize(m.layout), m.layout)
 		return nil
 	case m.panel == panelQuery && m.query.resultsFocused && key.Matches(msg, m.keys.pageDown):
-		m.query.scrollResults(m.query.resultHeight(m.layout))
+		m.query.moveResultSelection(m.query.resultPageSize(m.layout), m.layout)
 		return nil
 	case m.panel == panelQuery && m.query.resultsFocused:
 		return nil

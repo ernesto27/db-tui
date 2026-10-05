@@ -40,6 +40,11 @@ Use `gofmt`; the formatter determines indentation. Keep package names short, low
 
 ## Testing Guidelines
 
+Keep tests concise and focused on the most important behavior and regressions.
+Avoid redundant assertions, exhaustive state combinations, and extra test
+scaffolding that add noise without protecting against a distinct, meaningful
+failure.
+
 Every new feature must include automated tests that verify its expected behavior. A feature is not complete until its tests are added and passing. Use Go's `testing` package, `testify/assert`, and table-driven subtests for varied inputs. Add focused regression coverage at the lowest practical layer, especially for paging bounds, identifier quoting, cancellation, layout edges, SQL `NULL`, and query-log behavior. No numeric coverage threshold is set, but every behavior change needs relevant tests. Do not make integration tests depend on remote databases or credentials.
 
 Implement the requested change before running automated checks. Do not use test-first development or run incremental test commands unless the user explicitly asks; run the relevant automated verification once at the end. The user performs manual testing.

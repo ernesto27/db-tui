@@ -85,6 +85,7 @@ type Model struct {
 	data                      dataModel
 	panel                     rightPanel
 	query                     queryModel
+	rowCopy                   rowCopyState
 	sqlScriptsModal           *sqlScriptsModal
 	sqlScriptsRequest         uint64
 

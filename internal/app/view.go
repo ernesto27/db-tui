@@ -19,6 +19,9 @@ const readOnlyModeText = "READ ONLY"
 // View implements tea.Model.
 func (m Model) View() tea.View {
 	view := m.baseView()
+	if m.rowCopy.visible && m.rowCopy.session == m.session {
+		view.Content = m.renderRowCopyToast(view.Content)
+	}
 	if m.modal != nil || m.connectionsModal != nil || m.settingsModal != nil || m.shortcutsModal != nil || m.dumpModal != nil || m.exportModal != nil || m.ddlModal != nil || m.columnsModal != nil || m.indexesModal != nil || m.actionsModal != nil || m.editRowModal != nil || m.deleteRowModal != nil || m.rawQueryDeleteModal != nil || m.sqlScriptsModal != nil || m.objectsModal != nil || m.databaseExplorerModal != nil {
 		view.Content = m.renderModalOverlay(view.Content)
 	}
@@ -280,7 +283,11 @@ func (m Model) footerText() string {
 		if m.panel == panelQuery {
 			return "Ctrl+P execute command  •  Ctrl+T key data  •  Ctrl+K shortcuts  •  q quit"
 		}
-		return "Enter select database  •  r refresh  •  Ctrl+R raw command  •  Tab navigator/data  •  Ctrl+K shortcuts  •  q quit"
+		copyHelp := ""
+		if _, ok := m.selectedRowForCopy(); ok {
+			copyHelp = "  •  " + rowCopyHelpText
+		}
+		return "Enter select database  •  r refresh" + copyHelp + "  •  Ctrl+R raw command  •  Tab navigator/data  •  Ctrl+K shortcuts  •  q quit"
 	}
 	if m.database == nil {
 		if m.panel == panelQuery {
@@ -289,6 +296,9 @@ func (m Model) footerText() string {
 		return "Ctrl+S settings  •  Ctrl+N new connection  •  Ctrl+L open connections  •  Ctrl+R raw query  •  Ctrl+K shortcuts  •  q quit"
 	}
 	if m.panel == panelQuery {
+		if _, ok := m.selectedRowForCopy(); ok {
+			return "Ctrl+P execute  •  ↑/↓ select row  •  " + rowCopyHelpText + "  •  Alt+R read only  •  Ctrl+K shortcuts  •  q quit"
+		}
 		return "Ctrl+P execute  •  Alt+R read only  •  Ctrl+K shortcuts  •  q quit"
 	}
 	if m.activeExtensions.set {
@@ -336,6 +346,10 @@ func (m Model) footerText() string {
 	if m.activeRelation.set && m.activeRelation.item.section == navigatorTables && len(m.data.page.Rows) > 0 && !m.data.loading && m.editRowModal == nil {
 		editHelp = "  •  e edit row"
 	}
+	copyHelp := ""
+	if _, ok := m.selectedRowForCopy(); ok {
+		copyHelp = "  •  " + rowCopyHelpText
+	}
 	activationHelp := ""
 	if m.focus == focusNavigator {
 		activationHelp = "  •  Enter "
@@ -357,8 +371,8 @@ func (m Model) footerText() string {
 	if m.activeFunction.set && m.panel == panelData && m.focus == focusData {
 		functionHelp = "  •  ↑/↓ or j/k scroll function"
 	}
-	return fmt.Sprintf("Ctrl+O objects  •  Ctrl+F search%s%s%s%s%s%s%s  •  Ctrl+S settings  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Alt+R read only  •  Tab navigator/data  •  Ctrl+K shortcuts  •  q quit",
-		rowStatus, activationHelp, reconnectHelp, refreshHelp, functionHelp, tableHelp, editHelp)
+	return fmt.Sprintf("Ctrl+O objects  •  Ctrl+F search%s%s%s%s%s%s%s%s  •  Ctrl+S settings  •  Ctrl+D dump database  •  Ctrl+R raw query  •  Alt+R read only  •  Tab navigator/data  •  Ctrl+K shortcuts  •  q quit",
+		rowStatus, activationHelp, reconnectHelp, refreshHelp, functionHelp, tableHelp, editHelp, copyHelp)
 }
 
 func panelStyle(width, height int, focused bool) lipgloss.Style {
